@@ -156,6 +156,3 @@ if agent="$(polkit_agent)"; then
 else
     log "no polkit agent found, privileged prompts will not appear"
 fi
-
-# Night colour. Runs as a daemon and is driven later by hyprctl.
-start comm "hyprsunset" hyprsunset
