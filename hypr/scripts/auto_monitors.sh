@@ -28,8 +28,10 @@
 # Hyprland via `auto`, which places each monitor right of the previous one and
 # needs no arithmetic over scale factors.
 #
-# SCALES pins a scale factor for an output whose density warrants it. An
-# output with no entry gets 1, which is right for anything around 96 dpi.
+# Scale is the one thing this script cannot compute, so it is the only value
+# read from a file. Presets live in ../monitors.preset and are matched against
+# what a display reports about itself, so a preset written for one machine is
+# inert on any other. An output that matches nothing gets scale 1.
 #
 # Hyprland notes, still true on 0.56:
 #   - hl.monitor({output=X, disabled=true}) is the only per-monitor off switch
@@ -43,12 +45,35 @@
 
 set -euo pipefail
 
-# "connector|scale". Modes are never pinned here; they are computed. Only
-# scale needs a human decision, because it depends on how far the screen is
-# from your eyes rather than on anything the connector reports.
-SCALES=(
-    "eDP-1|1.5"
-)
+SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f "$0")")" && pwd)"
+PRESET_FILE="${HYPR_MONITOR_PRESET:-$SCRIPT_DIR/../monitors.preset}"
+LOCAL_FILE="${HYPR_LOCAL_MONITORS:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr/local.monitors}"
+
+# make|model|scale. Make and model contain spaces, so only the ends of a line
+# are trimmed; squeezing all whitespace out would make every entry unmatchable.
+SCALES=()
+read_scales() {
+    local file="$1" line
+    [[ -r "$file" ]] || return 0
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line="${line%%#*}"
+        line="${line#"${line%%[![:space:]]*}"}"
+        line="${line%"${line##*[![:space:]]}"}"
+        [[ -n "$line" ]] || continue
+        local rest="${line#*|}"
+        if [[ "$line" != *"|"*"|"* || "${rest#*|}" == *"|"* ]]; then
+            printf 'auto_monitors: %s: ignoring "%s", expected make|model|scale\n' \
+                "$file" "$line" >&2
+            continue
+        fi
+        SCALES+=("$line")
+    done < "$file"
+}
+
+# Local first, so a machine that disagrees with the repository wins without
+# having to edit it.
+read_scales "$LOCAL_FILE"
+read_scales "$PRESET_FILE"
 
 PARK_X=20000   # far enough right that a disabled panel never overlaps
 
@@ -60,9 +85,15 @@ is_internal() {
 }
 
 scale_for() {
-    local name="$1" entry
-    for entry in "${SCALES[@]}"; do
-        [[ "${entry%%|*}" == "$name" ]] && { printf '%s' "${entry#*|}"; return 0; }
+    local name="$1" make model entry rest
+    make=$(printf '%s' "$mons" | jq -r --arg n "$name" '.[] | select(.name == $n) | .make // ""')
+    model=$(printf '%s' "$mons" | jq -r --arg n "$name" '.[] | select(.name == $n) | .model // ""')
+    for entry in ${SCALES[@]+"${SCALES[@]}"}; do
+        [[ "${entry%%|*}" == "$make" ]] || continue
+        rest="${entry#*|}"
+        [[ "${rest%%|*}" == "$model" ]] || continue
+        printf '%s' "${rest#*|}"
+        return 0
     done
     printf '1'
 }
