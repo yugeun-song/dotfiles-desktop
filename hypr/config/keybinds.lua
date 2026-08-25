@@ -205,6 +205,12 @@ hl.bind("SHIFT + Print", hl.dsp.exec_cmd(capture .. " region"),
     { description = "Capture: drag a region" })
 hl.bind("CTRL + Print", hl.dsp.exec_cmd(capture .. " window"),
     { description = "Capture: focused window" })
+-- Ctrl + Shift + S as well as Super + Shift + S. It is the shortcut most
+-- people arrive with, and the cost is real: an application that uses it for
+-- save-as never sees it again, because the compositor takes the key before
+-- any window does.
+hl.bind("CTRL + SHIFT + S", hl.dsp.exec_cmd(capture .. " region-edit"),
+    { description = "Capture: region, then edit" })
 hl.bind("SUPER + SHIFT + S", hl.dsp.exec_cmd(capture .. " region-edit"),
     { description = "Capture: region, then annotate" })
 hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd(capture .. " color"),
