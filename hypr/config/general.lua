@@ -28,7 +28,8 @@ hl.config({
     },
 
     input = {
-        kb_layout = "us",
+        kb_layout = "kr",
+        kb_variant = "kr104",
         follow_mouse = 1,
         -- Focus follows the pointer, but moving the pointer over a window
         -- does not raise it. Raising on hover makes drag-and-drop between
