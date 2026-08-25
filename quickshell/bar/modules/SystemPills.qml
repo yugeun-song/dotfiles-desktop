@@ -1,10 +1,15 @@
 import QtQuick
+import Quickshell
 import qs.services
 
 Row {
     id: root
 
-    readonly property var terminal: ["kitty", "-e"]
+    // The same entry points the key bindings use. Naming a binary here would
+    // mean every pill that opens something fails silently on a machine with a
+    // different terminal, and these scripts already answer that question once.
+    readonly property string hyprScripts: (Quickshell.env("XDG_CONFIG_HOME") ?? `${Quickshell.env("HOME")}/.config`) + "/hypr/scripts"
+    readonly property var terminal: [root.hyprScripts + "/terminal.sh", "-e"]
 
     spacing: Theme.gap
 
@@ -125,7 +130,7 @@ Location  ${Weather.place}`
             return Net.ssid !== "" ? Theme.shorten(Net.ssid, 16) : "on";
         }
         fill: Net.preferWired || Net.wifiConnected ? Theme.accentGreen : Theme.muted
-        command: root.terminal.concat(["nmtui"])
+        command: root.terminal.concat([root.hyprScripts + "/launch.sh", "nmtui"])
         tooltip: {
             if (Net.devices.length === 0)
                 return "Network   unknown\nNo device is being reported, so NetworkManager is not running\nClick to open nmtui";
@@ -166,7 +171,13 @@ Location  ${Weather.place}`
             return Bt.connectedCount === 1 ? Theme.shorten(Bt.firstName, 14) : `${Bt.connectedCount} devices`;
         }
         fill: Bt.connectedCount > 0 ? Theme.accentIndigo : Theme.muted
-        command: root.terminal.concat(["bluetoothctl"])
+        // Not bluetoothctl directly. It puts the connected device in its
+        // prompt and points argument-less commands at it, so it opens scoped
+        // to whatever is already paired, which is the wrong place to start
+        // when the reason for opening it is usually some other machine.
+        // bluetui opens on the adapter, with the device list, scanning and
+        // pairing all in reach.
+        command: root.terminal.concat([root.hyprScripts + "/launch.sh", "bluetui", "bluetoothctl"])
         tooltip: {
             if (!Bt.present)
                 return "No Bluetooth adapter";
@@ -221,7 +232,7 @@ Location  ${Weather.place}`
         label: `${Resources.cpuPercent}%`
         labelWidth: Theme.percentWidth
         fill: Theme.loadColor(Resources.cpuUsage, Theme.accentOrange)
-        command: root.terminal.concat(["btop"])
+        command: root.terminal.concat([root.hyprScripts + "/launch.sh", "btop", "htop", "top"])
         tooltip: `CPU       ${Resources.cpuPercent}% busy\nSampled   every 1s from /proc/stat\nClick to open btop`
     }
 
@@ -230,7 +241,7 @@ Location  ${Weather.place}`
         label: `${Resources.memPercent}%`
         labelWidth: Theme.percentWidth
         fill: Theme.loadColor(Resources.memUsage, Theme.accentPurple)
-        command: root.terminal.concat(["btop"])
+        command: root.terminal.concat([root.hyprScripts + "/launch.sh", "btop", "htop", "top"])
         tooltip: `Memory    ${Resources.memUsedGb.toFixed(1)} of ${Resources.memTotalGb.toFixed(1)} GB\nIn use    ${Resources.memPercent}%\nSource    MemAvailable in /proc/meminfo\nClick to open btop`
     }
 }
