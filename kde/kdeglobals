@@ -1,0 +1,35 @@
+# Qt and KDE application settings.
+#
+# Qt reads none of this unless QT_QPA_PLATFORMTHEME names a platform theme
+# plugin; config/env.lua sets it to kde, which loads
+# KDEPlasmaPlatformTheme6.so from plasma-integration. Without that a KDE
+# application ignores this file entirely and draws in its own default light
+# palette, which is how a file manager ends up white on a dark desktop.
+#
+# Everything named here comes from an official package or from this
+# repository. No AUR.
+
+[General]
+ColorScheme=SpaceduckDark
+Name=Spaceduck Dark
+# Breeze is the only widget style that is both compiled code and an official
+# package. The colours come from kde/SpaceduckDark.colors, so the style only
+# decides shapes.
+widgetStyle=Breeze
+font=Inter,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+fixed=CaskaydiaCove Nerd Font Mono,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+menuFont=Inter,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+smallestReadableFont=Inter,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+toolBarFont=Inter,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+
+[Icons]
+# breeze-dark ships with breeze-icons, which is official. breeze-plus-dark
+# was the previous choice and comes from the AUR.
+Theme=breeze-dark
+
+[KDE]
+SingleClick=false
+AnimationDurationFactor=0.5
+
+[Sounds]
+Theme=freedesktop

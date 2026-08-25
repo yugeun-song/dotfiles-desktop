@@ -1,0 +1,147 @@
+# Colour scheme for Qt and KDE applications.
+#
+# Written here rather than taken from a package, so the desktop needs no
+# theme from the AUR to look like itself. It is the same palette the status
+# bar uses (quickshell/bar/services/Theme.qml); a file manager that does not
+# match the bar above it reads as two desktops sharing a screen.
+#
+# Only the colours live here. The widget style stays Breeze, which is an
+# official package and the one piece of this that is compiled code.
+#
+# Deployed to ~/.local/share/color-schemes/ by install.sh, and named in
+# kde/kdeglobals.
+
+[General]
+Name=Spaceduck Dark
+ColorScheme=SpaceduckDark
+shadeSortColumn=true
+
+[Colors:Window]
+BackgroundNormal=15,17,27
+BackgroundAlternate=27,28,54
+DecorationFocus=122,162,247
+DecorationHover=125,207,255
+ForegroundNormal=236,240,193
+ForegroundActive=122,162,247
+ForegroundInactive=104,111,154
+ForegroundLink=125,207,255
+ForegroundVisited=187,154,247
+ForegroundNegative=247,118,142
+ForegroundNeutral=224,175,104
+ForegroundPositive=158,206,106
+
+[Colors:View]
+BackgroundNormal=15,17,27
+BackgroundAlternate=27,28,54
+DecorationFocus=122,162,247
+DecorationHover=125,207,255
+ForegroundNormal=236,240,193
+ForegroundActive=122,162,247
+ForegroundInactive=104,111,154
+ForegroundLink=125,207,255
+ForegroundVisited=187,154,247
+ForegroundNegative=247,118,142
+ForegroundNeutral=224,175,104
+ForegroundPositive=158,206,106
+
+[Colors:Button]
+BackgroundNormal=27,28,54
+BackgroundAlternate=15,17,27
+DecorationFocus=122,162,247
+DecorationHover=125,207,255
+ForegroundNormal=236,240,193
+ForegroundActive=122,162,247
+ForegroundInactive=104,111,154
+ForegroundLink=125,207,255
+ForegroundVisited=187,154,247
+ForegroundNegative=247,118,142
+ForegroundNeutral=224,175,104
+ForegroundPositive=158,206,106
+
+[Colors:Selection]
+BackgroundNormal=122,162,247
+BackgroundAlternate=122,162,247
+DecorationFocus=122,162,247
+DecorationHover=125,207,255
+ForegroundNormal=15,17,27
+ForegroundActive=122,162,247
+ForegroundInactive=104,111,154
+ForegroundLink=15,17,27
+ForegroundVisited=15,17,27
+ForegroundNegative=247,118,142
+ForegroundNeutral=224,175,104
+ForegroundPositive=158,206,106
+
+[Colors:Tooltip]
+BackgroundNormal=27,28,54
+BackgroundAlternate=15,17,27
+DecorationFocus=122,162,247
+DecorationHover=125,207,255
+ForegroundNormal=236,240,193
+ForegroundActive=122,162,247
+ForegroundInactive=104,111,154
+ForegroundLink=125,207,255
+ForegroundVisited=187,154,247
+ForegroundNegative=247,118,142
+ForegroundNeutral=224,175,104
+ForegroundPositive=158,206,106
+
+[Colors:Complementary]
+BackgroundNormal=27,28,54
+BackgroundAlternate=15,17,27
+DecorationFocus=122,162,247
+DecorationHover=125,207,255
+ForegroundNormal=236,240,193
+ForegroundActive=122,162,247
+ForegroundInactive=104,111,154
+ForegroundLink=125,207,255
+ForegroundVisited=187,154,247
+ForegroundNegative=247,118,142
+ForegroundNeutral=224,175,104
+ForegroundPositive=158,206,106
+
+[Colors:Header]
+BackgroundNormal=27,28,54
+BackgroundAlternate=15,17,27
+DecorationFocus=122,162,247
+DecorationHover=125,207,255
+ForegroundNormal=236,240,193
+ForegroundActive=122,162,247
+ForegroundInactive=104,111,154
+ForegroundLink=125,207,255
+ForegroundVisited=187,154,247
+ForegroundNegative=247,118,142
+ForegroundNeutral=224,175,104
+ForegroundPositive=158,206,106
+
+# Window manager colours. Hyprland draws its own borders and ignores these,
+# but Qt applications with client side decorations read them.
+[WM]
+activeBackground=27,28,54
+activeForeground=236,240,193
+inactiveBackground=15,17,27
+inactiveForeground=104,111,154
+activeBlend=122,162,247
+inactiveBlend=104,111,154
+
+# Disabled text is dimmed rather than greyed: the palette has one muted
+# colour and using it for both keeps the scheme from drifting.
+[ColorEffects:Disabled]
+Color=104,111,154
+ColorAmount=0
+ColorEffect=0
+ContrastAmount=0.65
+ContrastEffect=1
+IntensityAmount=0
+IntensityEffect=0
+
+[ColorEffects:Inactive]
+ChangeSelectionColor=true
+Color=104,111,154
+ColorAmount=0.025
+ColorEffect=2
+ContrastAmount=0.1
+ContrastEffect=0
+Enable=false
+IntensityAmount=0
+IntensityEffect=0

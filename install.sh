@@ -59,6 +59,8 @@ link "$SRC/fcitx5/profile"         "$CONFIG/fcitx5/profile"
 link "$SRC/fcitx5/conf"            "$CONFIG/fcitx5/conf"
 link "$SRC/gtk/gtk-3.0-settings.ini" "$CONFIG/gtk-3.0/settings.ini"
 link "$SRC/gtk/gtk-4.0-settings.ini" "$CONFIG/gtk-4.0/settings.ini"
+link "$SRC/kde/kdeglobals"        "$CONFIG/kdeglobals"
+link "$SRC/kde/SpaceduckDark.colors" "$HOME/.local/share/color-schemes/SpaceduckDark.colors"
 
 make_executable() {
     local dir="$1" consumer="$2" f found=0 failed=0

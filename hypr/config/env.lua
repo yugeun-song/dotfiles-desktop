@@ -14,6 +14,10 @@ hl.env("MOZ_ENABLE_WAYLAND", "1")
 
 -- Qt applications otherwise draw their own title bars on top of the
 -- compositor's decorations.
+-- Without a platform theme plugin Qt never reads kdeglobals, and a KDE
+-- application draws in its own default light palette on a dark desktop.
+-- kde selects KDEPlasmaPlatformTheme6.so from plasma-integration.
+hl.env("QT_QPA_PLATFORMTHEME", "kde")
 hl.env("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1")
 hl.env("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
 
