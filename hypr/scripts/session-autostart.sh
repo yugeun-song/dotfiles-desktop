@@ -73,6 +73,11 @@ start() {
     setsid -f "$@" >/dev/null 2>&1 || log "failed to start $1"
 }
 
+# The portal's idea of the theme, which is what GTK applications ask. Not a
+# program to supervise, so it runs to completion here rather than going
+# through start().
+"$SCRIPTS/gsettings-apply.sh" || log "gsettings-apply failed"
+
 # Outputs first, so the first frame lands on the right screen.
 start argv "auto_monitors_watcher" "$SCRIPTS/auto_monitors_watcher.sh"
 
