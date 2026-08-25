@@ -45,6 +45,12 @@ while true; do
     socat -U - "UNIX-CONNECT:${SOCKET}" | while IFS= read -r line; do
         case "$line" in
             monitoradded*|monitorremoved*|monitoraddedv2*|monitorremovedv2*|configreloaded*)
+                # A cable that is not quite seated produces a burst of add and
+                # remove events, and answering each one is a modeset each time
+                # on hardware that hangs on modesets. Everything already queued
+                # describes the same change, so it is drained first and the one
+                # apply below reads the state they all settled at.
+                while IFS= read -r -t 0.4 _; do :; done
                 "$APPLY" || echo "auto_monitors_watcher: apply failed ($?)" >&2
                 ;;
         esac

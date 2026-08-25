@@ -127,11 +127,39 @@ apply() {
     fi
 }
 
+# Applying a monitor that is already exactly where it belongs still costs a
+# modeset, and a modeset is the one operation this GPU is not trusted with.
+# `hyprctl reload` re-evaluates the catch-all monitor rule and the watcher
+# answers that by running this script, so without this check every save of a
+# configuration file paid for two of them.
+#
+# Only an enabled output is compared. A disabled one reports whatever it had
+# before it was switched off, which is not what it would come back as.
+already_placed() {
+    local name="$1" position="$2" mode="$3" scale="$4"
+    [[ "$mode" == "preferred" ]] && return 1
+    printf '%s' "$mons" | jq -e \
+        --arg n "$name" --arg pos "$position" --arg mode "$mode" --arg scale "$scale" '
+        def near($a; $b): (($a - $b) | if . < 0 then -. else . end) < 0.5;
+        ($mode | capture("(?<w>[0-9]+)x(?<h>[0-9]+)@(?<r>[0-9.]+)")) as $m
+        | .[]
+        | select(.name == $n)
+        | select((.disabled // false) | not)
+        | select(.width == ($m.w | tonumber) and .height == ($m.h | tonumber))
+        | select(near(.refreshRate; ($m.r | tonumber)))
+        | select((((.scale - ($scale | tonumber)) | if . < 0 then -. else . end) < 0.001))
+        | select($pos == "auto" or ("\(.x)x\(.y)" == $pos))
+    ' >/dev/null 2>&1
+}
+
 place() {
     local name="$1" position="$2"
     local mode scale
     mode=$(mode_for "$name")
     scale=$(scale_for "$name")
+    if already_placed "$name" "$position" "$mode" "$scale"; then
+        return 0
+    fi
     apply "{output=\"$name\", mode=\"$mode\", position=\"$position\", scale=\"$scale\"}"
 }
 
@@ -202,6 +230,9 @@ if (( ${#external[@]} > 0 )); then
 
     for row in "${internal[@]}"; do
         name="${row%%|*}"
+        # Already off. Parking and disabling it again is two commits for no
+        # change, and every commit is a modeset.
+        [[ "${row#*|}" == "true" ]] && continue
         place "$name" "${PARK_X}x0" || true
         # Parked but still enabled is the worst of both: a live output at
         # 20000x0 that windows and workspaces can be sent to and nobody sees.
