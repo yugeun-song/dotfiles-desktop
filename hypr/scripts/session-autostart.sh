@@ -110,6 +110,17 @@ fi
 # the shell is restarted the desktop should still look like a desktop.
 start comm "hyprpaper" hyprpaper
 
+# hyprpaper comes up with no wallpaper: its configuration cannot name the file,
+# for the reason written in hypr/hyprpaper.conf. This is what puts the image on
+# the screen, and it waits because IPC is refused until hyprpaper is listening.
+if command -v hyprpaper >/dev/null 2>&1; then
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        hyprctl hyprpaper listactive >/dev/null 2>&1 && break
+        sleep 0.2
+    done
+    "$SCRIPTS/wallpaper.sh" --reload || log "wallpaper could not be set"
+fi
+
 # Input method. Started without -r on purpose; -r replaces a running fcitx5,
 # and this only runs when there is none to replace.
 start comm "fcitx5" fcitx5 -d

@@ -36,9 +36,19 @@ reload() {
         printf 'wallpaper: hyprpaper is not running, it will pick this up at next start\n' >&2
         return 0
     }
-    hyprctl hyprpaper unload all      >/dev/null || true
-    hyprctl hyprpaper preload "$DEST" >/dev/null || die "hyprpaper would not preload $DEST"
+    # unload and preload are refused by this build ("invalid hyprpaper request")
+    # and only listactive and wallpaper are answered, so failures from the
+    # first two are not treated as failures. wallpaper alone loads the file,
+    # which is the whole job.
+    hyprctl hyprpaper unload all      >/dev/null 2>&1 || true
+    hyprctl hyprpaper preload "$DEST" >/dev/null 2>&1 || true
     hyprctl hyprpaper wallpaper ",$DEST" >/dev/null || die "hyprpaper would not set $DEST"
+
+    # Verified rather than assumed. wallpaper answers with an empty line
+    # whether or not it worked, so the only way to know is to ask.
+    if ! hyprctl hyprpaper listactive 2>/dev/null | grep -qF "$DEST"; then
+        die "hyprpaper accepted $DEST but is not showing it"
+    fi
     printf 'wallpaper: %s\n' "$DEST"
 }
 
