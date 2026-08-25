@@ -38,6 +38,14 @@ BACKOFF_MAX="${BAR_BACKOFF_MAX:-30}"  # seconds
 
 mkdir -p "$STATE_DIR"
 
+# Everything the launcher starts inherits quickshell's working directory, and
+# quickshell inherits this script's. Started from a terminal that happened to
+# be in a repository, every application opened from the launcher would come up
+# there instead of at home. Nothing here uses a relative path, so pinning it
+# costs nothing and makes the launcher behave the same however the bar was
+# started.
+cd "$HOME" 2>/dev/null || cd /
+
 log() { printf '%s  %s\n' "$(date -Iseconds)" "$*" | tee -a "$LOG" >&2; }
 
 # quickshell must exist, and so must the config. Failing here with a clear
