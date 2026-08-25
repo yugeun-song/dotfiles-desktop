@@ -1,0 +1,227 @@
+#!/usr/bin/env bash
+# ============================================================================
+# bar - start the status bar and keep it up
+#
+# Four things this exists to guarantee:
+#
+#   one instance     quickshell's -n exits immediately if this config is
+#                    already running, so launching twice cannot produce two
+#                    bars. Checking with pgrep instead would race.
+#
+#   restarts         a crash brings the bar back rather than leaving an empty
+#                    strip until the next login.
+#
+#   bounded restarts a config that fails at load would otherwise respawn
+#                    forever. A restart loop is the same failure as a spawn
+#                    loop, only slower. After BUDGET crashes inside WINDOW
+#                    seconds this gives up and says why.
+#
+#   backoff          successive restarts wait longer, so a transient fault
+#                    does not turn into a hot loop while it clears.
+#
+# Usage:
+#   bar                 supervise in the foreground
+#   bar --once          start once, do not supervise
+#   bar --stop          stop a running bar
+#   bar --status        report whether one is running
+# ============================================================================
+
+set -uo pipefail
+
+CONFIG_DIR="${BAR_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar}"
+STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/bar"
+LOG="$STATE_DIR/bar.log"
+
+BUDGET="${BAR_RESTART_BUDGET:-5}"     # crashes allowed inside the window
+WINDOW="${BAR_RESTART_WINDOW:-120}"   # seconds
+BACKOFF_MAX="${BAR_BACKOFF_MAX:-30}"  # seconds
+
+mkdir -p "$STATE_DIR"
+
+log() { printf '%s  %s\n' "$(date -Iseconds)" "$*" | tee -a "$LOG" >&2; }
+
+# quickshell must exist, and so must the config. Failing here with a clear
+# message beats failing later with a QML backtrace.
+require() {
+    command -v qs >/dev/null 2>&1 || command -v quickshell >/dev/null 2>&1 || {
+        log "quickshell is not installed"; return 1; }
+    [[ -f "$CONFIG_DIR/shell.qml" ]] || {
+        log "no shell.qml under $CONFIG_DIR"; return 1; }
+}
+
+runner() {
+    if command -v qs >/dev/null 2>&1; then echo qs; else echo quickshell; fi
+}
+
+# A bar is quickshell started with -p "$CONFIG_DIR". Testing the cmdline for
+# the path as a substring would also match an editor with the config open, so
+# match on the program and on the argument that follows -p.
+running_pids() {
+    local d p comm arg prev hit
+    for d in /proc/[0-9]*; do
+        p="${d#/proc/}"
+        read -r comm 2>/dev/null < "$d/comm" || continue
+        [[ "$comm" == qs || "$comm" == quickshell ]] || continue
+        prev=""; hit=0
+        while IFS= read -r -d '' arg; do
+            if [[ "$prev" == "-p" || "$prev" == "--path" ]] && [[ "$arg" == "$CONFIG_DIR" ]]; then
+                hit=1; break
+            fi
+            prev="$arg"
+        done 2>/dev/null < "$d/cmdline"
+        (( hit )) && printf '%s\n' "$p"
+    done
+}
+
+# The supervisor holds an exclusive lock on its pidfile for as long as it
+# runs, so a pid left behind by a killed supervisor never reads as alive.
+supervisor_alive() {
+    [[ -s "$STATE_DIR/supervisor.pid" ]] || return 1
+    ! flock -n "$STATE_DIR/supervisor.pid" true
+}
+
+case "${1:-}" in
+    --status)
+        mapfile -t pids < <(running_pids)
+        if (( ${#pids[@]} )); then
+            echo "running: ${pids[*]}"
+        else
+            echo "not running"
+        fi
+        exit 0
+        ;;
+    --stop)
+        # The supervisor goes first: killing only the child is a crash from
+        # its point of view, and it would restart the bar and charge the
+        # restart budget for it.
+        stopped=0
+        if supervisor_alive; then
+            read -r sup < "$STATE_DIR/supervisor.pid"
+            if [[ -n "$sup" ]] && kill "$sup" 2>/dev/null; then
+                stopped=1
+                for _ in {1..40}; do
+                    supervisor_alive || break
+                    sleep 0.25
+                done
+                supervisor_alive && kill -9 "$sup" 2>/dev/null
+            fi
+        fi
+        mapfile -t pids < <(running_pids)
+        if (( ${#pids[@]} )); then
+            stopped=1
+            kill "${pids[@]}" 2>/dev/null
+            sleep 1
+            mapfile -t pids < <(running_pids)
+            if (( ${#pids[@]} )); then
+                kill -9 "${pids[@]}" 2>/dev/null
+                sleep 0.5
+                mapfile -t pids < <(running_pids)
+            fi
+        fi
+        if (( ${#pids[@]} )); then
+            echo "still running: ${pids[*]}"
+            exit 1
+        fi
+        if (( stopped )); then echo "stopped"; else echo "not running"; fi
+        exit 0
+        ;;
+    --once)
+        require || exit 1
+        exec "$(runner)" -n -p "$CONFIG_DIR"
+        ;;
+esac
+
+require || exit 1
+
+exec {lockfd}>>"$STATE_DIR/supervisor.pid"
+if ! flock -n "$lockfd"; then
+    log "another supervisor already owns $CONFIG_DIR, leaving it alone"
+    exit 0
+fi
+printf '%s\n' "$$" > "$STATE_DIR/supervisor.pid"
+
+child=
+cleanup() {
+    [[ -n "$child" ]] && kill "$child" 2>/dev/null
+    rm -f "$STATE_DIR/supervisor.pid"
+}
+trap cleanup EXIT
+trap 'exit 143' INT TERM
+
+# A bar running with no supervisor holding the lock is an orphan: its
+# supervisor was signalled and it was not. Nothing is watching it, so stop it
+# and take the config over rather than reporting success and walking away.
+mapfile -t orphans < <(running_pids)
+if (( ${#orphans[@]} )); then
+    log "taking over unsupervised instance ${orphans[*]}"
+    kill "${orphans[@]}" 2>/dev/null
+    for _ in {1..40}; do
+        mapfile -t orphans < <(running_pids)
+        (( ${#orphans[@]} )) || break
+        sleep 0.25
+    done
+    if (( ${#orphans[@]} )); then
+        kill -9 "${orphans[@]}" 2>/dev/null
+        sleep 0.5
+    fi
+fi
+
+crash_times=()
+crashes=0
+backoff=1
+
+while :; do
+    # The child's own output is the only record of why a QML load failed, so
+    # it goes to the file the give-up message points at. It must not inherit
+    # the lock fd, or an orphan would keep the lock after this exits.
+    "$(runner)" -n -p "$CONFIG_DIR" >>"$LOG" 2>&1 {lockfd}>&- &
+    child=$!
+    wait "$child"
+    rc=$?
+    child=
+
+    # -n returns non-zero when another instance already holds this config.
+    # That is a correct outcome, not a crash: something else is drawing the
+    # bar, so this supervisor has nothing to do.
+    if (( rc != 0 )) && [[ -n "$(running_pids)" ]]; then
+        log "another instance already owns $CONFIG_DIR, leaving it alone"
+        exit 0
+    fi
+
+    # Count the crashes still inside the window rather than restarting the
+    # window at a fixed point: the backoff sleeps are long enough to outrun a
+    # fixed window, which would keep the count from ever reaching the budget.
+    now=$SECONDS
+    crash_times+=("$now")
+    kept=()
+    for t in "${crash_times[@]}"; do
+        (( now - t <= WINDOW )) && kept+=("$t")
+    done
+    crash_times=("${kept[@]}")
+    crashes=${#crash_times[@]}
+    (( crashes == 1 )) && backoff=1
+
+    if (( crashes > BUDGET )); then
+        log "gave up after $crashes restarts in ${WINDOW}s (last exit $rc)"
+        if (( rc == 127 )); then
+            log "the $(runner) binary is gone; reinstall quickshell"
+        elif (( rc > 128 )); then
+            log "killed by signal $(( rc - 128 ))"
+        else
+            log "the configuration is probably failing at load; the error is above in $LOG, or run: $(runner) -p $CONFIG_DIR"
+        fi
+        exit 1
+    fi
+
+    log "exited with $rc, restart $crashes/$BUDGET in ${backoff}s"
+    # A trapped signal waits for the foreground command to return, so sleeping
+    # in the foreground would hold --stop off for the whole backoff. Parked in
+    # $child so the EXIT trap kills it, and without the lock fd so it cannot
+    # keep the lock open after this shell is killed.
+    sleep "$backoff" {lockfd}>&- &
+    child=$!
+    wait "$child"
+    child=
+    backoff=$(( backoff * 2 ))
+    (( backoff > BACKOFF_MAX )) && backoff=$BACKOFF_MAX
+done
