@@ -1,5 +1,9 @@
 # Qt and KDE application settings.
 #
+# Palette values are taken from two published themes rather than invented:
+#   Spaceduck    https://github.com/pineapplegiant/spaceduck   (bg, fg, greys, selection)
+#   Tokyo Night  https://github.com/folke/tokyonight.nvim      (blue, cyan, purple, green, orange)
+#
 # Qt reads none of this unless QT_QPA_PLATFORMTHEME names a platform theme
 # plugin; config/env.lua sets it to kde, which loads
 # KDEPlasmaPlatformTheme6.so from plasma-integration. Without that a KDE

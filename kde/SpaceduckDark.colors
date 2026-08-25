@@ -1,5 +1,9 @@
 # Colour scheme for Qt and KDE applications.
 #
+# Palette values are taken from two published themes rather than invented:
+#   Spaceduck    https://github.com/pineapplegiant/spaceduck   (bg, fg, greys, selection)
+#   Tokyo Night  https://github.com/folke/tokyonight.nvim      (blue, cyan, purple, green, orange)
+#
 # Written here rather than taken from a package, so nothing about the look
 # depends on the AUR. It is the same palette the status bar uses
 # (quickshell/bar/services/Theme.qml); a file manager that does not match the

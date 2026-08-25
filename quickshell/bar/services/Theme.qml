@@ -6,6 +6,10 @@ import Quickshell
 Singleton {
     id: root
 
+    // Palette values are taken from two published themes rather than invented:
+    //   Spaceduck    https://github.com/pineapplegiant/spaceduck   (bg, fg, greys, selection)
+    //   Tokyo Night  https://github.com/folke/tokyonight.nvim      (blue, cyan, purple, green, orange)
+
     // ---------------------------------------------------------------------
     // Every dimension below is derived from one number. The base values are
     // the proportions the bar was designed at; changing scale keeps the ratio
