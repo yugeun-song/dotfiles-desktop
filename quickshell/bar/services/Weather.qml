@@ -23,10 +23,24 @@ Singleton {
     readonly property int todayMin: root.data?.today?.min ?? 0
     readonly property int todayMax: root.data?.today?.max ?? 0
 
+    // Consecutive failed fetches, used to space out the retries. A boot that
+    // beats NetworkManager to the network would otherwise leave the pill absent
+    // until the next 15-minute tick.
+    property int failures: 0
+
     Process {
         id: fetch
 
         command: [Quickshell.shellPath("scripts/weather.sh"), "--bar"]
+
+        onExited: code => {
+            if (code === 0) {
+                root.failures = 0;
+                return;
+            }
+            root.failures = Math.min(root.failures + 1, 5);
+            retry.restart();
+        }
 
         stdout: SplitParser {
             onRead: line => {
@@ -40,6 +54,20 @@ Singleton {
                 }
             }
         }
+
+        // curl and jq write their diagnosis here, and quickshell closes the
+        // channel outright unless something is reading it.
+        stderr: SplitParser {
+            onRead: line => console.warn("[weather]", line)
+        }
+    }
+
+    Timer {
+        id: retry
+
+        interval: 30000 * Math.pow(2, root.failures - 1)
+        repeat: false
+        onTriggered: fetch.running = true
     }
 
     // The script caches for 15 minutes of its own accord, so polling more

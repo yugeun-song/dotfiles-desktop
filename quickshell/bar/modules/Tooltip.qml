@@ -16,12 +16,23 @@ Item {
 
     property bool shown: false
 
+    // Hiding immediately rather than after the grace period matters when a
+    // menu is opening in the same click: the two surfaces overlap for a
+    // moment, the pointer is over both, and the result reads as a laggy
+    // button rather than two widgets.
+    property bool immediate: false
+
     onActiveChanged: {
         if (root.active) {
             hideTimer.stop();
             showTimer.restart();
+            return;
+        }
+        showTimer.stop();
+        if (root.immediate) {
+            root.shown = false;
+            hideTimer.stop();
         } else {
-            showTimer.stop();
             hideTimer.restart();
         }
     }

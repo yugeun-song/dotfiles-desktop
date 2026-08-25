@@ -9,46 +9,43 @@ Row {
     spacing: Theme.gap
 
     Pill {
-        visible: InputMethod.present
-        icon: Theme.iconKeyboard
-        label: InputMethod.label
-        fill: InputMethod.hangul ? Theme.accentAmber : Theme.accentQuiet
-        tooltip: `Input     ${InputMethod.hangul ? "Hangul" : "Latin"}\nEngine    ${InputMethod.method}\nClick for input method actions`
-        menuEntries: [
-            {
-                label: InputMethod.hangul ? "Switch to Latin" : "Switch to Hangul",
-                icon: Theme.iconSwap,
-                action: () => InputMethod.toggle()
-            },
-            {
-                separator: true
-            },
-            {
-                label: "Reload configuration",
-                icon: Theme.iconRestart,
-                detail: "fcitx5-remote -r",
-                action: () => InputMethod.reloadConfig()
-            },
-            {
-                label: "Restart fcitx5",
-                icon: Theme.iconRestart,
-                detail: InputMethod.method,
-                action: () => InputMethod.restart()
-            },
-            {
-                label: "Input method settings",
-                icon: Theme.iconSettings,
-                action: () => InputMethod.configure()
-            }
-        ]
-    }
-
-    Pill {
-        visible: CapsLock.active
+        visible: CapsLock.active && !CapsLock.stale
         icon: Theme.iconCapsLock
         label: "CAPS LOCK"
         fill: Theme.capsLock
         tooltip: "Caps Lock is on"
+    }
+
+    Pill {
+        visible: Ime.present && !Ime.stale
+        icon: Theme.iconKeyboard
+        label: Ime.label
+        fill: Ime.hangul ? Theme.accentAmber : Theme.accentQuiet
+        tooltip: `Input     ${Ime.hangul ? "Hangul" : "Latin"}\nEngine    ${Ime.method}\nClick for input method actions`
+        // No language toggle here on purpose. The menu opens directly under
+        // the pointer, so the next click lands on the first entry: clicking
+        // the pill twice would silently flip the input method. The Hangul key
+        // does that job, and a menu is the wrong place for something with a
+        // dedicated key.
+        menuEntries: [
+            {
+                label: "Reload configuration",
+                icon: Theme.iconRestart,
+                detail: "fcitx5-remote -r",
+                action: () => Ime.reloadConfig()
+            },
+            {
+                label: "Restart fcitx5",
+                icon: Theme.iconRestart,
+                detail: Ime.method,
+                action: () => Ime.restart()
+            },
+            {
+                label: "Input method settings",
+                icon: Theme.iconSettings,
+                action: () => Ime.configure()
+            }
+        ]
     }
 
     Pill {
@@ -77,10 +74,28 @@ Row {
         }
     }
 
+    // The reading carries no observation time and Weather.data is never
+    // cleared, so a feed that stopped arriving would keep reading as the
+    // current sky. The pill leaves when nothing new has come in for an hour.
+    Timer {
+        id: weatherFresh
+
+        interval: 3600000
+        running: true
+    }
+
+    Connections {
+        target: Weather
+
+        function onDataChanged() {
+            weatherFresh.restart();
+        }
+    }
+
     Pill {
-        visible: Weather.ready
+        visible: Weather.ready && weatherFresh.running
         icon: Theme.weatherIcon(Weather.code, Weather.day)
-        label: `${Weather.temp}°`
+        label: Weather.place !== "" ? `${Weather.place}, ${Weather.temp}°` : `${Weather.temp}°`
         fill: Theme.accentSky
         tooltip: `Sky       ${Theme.weatherText(Weather.code)}
 Now       ${Weather.temp}°C, feels ${Weather.feels}°C
@@ -90,11 +105,19 @@ Wind      ${Weather.wind} km/h
 Location  ${Weather.place}`
     }
 
+    // Networking.wifiEnabled is false both when the radio is off and when
+    // NetworkManager is not there to report on it, so an empty device list
+    // means unknown rather than off. Saying "off" over a working link is the
+    // one answer that cannot be recovered from by looking at the bar.
     Pill {
         icon: Net.preferWired ? Theme.iconEthernet : Net.wifiIcon()
         label: {
             if (Net.preferWired)
                 return "wired";
+            if (Net.devices.length === 0)
+                return "n/a";
+            if (!Net.wifiDevice)
+                return "none";
             if (!Net.wifiRadioOn)
                 return "off";
             if (!Net.wifiConnected)
@@ -104,6 +127,8 @@ Location  ${Weather.place}`
         fill: Net.preferWired || Net.wifiConnected ? Theme.accentGreen : Theme.muted
         command: root.terminal.concat(["nmtui"])
         tooltip: {
+            if (Net.devices.length === 0)
+                return "Network   unknown\nNo device is being reported, so NetworkManager is not running\nClick to open nmtui";
             const lines = [];
             if (Net.wiredConnected)
                 lines.push(`Wired     ${Net.wiredDevice?.name ?? "connected"}`);
@@ -112,7 +137,9 @@ Location  ${Weather.place}`
             else
                 lines.push("Wired     no interface");
 
-            if (!Net.wifiRadioOn)
+            if (!Net.wifiDevice)
+                lines.push("Wi-Fi     no interface");
+            else if (!Net.wifiRadioOn)
                 lines.push("Wi-Fi     radio off");
             else if (!Net.wifiConnected)
                 lines.push("Wi-Fi     not connected");
@@ -172,6 +199,7 @@ Location  ${Weather.place}`
             strokeColor: Theme.ink
         }
         label: `${Power.percent}%`
+        labelWidth: Theme.percentWidth
         fill: Theme.batteryColor(Power.percent, Power.charging)
         tooltip: {
             const lines = [`Charge    ${Power.percent}%`, `State     ${Power.stateLabel()}`];
@@ -191,6 +219,7 @@ Location  ${Weather.place}`
     Pill {
         icon: Theme.iconCpu
         label: `${Resources.cpuPercent}%`
+        labelWidth: Theme.percentWidth
         fill: Theme.loadColor(Resources.cpuUsage, Theme.accentOrange)
         command: root.terminal.concat(["btop"])
         tooltip: `CPU       ${Resources.cpuPercent}% busy\nSampled   every 1s from /proc/stat\nClick to open btop`
@@ -199,6 +228,7 @@ Location  ${Weather.place}`
     Pill {
         icon: Theme.iconMemory
         label: `${Resources.memPercent}%`
+        labelWidth: Theme.percentWidth
         fill: Theme.loadColor(Resources.memUsage, Theme.accentPurple)
         command: root.terminal.concat(["btop"])
         tooltip: `Memory    ${Resources.memUsedGb.toFixed(1)} of ${Resources.memTotalGb.toFixed(1)} GB\nIn use    ${Resources.memPercent}%\nSource    MemAvailable in /proc/meminfo\nClick to open btop`

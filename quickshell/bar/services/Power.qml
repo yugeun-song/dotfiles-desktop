@@ -9,7 +9,8 @@ Singleton {
     readonly property var device: UPower.displayDevice
     readonly property bool present: (root.device?.isPresent ?? false) && (root.device?.isLaptopBattery ?? false)
 
-    // UPower reports these as a 0..1 fraction, not a percentage.
+    // UPower reports percentage as a 0..1 fraction, not a percentage. The
+    // convention is not shared: healthPercentage below is already 0..100.
     readonly property int percent: Math.round((root.device?.percentage ?? 0) * 100)
     readonly property int state: root.device?.state ?? UPowerDeviceState.Unknown
     readonly property bool charging: root.state === UPowerDeviceState.Charging || root.state === UPowerDeviceState.PendingCharge
@@ -21,8 +22,13 @@ Singleton {
     readonly property real energyFull: root.device?.energyCapacity ?? 0
     readonly property real rate: Math.abs(root.device?.changeRate ?? 0)
 
-    readonly property bool healthKnown: root.device?.healthSupported ?? false
-    readonly property int health: Math.round((root.device?.healthPercentage ?? 0) * 100)
+    // Health comes off the real battery: the synthetic display device never
+    // publishes Capacity, and quickshell reads healthSupported as "capacity is
+    // not zero", so asking the display device hides the line for good.
+    readonly property var battery: UPower.devices?.values.find(d => d.isLaptopBattery) ?? null
+
+    readonly property bool healthKnown: root.battery?.healthSupported ?? false
+    readonly property int health: Math.round(root.battery?.healthPercentage ?? 0)
 
     readonly property real secondsToEmpty: root.device?.timeToEmpty ?? 0
     readonly property real secondsToFull: root.device?.timeToFull ?? 0

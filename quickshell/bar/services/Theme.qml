@@ -38,17 +38,24 @@ Singleton {
     }
 
     readonly property int textSize:    root.px(12)
+    // Menus are read at a glance and are not competing for room the way
+    // the bar is, so they carry their own, larger size.
+    readonly property int menuTextSize: root.px(14)
     // Nerd Font glyphs sit well inside their em box, so a glyph asked for at
     // the text size renders visibly smaller than the text beside it. The base
     // here is deliberately larger than textSize to compensate.
     readonly property int iconSize:    root.px(21)
     readonly property int pillHeight:  root.px(28)
-    readonly property int pillMargin:  root.px(9)
+    readonly property int pillMargin:  root.px(13)
     readonly property int pillRadius:  root.px(10)
     readonly property int pillPadding: root.px(11)
     readonly property int pillGlyphGap: root.px(6)
     readonly property int gap:         root.px(6)
     readonly property int edgeMargin:  root.px(10)
+    // The right group ends at the screen corner, where a margin equal to
+    // the left one reads as too tight: there is nothing beyond it to
+    // balance against.
+    readonly property int edgeMarginRight: root.px(18)
     readonly property int barHeight:   root.pillHeight + root.pillMargin * 2
 
     readonly property int chipWidth:   root.px(27)
@@ -85,8 +92,6 @@ Singleton {
     readonly property color purple: "#b3a1e6"
     readonly property color violet: "#7a5ccc"
 
-    // Lightened from the palette blue so the weather pill stays sky-like
-    // and does not read as the same blue the load pills use.
     // ---------------------------------------------------------------------
     // Accent set for the status pills. The background stays spaceduck, but
     // the accents come from a wider palette so seven pills sitting in a row
@@ -142,6 +147,17 @@ Singleton {
     readonly property string iconRestart:   String.fromCodePoint(0xF0450)
     readonly property string iconSettings:  String.fromCodePoint(0xF0493)
     readonly property string iconSwap:      String.fromCodePoint(0xF04E1)
+    readonly property string iconLock:      String.fromCodePoint(0xF033E)
+    readonly property string iconLogout:    String.fromCodePoint(0xF0343)
+    readonly property string iconSleep:     String.fromCodePoint(0xF0904)
+    readonly property string iconPower:     String.fromCodePoint(0xF0425)
+    readonly property string iconSearch:    String.fromCodePoint(0xF0349)
+    readonly property string iconApps:      String.fromCodePoint(0xF003C)
+    readonly property string iconBrightness: String.fromCodePoint(0xF00DE)
+    readonly property string iconVolume:    String.fromCodePoint(0xF057E)
+    readonly property string iconVolumeMed: String.fromCodePoint(0xF0580)
+    readonly property string iconVolumeLow: String.fromCodePoint(0xF057F)
+    readonly property string iconVolumeOff: String.fromCodePoint(0xF0581)
     readonly property string iconAlarm:     String.fromCodePoint(0xF0020)
     readonly property string iconAlarmRing: String.fromCodePoint(0xF0E47)
     readonly property string iconBatteryAlert: String.fromCodePoint(0xF0083)
@@ -224,8 +240,19 @@ Singleton {
         }
     }
 
-    // Battery glyphs form two ladders of ten: empty, 10 through 90, full.
-    // Index 0 is empty and index 10 is full in both.
+    function volumeIcon(percent: int, muted: bool): string {
+        if (muted || percent <= 0)
+            return root.iconVolumeOff;
+        if (percent < 34)
+            return root.iconVolumeLow;
+        if (percent < 67)
+            return root.iconVolumeMed;
+        return root.iconVolume;
+    }
+
+    // Both battery glyph runs advance in tens from a base code point, but
+    // neither run covers both ends: the charging one has no full glyph and the
+    // discharging one has no empty glyph, so those two are named on their own.
     function batteryIcon(percent: int, charging: bool): string {
         const step = Math.max(0, Math.min(10, Math.round(percent / 10)));
         if (charging)
@@ -258,6 +285,22 @@ Singleton {
             if (candidate && Quickshell.hasThemeIcon(candidate))
                 return Quickshell.iconPath(candidate, true);
         return "";
+    }
+
+    // A percentage reading swings between one and three digits, and letting
+    // the pill resize with it shifts every pill to its left on each sample.
+    // Three digits, so the number's right edge is in the same place at 1% as
+    // at 100% and only the space between the icon and the number changes.
+    // Measured rather than guessed so it tracks the scale factor.
+    readonly property int percentWidth: Math.ceil(percentMetrics.width)
+
+    TextMetrics {
+        id: percentMetrics
+
+        font.family: root.uiFont
+        font.pixelSize: root.textSize
+        font.weight: Font.Medium
+        text: "100%"
     }
 
     function shorten(value: string, limit: int): string {

@@ -29,8 +29,6 @@ Item {
     implicitWidth: Theme.workspaceCount * root.chipWidth + (Theme.workspaceCount - 1) * root.chipSpacing
     implicitHeight: Theme.pillHeight
 
-    property int previousGroup: root.groupIndex
-
     function firstIdFor(id: int): int {
         return Math.max(0, Math.floor((id - 1) / root.groupSize)) * root.groupSize + 1;
     }
@@ -88,7 +86,10 @@ Item {
         id: indicatorShadow
 
         x: indicator.x
-        y: Theme.px(2)
+        // One pixel, not two. The shadow is the only thing in the bar that
+        // reaches below the pills, and at two it was enough to make the whole
+        // left side read as sitting lower than the right.
+        y: Theme.px(1)
         width: indicator.width
         height: indicator.height
         radius: indicator.radius
@@ -127,11 +128,20 @@ Item {
     }
 
     WheelHandler {
+        id: wheel
+
+        // A touchpad sends one gesture as a stream of small deltas followed by
+        // a kinetic tail, so acting on each event walks several workspaces for
+        // one flick. A notch is 120, and only a full notch moves.
+        property real notch: 0
+
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         onWheel: event => {
-            if (event.angleDelta.y === 0)
+            wheel.notch += event.angleDelta.y;
+            if (Math.abs(wheel.notch) < 120)
                 return;
-            const step = event.angleDelta.y > 0 ? "-1" : "+1";
+            const step = wheel.notch > 0 ? "-1" : "+1";
+            wheel.notch = 0;
             Hyprland.dispatch(`hl.dsp.focus({workspace = "${step}"})`);
         }
     }

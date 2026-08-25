@@ -12,6 +12,14 @@ Rectangle {
     property int horizontalPadding: Theme.pillPadding
     property string tooltip: ""
     property int iconPixelSize: Theme.iconSize
+    // Width to hold open for the label, whatever it currently reads. A
+    // percentage swings between one and three digits; without this the pill
+    // resizes on every sample and drags its neighbours along.
+    //
+    // The label is right-aligned inside it, so the number's right edge and
+    // the icon both stay put and the missing digits show up as space between
+    // them, the way a right-aligned column of figures reads on paper.
+    property int labelWidth: 0
     property Component iconComponent: null
     property var menuEntries: []
     property var command: null
@@ -21,15 +29,41 @@ Rectangle {
     implicitHeight: Theme.pillHeight
     implicitWidth: content.implicitWidth + root.horizontalPadding * 2
     radius: Theme.pillRadius
-    color: root.fill
+
+    // Pressed and open both read as darker. Without this the only thing that
+    // changed on a click was a second surface appearing somewhere else, which
+    // is why clicking felt like it had not registered.
+    color: click.pressed || menu.open ? Qt.darker(root.fill, 1.35) : root.fill
+
+    Behavior on color {
+        ColorAnimation {
+            duration: 90
+            easing.type: Easing.OutCubic
+        }
+    }
 
     HoverHandler {
         id: hover
+
+        onHoveredChanged: {
+            if (!hover.hovered)
+                root.tooltipSuppressed = false;
+        }
     }
 
+    // Only one of the two surfaces is ever up, and the rule that decides is
+    // here rather than split across two timers. Once the menu has been used,
+    // the tooltip stays away until the pointer actually leaves the pill.
+    // A timer instead of a rule was what made the boundary feel arbitrary:
+    // the tooltip would come back on its own while the pointer had not moved.
+    property bool tooltipSuppressed: false
+
     Tooltip {
+        id: tip
+
         anchorItem: root
-        active: hover.hovered && !menu.open
+        active: hover.hovered && !menu.open && !click.pressed && !root.tooltipSuppressed
+        immediate: menu.open || click.pressed
         text: root.tooltip
     }
 
@@ -38,11 +72,24 @@ Rectangle {
 
         anchorItem: root
         entries: root.menuEntries
+
+        onOpened: {
+            tip.shown = false;
+            root.tooltipSuppressed = true;
+        }
+
+        onClosed: root.tooltipSuppressed = true
     }
 
     MouseArea {
+        id: click
+
         anchors.fill: parent
         cursorShape: root.command !== null || root.menuEntries.length > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
+        onPressed: {
+            tip.shown = false;
+            root.tooltipSuppressed = true;
+        }
         onClicked: {
             if (root.menuEntries.length > 0) {
                 menu.toggle();
@@ -77,8 +124,12 @@ Rectangle {
         }
 
         Text {
+            id: labelText
+
             anchors.verticalCenter: parent.verticalCenter
             visible: root.label !== ""
+            width: root.labelWidth > 0 ? root.labelWidth : implicitWidth
+            horizontalAlignment: root.labelWidth > 0 ? Text.AlignRight : Text.AlignLeft
             text: root.label
             font.family: Theme.uiFont
             font.pixelSize: Theme.textSize

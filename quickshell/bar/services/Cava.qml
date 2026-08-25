@@ -15,12 +15,38 @@ Singleton {
     readonly property bool demo: Quickshell.env("BAR_VIZ_DEMO") === "1"
 
     property var levels: []
+    property int restarts: 0
+
+    // cava exits on its own when its capture stream goes away, which is what a
+    // sink switch or a PipeWire restart does mid-track. Nothing else brings it
+    // back until playback is paused and resumed, so the well sits empty and
+    // reads as silence rather than as a dead helper.
+    Timer {
+        id: relaunch
+
+        interval: 2000
+        repeat: false
+        onTriggered: {
+            if (!root.active || root.demo)
+                return;
+            root.restarts = root.restarts + 1;
+            console.warn("[cava] exited, restart", root.restarts);
+            cava.running = true;
+            // Put the binding back, or nothing stops cava when playback does.
+            cava.running = Qt.binding(() => root.active && !root.demo);
+        }
+    }
 
     Process {
         id: cava
 
         running: root.active && !root.demo
         command: ["cava", "-p", Quickshell.shellPath("cava.conf")]
+
+        onExited: {
+            if (root.active && !root.demo)
+                relaunch.restart();
+        }
 
         stdout: SplitParser {
             onRead: data => {

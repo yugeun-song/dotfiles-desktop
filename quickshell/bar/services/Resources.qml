@@ -29,6 +29,9 @@ Singleton {
     FileView {
         id: kernelFile
         path: "/proc/sys/kernel/osrelease"
+        // Read synchronously: an async read cannot finish before
+        // Component.onCompleted returns, and the value is read once from there.
+        blockLoading: true
     }
 
     FileView {
@@ -86,7 +89,9 @@ Singleton {
 
     Component.onCompleted: {
         kernelFile.reload();
-        root.kernel = kernelFile.text().trim();
+        const value = kernelFile.text().trim();
+        if (value !== "")
+            root.kernel = value;
     }
 
     Timer {

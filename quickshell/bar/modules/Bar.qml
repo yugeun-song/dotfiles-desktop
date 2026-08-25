@@ -46,6 +46,15 @@ PanelWindow {
         Theme.referenceScreen = root.modelData;
     }
 
+    // Docking builds a bar for the laptop panel and tears it down again a
+    // moment later, and the reference used to stay pointed at that panel for
+    // as long as the shell ran. A bar that still owns the reference on the way
+    // out hands it to a screen that is actually there.
+    Component.onDestruction: {
+        if (Theme.referenceScreen === root.modelData)
+            Theme.referenceScreen = Quickshell.screens.find(s => s !== root.modelData) ?? null;
+    }
+
     Rectangle {
         anchors.fill: parent
         color: Theme.bg
@@ -58,7 +67,7 @@ PanelWindow {
             anchors.verticalCenter: parent.verticalCenter
             spacing: Theme.gap
 
-            ArchBadge {
+            SystemBadge {
                 anchors.verticalCenter: parent.verticalCenter
             }
 
@@ -90,7 +99,7 @@ PanelWindow {
             id: rightSection
 
             anchors.right: parent.right
-            anchors.rightMargin: Theme.edgeMargin
+            anchors.rightMargin: Theme.edgeMarginRight
             anchors.verticalCenter: parent.verticalCenter
         }
     }

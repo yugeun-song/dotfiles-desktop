@@ -27,6 +27,9 @@ write() {
     local tmp
     tmp=$(mktemp "$STATE_DIR/.alarms.XXXXXX") || return 1
     cat > "$tmp" || { rm -f "$tmp"; return 1; }
+    # A jq that fails upstream sends nothing down the pipe, and an empty file
+    # moved into place would erase every alarm without a word.
+    jq -e . "$tmp" > /dev/null 2>&1 || { rm -f "$tmp"; return 1; }
     mv "$tmp" "$STATE_FILE"
 }
 
@@ -46,11 +49,15 @@ next_epoch_for() {
 cmd_add() {
     local at="${1:-}"; shift || true
     local daily=false
-    if [[ "${1:-}" == "--daily" ]]; then
-        daily=true
-        shift
-    fi
-    local label="${*:-alarm}"
+    local words=() word
+    for word in "$@"; do
+        case "$word" in
+            --daily) daily=true ;;
+            --*)     echo "usage: alarm.sh add HH:MM [--daily] [label]" >&2; return 2 ;;
+            *)       words+=("$word") ;;
+        esac
+    done
+    local label="${words[*]:-alarm}"
 
     [[ -n "$at" ]] || { echo "usage: alarm.sh add HH:MM [--daily] [label]" >&2; return 2; }
 
@@ -60,28 +67,29 @@ cmd_add() {
     jq --arg id "$(date +%s%N)" --arg at "$at" --arg label "$label" \
        --argjson epoch "$epoch" --argjson daily "$daily" \
        '. + [{id: $id, at: $at, label: $label, epoch: $epoch, daily: $daily, fired: false}]' \
-       "$STATE_FILE" | write
+       "$STATE_FILE" | write || { echo "could not save alarm" >&2; return 1; }
     echo "added $at ($(date -d "@$epoch" '+%Y-%m-%d %H:%M')) $label"
 }
 
 cmd_in() {
     local spec="${1:-}"; shift || true
     local label="${*:-timer}"
-    [[ -n "$spec" ]] || { echo "usage: alarm.sh in <30m|2h|90s> [label]" >&2; return 2; }
+    [[ "$spec" =~ ^[0-9]+[smh]?$ ]] || { echo "usage: alarm.sh in <30m|2h|90s> [label]" >&2; return 2; }
 
+    # 10# so a leading zero is not taken for octal.
     local seconds
     case "$spec" in
-        *s) seconds=${spec%s} ;;
-        *m) seconds=$(( ${spec%m} * 60 )) ;;
-        *h) seconds=$(( ${spec%h} * 3600 )) ;;
-        *)  seconds=$(( spec * 60 )) ;;
+        *s) seconds=$(( 10#${spec%s} )) ;;
+        *m) seconds=$(( 10#${spec%m} * 60 )) ;;
+        *h) seconds=$(( 10#${spec%h} * 3600 )) ;;
+        *)  seconds=$(( 10#$spec * 60 )) ;;
     esac
 
     local epoch=$(( $(date +%s) + seconds ))
     jq --arg id "$(date +%s%N)" --arg at "$(date -d "@$epoch" +%H:%M)" --arg label "$label" \
        --argjson epoch "$epoch" \
        '. + [{id: $id, at: $at, label: $label, epoch: $epoch, daily: false, fired: false}]' \
-       "$STATE_FILE" | write
+       "$STATE_FILE" | write || { echo "could not save alarm" >&2; return 1; }
     echo "added $(date -d "@$epoch" '+%H:%M') $label"
 }
 
@@ -98,27 +106,47 @@ cmd_list() {
 cmd_remove() {
     local id="${1:-}"
     [[ -n "$id" ]] || { echo "usage: alarm.sh remove <id>" >&2; return 2; }
-    jq --arg id "$id" '[.[] | select((.id | startswith($id)) | not)]' "$STATE_FILE" | write
+
+    # The id is matched by prefix, so a short one can cover the whole list.
+    # Refuse anything but a single hit rather than deleting more than asked.
+    local matches
+    matches=$(jq --arg id "$id" '[.[] | select(.id | startswith($id))] | length' "$STATE_FILE") || return 1
+    if [[ "$matches" == 0 ]]; then
+        echo "no alarm matches $id" >&2
+        return 1
+    elif [[ "$matches" != 1 ]]; then
+        echo "$id matches $matches alarms:" >&2
+        jq -r --arg id "$id" '.[] | select(.id | startswith($id)) | "  \(.id)  \(.at)  \(.label)"' "$STATE_FILE" >&2
+        return 1
+    fi
+
+    jq --arg id "$id" '[.[] | select((.id | startswith($id)) | not)]' "$STATE_FILE" | write \
+        || { echo "could not save alarms" >&2; return 1; }
     echo "removed $id"
 }
 
-# Called by the bar after an alarm rings: repeating alarms roll to the next
-# day, one-off alarms are dropped.
+# Called by the bar after an alarm rings: repeating alarms roll forward, one-off
+# alarms are dropped. A daily alarm missed while the machine was off is days
+# behind, so it has to be stepped until it lands ahead of now, not by one day.
+# Only a one-off inside the bar's 300s ring window is dropped: one that went
+# past while the bar was down never rang, and deleting it here would lose it
+# with nothing shown to the user.
 cmd_reap() {
     local now
     now=$(date +%s)
     jq --argjson now "$now" '
         [ .[]
           | if .epoch <= $now then
-                if .daily then .epoch = (.epoch + 86400) | .fired = false
-                else empty end
+                if .daily then (.epoch |= until(. > $now; . + 86400)) | .fired = false
+                elif $now - .epoch < 300 then empty
+                else . end
             else . end
         ]
     ' "$STATE_FILE" | write
 }
 
 cmd_clear() {
-    printf '[]\n' | write
+    printf '[]\n' | write || { echo "could not clear alarms" >&2; return 1; }
     echo "cleared"
 }
 
@@ -129,5 +157,5 @@ case "${1:-list}" in
     remove) shift; cmd_remove "$@" ;;
     reap)   cmd_reap ;;
     clear)  cmd_clear ;;
-    *)      sed -n '3,18p' "${BASH_SOURCE[0]}" | sed 's/^#\{1,\} \{0,1\}//' ;;
+    *)      sed -n '3,16p' "${BASH_SOURCE[0]}" | sed 's/^#\{1,\} \{0,1\}//'; exit 2 ;;
 esac

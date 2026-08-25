@@ -45,8 +45,16 @@ Rectangle {
         text: root.summary
     }
 
-    onPlayingChanged: Cava.active = root.playing
-    Component.onDestruction: Cava.active = false
+    // Cava.active is shared by every bar, so it is bound rather than written:
+    // a copy torn down on a monitor change used to switch cava off while the
+    // surviving bar was still playing, and only a pause and resume brought it
+    // back. RestoreNone keeps the departing copy from putting a value back.
+    Binding {
+        target: Cava
+        property: "active"
+        value: root.playing
+        restoreMode: Binding.RestoreNone
+    }
 
     implicitHeight: Theme.pillHeight
     implicitWidth: root.pad * 2 + root.leadWidth + root.itemSpacing + root.textWidth
@@ -74,7 +82,10 @@ Rectangle {
             id: viz
 
             anchors.verticalCenter: parent.verticalCenter
-            visible: root.hasMedia
+            // An empty level list draws the same flat row of stubs a silent
+            // passage does, so the well collapses instead of claiming the
+            // track went quiet when cava is simply not feeding it.
+            visible: root.hasMedia && Cava.levels.length > 0
             barColor: Theme.ink
         }
 

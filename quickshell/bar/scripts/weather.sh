@@ -22,6 +22,10 @@
 #
 set -uo pipefail
 
+for dep in curl jq; do
+    command -v "$dep" >/dev/null 2>&1 || { echo "weather.sh: $dep is required" >&2; exit 1; }
+done
+
 # ---------------------------------------------------------------------------
 # Location. This is the only block that needs editing.
 # Look coordinates up at https://open-meteo.com/en/docs (geocoding section).
@@ -31,7 +35,10 @@ WEATHER_LON="${WEATHER_LON:-126.9780}"
 WEATHER_NAME="${WEATHER_NAME:-Seoul}"
 WEATHER_TZ="${WEATHER_TZ:-Asia/Seoul}"
 
-CACHE_TTL="${WEATHER_CACHE_TTL:-900}"   # 15 minutes
+# Kept below the status bar's 15-minute poll. At exactly 15 the cache is still
+# a few seconds short of expiring when the next tick arrives, so that tick is
+# served from cache and the reading only refreshes every 30 minutes.
+CACHE_TTL="${WEATHER_CACHE_TTL:-600}"   # 10 minutes
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/weather"
 CACHE_FILE="$CACHE_DIR/${WEATHER_LAT}_${WEATHER_LON}.json"
 
@@ -44,27 +51,55 @@ PARAMS+="&daily=weather_code,temperature_2m_max,temperature_2m_min"
 PARAMS+="&timezone=${WEATHER_TZ}&forecast_days=3"
 
 fetch() {
-    curl -fsSL --max-time 10 "${API}?${PARAMS}" 2>/dev/null
+    curl -fsSL --max-time 10 "${API}?${PARAMS}"
+}
+
+cache_mtime() {
+    stat -c %Y "$CACHE_FILE" 2>/dev/null || echo 0
 }
 
 cache_fresh() {
     [[ -s "$CACHE_FILE" ]] || return 1
-    local age=$(( $(date +%s) - $(stat -c %Y "$CACHE_FILE" 2>/dev/null || echo 0) ))
+    local age=$(( $(date +%s) - $(cache_mtime) ))
     (( age < CACHE_TTL ))
 }
 
+# A cache truncated by a killed run is still non-empty with a fresh mtime, so
+# age alone does not say the file is usable.
+cache_read() {
+    local cached
+    cached=$(cat "$CACHE_FILE" 2>/dev/null) || return 1
+    printf '%s' "$cached" | jq -e '.current' >/dev/null 2>&1 || return 1
+    printf '%s' "$cached"
+}
+
+# Sets $json and $FETCHED. FETCHED is when the reading it returns was obtained,
+# so a consumer can tell a stale cache from a live answer; a live body is timed
+# here rather than by the cache mtime, which stays behind when the cache write
+# is skipped.
 get_json() {
-    if cache_fresh; then cat "$CACHE_FILE"; return 0; fi
-    local body
+    if cache_fresh && json=$(cache_read); then
+        FETCHED=$(cache_mtime)
+        return 0
+    fi
+    local body tmp
     body=$(fetch)
     if [[ -n "$body" ]] && printf '%s' "$body" | jq -e '.current' >/dev/null 2>&1; then
-        printf '%s' "$body" > "$CACHE_FILE"
-        printf '%s' "$body"
+        # Write through a temporary file so a run that dies mid-write leaves
+        # the previous cache in place instead of a partial one.
+        if tmp=$(mktemp "$CACHE_DIR/.wx.XXXXXX" 2>/dev/null); then
+            printf '%s' "$body" > "$tmp" && mv "$tmp" "$CACHE_FILE" || rm -f "$tmp"
+        fi
+        json=$body
+        FETCHED=$(date +%s)
         return 0
     fi
     # On a failed fetch, fall back to a stale cache so the last known value
     # still shows while the network is down.
-    [[ -s "$CACHE_FILE" ]] && { cat "$CACHE_FILE"; return 0; }
+    if json=$(cache_read); then
+        FETCHED=$(cache_mtime)
+        return 0
+    fi
     return 1
 }
 
@@ -99,21 +134,23 @@ wmo_desc() {
 wmo_icon() {
     local code="$1" day="${2:-1}"
     case "$code" in
-        0)        [[ "$day" == 1 ]] && echo "" || echo "" ;;
-        1|2)      [[ "$day" == 1 ]] && echo "" || echo "" ;;
-        3)        echo "" ;;
-        45|48)    echo "" ;;
-        51|53|55|56|57) echo "" ;;
-        61|63|65|66|67) echo "" ;;
-        71|73|75|77)    echo "" ;;
-        80|81|82) echo "" ;;
-        85|86)    echo "" ;;
-        95|96|99) echo "" ;;
-        *)        echo "" ;;
+        0)        [[ "$day" == 1 ]] && echo "󰖙" || echo "󰖔" ;;
+        1|2)      [[ "$day" == 1 ]] && echo "󰖕" || echo "󰼱" ;;
+        3)        echo "󰖐" ;;
+        45|48)    echo "󰖑" ;;
+        51|53|55|56|57) echo "󰖗" ;;
+        61|63|65|66|67) echo "󰖖" ;;
+        71|73|75|77)    echo "󰖘" ;;
+        80|81|82) echo "󰖖" ;;
+        85|86)    echo "󰖘" ;;
+        95|96|99) echo "󰖓" ;;
+        *)        echo "󰖐" ;;
     esac
 }
 
-json=$(get_json) || { echo "weather unavailable"; exit 1; }
+json=""
+FETCHED=0
+get_json || { echo "weather.sh: fetch failed and no usable cache at $CACHE_FILE" >&2; exit 1; }
 
 code=$(printf '%s' "$json" | jq -r '.current.weather_code')
 isday=$(printf '%s' "$json" | jq -r '.current.is_day')
@@ -129,8 +166,9 @@ case "${1:-}" in
         ;;
     --bar)
         # One line, so a stream parser split on newlines receives it whole.
-        printf '%s' "$json" | jq -c --arg place "$WEATHER_NAME" '{
+        printf '%s' "$json" | jq -c --arg place "$WEATHER_NAME" --argjson fetched "$FETCHED" '{
             place:    $place,
+            fetched:  $fetched,
             code:     .current.weather_code,
             temp:     (.current.temperature_2m | round),
             feels:    (.current.apparent_temperature | round),
