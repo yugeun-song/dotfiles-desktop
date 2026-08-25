@@ -22,6 +22,7 @@ local launch    = scripts .. "/launch.sh"
 local clipboard = scripts .. "/clipboard.sh"
 local shellkey  = scripts .. "/shell-global.sh"
 local wswalk    = scripts .. "/workspace-walk.sh"
+local dirwalk   = scripts .. "/focus-walk.sh"
 
 local app = {
     browser  = launch .. " 'google-chrome-stable' 'firefox' 'chromium' 'brave' 'librewolf'",
@@ -61,6 +62,12 @@ for _, key in ipairs({ "SUPER_L", "SUPER_R" }) do
     hl.bind("SUPER + " .. key, hl.dsp.exec_cmd(shellkey .. " launcher"),
         { release = true, description = "Application launcher" })
 end
+-- The power button, now that logind is told to ignore it. The short press is
+-- a userspace input event and this is what reads it; the four second
+-- hardware override is below any of this and stays the way out of a wedged
+-- machine.
+hl.bind("XF86PowerOff", hl.dsp.global("quickshell:powerMenu"),
+    { description = "Session menu" })
 hl.bind("CTRL + ALT + Delete", hl.dsp.global("quickshell:powerMenu"),
     { description = "Session dialog" })
 hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd(scripts .. "/session-autostart.sh"),
@@ -71,19 +78,19 @@ local vim_dir   = { H = "l", J = "d", K = "u", L = "r" }
 local arrow_dir = { Left = "l", Down = "d", Up = "u", Right = "r" }
 
 for key, dir in pairs(vim_dir) do
-    hl.bind("SUPER + " .. key, hl.dsp.focus({ direction = dir }),
+    hl.bind("SUPER + " .. key, hl.dsp.exec_cmd(dirwalk .. " focus " .. dir),
         { description = "Focus " .. dir })
-    hl.bind("SUPER + SHIFT + " .. key, hl.dsp.window.move({ direction = dir }),
+    hl.bind("SUPER + SHIFT + " .. key, hl.dsp.exec_cmd(dirwalk .. " move " .. dir),
         { description = "Move window " .. dir })
 end
 for key, dir in pairs(arrow_dir) do
-    hl.bind("SUPER + " .. key, hl.dsp.focus({ direction = dir }),
+    hl.bind("SUPER + " .. key, hl.dsp.exec_cmd(dirwalk .. " focus " .. dir),
         { description = "Focus " .. dir })
-    hl.bind("SUPER + SHIFT + " .. key, hl.dsp.window.move({ direction = dir }),
+    hl.bind("SUPER + SHIFT + " .. key, hl.dsp.exec_cmd(dirwalk .. " move " .. dir),
         { description = "Move window " .. dir })
 end
-hl.bind("SUPER + BracketLeft", hl.dsp.focus({ direction = "l" }))
-hl.bind("SUPER + BracketRight", hl.dsp.focus({ direction = "r" }))
+hl.bind("SUPER + BracketLeft", hl.dsp.exec_cmd(dirwalk .. " focus l"))
+hl.bind("SUPER + BracketRight", hl.dsp.exec_cmd(dirwalk .. " focus r"))
 
 --##! Window state
 hl.bind("SUPER + Q", hl.dsp.window.close(), { description = "Close window" })
