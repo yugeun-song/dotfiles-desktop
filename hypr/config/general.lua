@@ -85,6 +85,15 @@ hl.config({
         -- Nothing here restores a session lock, and a stale restore leaves
         -- an unlockable screen after a crash.
         allow_session_lock_restore = false,
+        -- Any input brings the outputs back. Both default to off, which means
+        -- a screen switched off by the lid binding or left off across a
+        -- suspend stays dark no matter what is typed at it. Locked, that is
+        -- not a dark screen, it is a lock screen nobody can read the password
+        -- field on. The cost is that a key pressed on an external keyboard
+        -- lights the internal panel inside a closed lid, which is wasted
+        -- backlight and nothing worse.
+        mouse_move_enables_dpms = true,
+        key_press_enables_dpms = true,
     },
 
     debug = {
