@@ -92,10 +92,26 @@ Rectangle {
     MouseArea {
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
+
+        // The prefix matters and the two places Hyprland reports an address
+        // disagree about it. The event stream, which is where these toplevels
+        // come from, writes it bare: `activewindowv2>>56035d324da0`. hyprctl
+        // writes `0x56035d324da0`, and the dispatcher only finds a window when
+        // it is given that form. Sent bare it answers "window not found" and
+        // the click does nothing at all, which looks exactly like a chip that
+        // was never clickable.
+        function focusAddress(): string {
+            const raw = root.toplevel?.address ?? "";
+            if (raw === "")
+                return "";
+            return raw.startsWith("0x") ? raw : "0x" + raw;
+        }
+
         onClicked: {
-            const address = root.toplevel?.address ?? "";
-            if (address !== "")
-                Hyprland.dispatch(`hl.dsp.focus({window = "address:${address}"})`);
+            const address = focusAddress();
+            if (address === "")
+                return;
+            Hyprland.dispatch(`hl.dsp.focus({ window = "address:${address}" })`);
         }
     }
 }
