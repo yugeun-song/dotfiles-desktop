@@ -2,14 +2,55 @@
 #
 # Links the desktop configuration into place.
 #
-# Nothing here needs privileges except the fontconfig file, which is offered
-# separately because it belongs to the system rather than the user.
+# One file needs privileges: the font chain, which lives under /etc because it
+# belongs to the system rather than to a user. It used to be printed as two
+# commands to run afterwards, and it was never run, so the machine kept the
+# font configuration of the dotfiles this repository replaced. It is installed
+# here now, and the privilege for it is asked for once at the start rather than
+# in the middle.
 #
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
+FONTCONF=/etc/fonts/local.conf
+
+# Asked for before anything is written, so a password prompt never appears
+# halfway through with links already made and the rest still to do. Refreshed
+# in the background because the timestamp expires on its own and this script
+# can take longer than that on a cold cache.
+#
+# Failing here is not fatal: everything except the font chain is the user's own
+# files. What cannot be installed is reported at the end.
+SUDO_OK=0
+SUDO_KEEPALIVE=
+
+acquire_sudo() {
+    if [[ -f "$FONTCONF" ]] && cmp -s "$SRC/fontconfig/local.conf" "$FONTCONF"; then
+        echo "font chain already installed at $FONTCONF"
+        return 0
+    fi
+    if ! command -v sudo >/dev/null 2>&1; then
+        echo "sudo is not installed, so $FONTCONF cannot be written" >&2
+        return 0
+    fi
+    if sudo -v 2>/dev/null; then
+        SUDO_OK=1
+        ( while true; do sudo -n true 2>/dev/null; sleep 50; done ) &
+        SUDO_KEEPALIVE=$!
+    else
+        echo "no sudo, so $FONTCONF is left alone" >&2
+    fi
+}
+
+cleanup() {
+    [[ -n "$SUDO_KEEPALIVE" ]] && kill "$SUDO_KEEPALIVE" 2>/dev/null
+    return 0
+}
+trap cleanup EXIT
+
+acquire_sudo
 
 link() {
     local from="$1" to="$2"
@@ -85,6 +126,22 @@ make_executable "$SRC/quickshell/bar/scripts" "the caps lock, input method, weat
 make_executable "$SRC/hypr/scripts" "the monitor, terminal and capture bindings"
 
 echo
-echo "the font chain is a system file and is not linked automatically:"
-echo "  sudo install -Dm644 $SRC/fontconfig/local.conf /etc/fonts/local.conf"
-echo "  sudo fc-cache -f"
+if [[ -f "$FONTCONF" ]] && cmp -s "$SRC/fontconfig/local.conf" "$FONTCONF"; then
+    echo "font chain: already current"
+elif (( SUDO_OK )); then
+    if [[ -f "$FONTCONF" ]]; then
+        sudo cp -a "$FONTCONF" "$FONTCONF.bak-$STAMP" \
+            && echo "kept existing font chain at $FONTCONF.bak-$STAMP"
+    fi
+    if sudo install -Dm644 "$SRC/fontconfig/local.conf" "$FONTCONF"; then
+        echo "installed $FONTCONF"
+        # Without this the new chain is on disk and nothing is using it.
+        sudo fc-cache -f >/dev/null 2>&1 && echo "font cache rebuilt"
+    else
+        echo "could not write $FONTCONF" >&2
+    fi
+else
+    echo "the font chain was not installed. it is a system file:" >&2
+    echo "  sudo install -Dm644 $SRC/fontconfig/local.conf $FONTCONF" >&2
+    echo "  sudo fc-cache -f" >&2
+fi
