@@ -1,21 +1,22 @@
 #!/usr/bin/env bash
 #
-# Step through the workspaces that exist, and stop at the ends.
+# Step to the next workspace by number, and stop at the ends.
 #
-# Hyprland's own relative form, r+n and r-n, wraps: pressing left on the
-# first workspace lands on the last one. That is a jump across the whole set
-# dressed up as a step, and it happens exactly when the intent was to find
-# out there is nothing further left. So the index is clamped here instead.
+# Hyprland's own relative forms wrap: left from the first workspace lands on
+# the last one. That is a jump across the whole set dressed up as a step, and
+# it happens exactly when the intent was to find out there is nothing further
+# left.
 #
-# Only regular workspaces are walked. Special workspaces have negative ids and
-# are reached by their own binding, not by stepping into them by accident.
+# Walking by number rather than over the workspaces that happen to exist,
+# because an empty workspace to the right is somewhere to go: Hyprland creates
+# it on arrival. Walking only the existing ones would mean the key does nothing
+# at all until a second workspace has been made some other way.
 #
 # Usage: workspace-walk.sh focus|move <signed step>
 
 set -euo pipefail
 
-# Nothing here creates a workspace, so this is a guard rather than a policy in
-# force: it is the answer for whatever adds a create-and-go binding later.
+MIN_WORKSPACE=1
 MAX_WORKSPACE="${HYPR_MAX_WORKSPACE:-100}"
 
 mode="${1-}"
@@ -35,31 +36,21 @@ current=$(hyprctl -j activeworkspace 2>/dev/null | jq -r '.id') || {
 [[ "$current" =~ ^-?[0-9]+$ ]] || {
     printf 'workspace-walk: no active workspace id\n' >&2; exit 1; }
 
-# A special workspace is showing. Stepping from it would leave the caller on
-# whatever regular workspace happens to sort next, which is not a step.
-(( current < 1 )) && exit 0
+# A special workspace is showing. Stepping from it would land on whatever
+# number happens to be next, which is not a step from anywhere the user is.
+(( current < MIN_WORKSPACE )) && exit 0
 
-mapfile -t ids < <(hyprctl -j workspaces 2>/dev/null \
-    | jq -r --argjson max "$MAX_WORKSPACE" '.[] | select(.id > 0 and .id <= $max) | .id' | sort -n)
-(( ${#ids[@]} > 0 )) || exit 0
-
-index=-1
-for i in "${!ids[@]}"; do
-    [[ "${ids[$i]}" == "$current" ]] && { index=$i; break; }
-done
-(( index < 0 )) && exit 0
-
-target=$(( index + step ))
-(( target < 0 )) && target=0
-(( target > ${#ids[@]} - 1 )) && target=$(( ${#ids[@]} - 1 ))
-(( target == index )) && exit 0
+target=$(( current + step ))
+(( target < MIN_WORKSPACE )) && target=$MIN_WORKSPACE
+(( target > MAX_WORKSPACE )) && target=$MAX_WORKSPACE
+(( target == current )) && exit 0
 
 # Lua syntax, not the plain dispatcher names. Under a Lua configuration
 # hyprctl wraps the argument as hl.dispatch(<argument>) and evaluates it, so
-# `hyprctl dispatch workspace 3` is a Lua parse error and this script would
-# report success while doing nothing at all.
+# `hyprctl dispatch workspace 3` is a parse error: it answers ok and moves
+# nothing, which is indistinguishable from a key that is not bound.
 if [[ "$mode" == "focus" ]]; then
-    hyprctl dispatch "hl.dsp.focus({ workspace = ${ids[$target]} })" >/dev/null
+    hyprctl dispatch "hl.dsp.focus({ workspace = $target })" >/dev/null
 else
-    hyprctl dispatch "hl.dsp.window.move({ workspace = ${ids[$target]} })" >/dev/null
+    hyprctl dispatch "hl.dsp.window.move({ workspace = $target })" >/dev/null
 fi

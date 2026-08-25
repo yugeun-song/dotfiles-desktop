@@ -268,10 +268,13 @@ hl.bind("CTRL + SHIFT + ALT + SUPER + Delete", hl.dsp.exec_cmd("systemctl powero
     { description = "Shut down" })
 
 --##! Lid
--- The panel goes dark, the session does not go to sleep.
-hl.bind("switch:on:Lid Switch", hl.dsp.exec_cmd("hyprctl dispatch dpms off eDP-1"),
+-- The panel goes dark, the session does not go to sleep, and the keyboard
+-- keeps working. Through a script because the right action depends on whether
+-- an external is connected, and because `hyprctl dispatch dpms off eDP-1` is a
+-- Lua parse error under this configuration: it answers ok and does nothing.
+hl.bind("switch:on:Lid Switch", hl.dsp.exec_cmd(scripts .. "/lid.sh close"),
     { locked = true, description = "Lid: internal panel off" })
-hl.bind("switch:off:Lid Switch", hl.dsp.exec_cmd("hyprctl dispatch dpms on eDP-1"),
+hl.bind("switch:off:Lid Switch", hl.dsp.exec_cmd(scripts .. "/lid.sh open"),
     { locked = true, description = "Lid: internal panel on" })
 
 --##! Virtual machines
