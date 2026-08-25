@@ -844,7 +844,7 @@ apply_hypr_border() {
 - **바를 재시작하지 않는다.** `bin/bar`에는 `--restart`가 없고 `--stop`(`bin/bar:124-158`)은 슈퍼바이저까지 죽인다. IPC 호출이 실패하면 그냥 다음 기동 때 읽히게 둔다.
 - **fcitx5를 재시작하지 않는다.** `hypr/scripts/session-autostart.sh:113-115`가 적듯 재시작하면 떠 있는 모든 클라이언트가 입력 컨텍스트를 잃는다. `fcitx5-remote -r`는 재적재이지 재시작이 아니다.
 - **`gsettings set gtk-theme` / `icon-theme` / `cursor-theme`를 건드리지 않는다.** 그 셋은 `hypr/scripts/gsettings-apply.sh:44-46`의 관할이고 팔레트와 무관하다. `color-scheme` 한 줄만 예외다.
-- **벽지를 바꾸지 않는다.** `hyprpaper.conf`와 `~/.local/share/wallpapers/current.png`는 사용자 상태다. 벽지에서 색을 뽑는 방향은 이 설계가 명시적으로 거부한 것이다.
+- **벽지를 바꾸지 않는다.** `hyprpaper.conf`와 `~/Pictures/Wallpapers/current.png`는 사용자 상태다. 벽지에서 색을 뽑는 방향은 이 설계가 명시적으로 거부한 것이다.
 - **세션을 끝내지 않는다.** 로그아웃이나 재로그인을 유도하지 않고, 재시작이 필요한 것은 필요하다고 말하고 끝낸다.
 - **손으로 고쳐진 생성물을 조용히 덮지 않는다.** 5절의 마커 검사가 걸리면 `build`는 멈춘다.
 

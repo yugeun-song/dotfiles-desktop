@@ -2,10 +2,12 @@
 #
 # Set the wallpaper.
 #
-# One image, at one path. hyprpaper.conf preloads it and hyprlock.conf draws
-# it blurred, both by that same literal path, which is what keeps the desktop
-# and the lock screen from drifting apart. Changing the wallpaper therefore
-# means replacing the file, not editing two configurations.
+# One image, at one path, under Pictures where a file manager can reach it.
+# hyprlock.conf names that path directly; hyprpaper cannot, because it expands
+# neither ~ nor $HOME, so this script hands it the resolved path over IPC. Both
+# end up at the same file, which is what keeps the desktop and the lock screen
+# from drifting apart. Changing the wallpaper means replacing the file, not
+# editing two configurations.
 #
 # The name ends in .png because both configurations name it that way. A source
 # in another format is converted rather than copied under a lying extension:
@@ -19,7 +21,7 @@
 
 set -euo pipefail
 
-DEST="${XDG_DATA_HOME:-$HOME/.local/share}/wallpapers/current.png"
+DEST="$HOME/Pictures/Wallpapers/current.png"
 
 die() { printf 'wallpaper: %s\n' "$*" >&2; exit 1; }
 
@@ -56,8 +58,8 @@ case "${1-}" in
     --show)
         printf 'path      %s\n' "$DEST"
         [[ -f "$DEST" ]] && printf 'size      %s\n' "$(stat -c %s "$DEST") bytes" || printf 'size      missing\n'
-        printf 'desktop   hypr/hyprpaper.conf\n'
-        printf 'lock      hypr/hyprlock.conf\n'
+        printf 'desktop   set over ipc by this script; hyprpaper.conf cannot name a path\n'
+        printf 'lock      hypr/hyprlock.conf names this path directly\n'
         exit 0
         ;;
     --reload)
