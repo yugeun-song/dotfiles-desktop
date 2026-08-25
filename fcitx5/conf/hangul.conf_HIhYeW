@@ -1,0 +1,27 @@
+# Keyboard Layout
+Keyboard=Dubeolsik
+# Hanja Mode Toggle Key
+HanjaModeToggleKey=
+# Auto Reorder
+AutoReorder=True
+# Combine on Double Stroke
+CombiOnDoubleStroke=False
+# Combine Non Choseong
+NonChoseongCombi=True
+# Word Commit
+WordCommit=False
+# Hanja Mode
+HanjaMode=False
+
+[PrevPage]
+0=Up
+
+[NextPage]
+0=Down
+
+[PrevCandidate]
+0=Shift+Tab
+
+[NextCandidate]
+0=Tab
+
