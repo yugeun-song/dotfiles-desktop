@@ -235,7 +235,11 @@ hl.bind("SUPER + ALT + M", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE
 -- knows the difference between a backlight device and a monitor on DDC and
 -- draws the readout. The second runs only when the shell is not there, so a
 -- crashed bar costs the readout and not the key.
-local shell_alive = "pgrep -x quickshell >/dev/null 2>&1"
+-- The process is named qs, not quickshell: bin/bar prefers the qs binary and
+-- that is what ends up in comm. Matching only "quickshell" made this test
+-- always fail, so the fallback fired alongside the shell handler and every
+-- press moved two steps, all the way to a dark panel.
+local shell_alive = "pgrep -x qs >/dev/null 2>&1 || pgrep -x quickshell >/dev/null 2>&1"
 
 hl.bind("XF86MonBrightnessUp", hl.dsp.global("quickshell:brightnessUp"),
     { locked = true, repeating = true, description = "Brightness up" })
@@ -271,6 +275,15 @@ hl.bind("XF86AudioPrev", hl.dsp.exec_cmd("playerctl previous"), { locked = true 
 -- Not SUPER + L: that is "focus right" above, and losing a directional key to
 -- a lock screen is a poor trade.
 hl.bind("CTRL + ALT + L", hl.dsp.exec_cmd("loginctl lock-session"), { description = "Lock" })
+-- The way out of a lock screen that died. Under ext-session-lock a crashed
+-- locker leaves the session locked on purpose, which is the right default and
+-- also a way to be shut out of a running machine with every window still in
+-- it. This is safe to bind: Hyprland refuses it while a lock client is alive
+-- ("session is locked with a client, refusing"), so it can only clear a lock
+-- that has nothing behind it. locked = true, because the moment it is needed
+-- is the moment ordinary bindings are not being delivered.
+hl.bind("CTRL + ALT + SHIFT + U", hl.dsp.exec_cmd("hyprctl eval 'hl.clear_crashed_lockscreen()'"),
+    { locked = true, description = "Clear a crashed lock screen" })
 hl.bind("CTRL + SHIFT + ALT + SUPER + Delete", hl.dsp.exec_cmd("systemctl poweroff"),
     { description = "Shut down" })
 

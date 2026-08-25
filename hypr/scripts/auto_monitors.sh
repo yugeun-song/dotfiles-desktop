@@ -172,38 +172,61 @@ if (( ${#external[@]} > 1 )); then
 fi
 
 if (( ${#external[@]} > 0 )); then
-    for row in "${internal[@]}"; do
-        name="${row%%|*}"
-        place "$name" "${PARK_X}x0"
-        # Parked but still enabled is the worst of both: a live output at
-        # 20000x0 that windows and workspaces can be sent to and nobody sees.
-        # Put it back on screen before giving up.
-        apply "{output=\"$name\", disabled=true}" || {
-            place "$name" "0x0"
-            exit 1
-        }
-    done
-
+    # The externals go up first. Switching the internal panel off before the
+    # screen meant to replace it is actually working leaves a window, and on a
+    # failure a whole session, with no enabled output at all. There is no way
+    # back from that with a keyboard nobody can see.
+    placed=0
     first=1
     for row in "${external[@]}"; do
         name="${row%%|*}"
         if (( first )); then
-            place "$name" "0x0"
-            first=0
+            if place "$name" "0x0"; then
+                placed=1
+                first=0
+            fi
         else
-            place "$name" "auto"
+            place "$name" "auto" || true
         fi
+    done
+
+    # Every external refused. The panel is still the only screen there is, so
+    # it stays on: a listed output is not the same thing as a working one.
+    if (( ! placed )); then
+        echo "auto_monitors: no external output could be configured, keeping the internal panel" >&2
+        for row in "${internal[@]}"; do
+            place "${row%%|*}" "0x0" || true
+        done
+        exit 1
+    fi
+
+    for row in "${internal[@]}"; do
+        name="${row%%|*}"
+        place "$name" "${PARK_X}x0" || true
+        # Parked but still enabled is the worst of both: a live output at
+        # 20000x0 that windows and workspaces can be sent to and nobody sees.
+        # Put it back on screen before giving up.
+        apply "{output=\"$name\", disabled=true}" || {
+            place "$name" "0x0" || true
+            exit 1
+        }
     done
     exit 0
 fi
 
 # No external output. Re-enable the panel if a previous run turned it off.
+#
+# The reload is allowed to fail. Under set -e a non-zero exit here would end
+# the script before the place loop below, which is the only thing that puts the
+# panel back on screen, and the result of that is a laptop with its lid open
+# and nothing on it.
 for row in "${internal[@]}"; do
     if [[ "${row#*|}" == "true" ]]; then
-        hyprctl reload >/dev/null
+        hyprctl reload >/dev/null || \
+            echo "auto_monitors: hyprctl reload failed, the panel may still be disabled" >&2
         break
     fi
 done
 for row in "${internal[@]}"; do
-    place "${row%%|*}" "0x0"
+    place "${row%%|*}" "0x0" || true
 done

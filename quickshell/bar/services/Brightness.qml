@@ -129,10 +129,15 @@ Singleton {
 
     property int pending: -1
 
+    // Not zero. A backlight at zero is a panel that shows nothing, and the way
+    // back is a key on a screen that cannot be read. One percent is still dark
+    // enough to be the bottom of the range and leaves the screen legible.
+    readonly property int floorPercent: 1
+
     function set(value) {
         if (!root.available)
             return;
-        root.percent = Math.max(0, Math.min(100, Math.round(value)));
+        root.percent = Math.max(root.floorPercent, Math.min(100, Math.round(value)));
         root.changed();
         root.pending = root.percent;
         coalesce.restart();
