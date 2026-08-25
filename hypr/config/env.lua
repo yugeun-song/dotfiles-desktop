@@ -21,9 +21,16 @@ hl.env("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
 -- that misses this shows a keyboard that cannot type Hangul at all.
 hl.env("XMODIFIERS", "@im=fcitx")
 hl.env("QT_IM_MODULE", "fcitx")
-hl.env("GTK_IM_MODULE", "fcitx")
+-- wayland, not fcitx. GTK4 speaks text-input-v3 to the compositor, and naming
+-- the fcitx immodule here puts the legacy path in front of it: the two then
+-- both claim the preedit and Hangul composition breaks in GTK applications
+-- while working everywhere else.
+hl.env("GTK_IM_MODULE", "wayland")
 hl.env("SDL_IM_MODULE", "fcitx")
 hl.env("GLFW_IM_MODULE", "ibus")
+-- For anything that reads neither the toolkit variables nor XMODIFIERS, which
+-- in practice means games and a long tail of single-purpose programs.
+hl.env("INPUT_METHOD", "fcitx")
 
 hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
 hl.env("XDG_SESSION_TYPE", "wayland")
