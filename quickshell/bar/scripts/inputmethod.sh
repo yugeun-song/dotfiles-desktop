@@ -13,10 +13,14 @@
 #
 set -u
 
+
 interval="${INPUTMETHOD_POLL_INTERVAL:-0.3}"
 last=""
 
-command -v fcitx5-remote >/dev/null 2>&1 || exit 0
+command -v fcitx5-remote >/dev/null 2>&1 || {
+    echo "inputmethod.sh: fcitx5-remote not found on PATH; IME indicator disabled" >&2
+    exit 1
+}
 
 while :; do
     state=$(fcitx5-remote 2>/dev/null) || state=""

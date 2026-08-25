@@ -1,8 +1,13 @@
 pragma Singleton
 
+import QtQuick
 import Quickshell
 import Quickshell.Io
 
+// Named Ime, not InputMethod. QtQuick exports a type called InputMethod, and
+// any file importing QtQuick resolves that name to Qt's type instead of this
+// singleton. The failure is silent: the pill renders with an empty label and
+// a stray "Unable to assign [undefined]" in the log.
 Singleton {
     id: root
 
@@ -37,9 +42,43 @@ Singleton {
         Quickshell.execDetached(["fcitx5-remote", "-r"]);
     }
 
+    // A helper that dies takes its pill's value with it, and a stale number
+    // that still looks live is worse than an obviously missing one. So the
+    // service says when it last heard anything, and brings the helper back.
+    property bool stale: true
+    property int restarts: 0
+
+    Timer {
+        id: supervisor
+
+        interval: 2000
+        repeat: false
+        onTriggered: {
+            root.restarts = root.restarts + 1;
+            console.warn("[ime] helper exited, restart", root.restarts);
+            poller.running = true;
+        }
+    }
+
     Process {
+        id: poller
+
         running: true
         command: [Quickshell.shellPath("scripts/inputmethod.sh")]
+
+        onRunningChanged: {
+            if (!poller.running) {
+                // Clearing the state hides the pill instead of leaving a label
+                // that claims hangul while the user is typing latin. The script
+                // reprints the current state as soon as it comes back.
+                root.stale = true;
+                root.state = "";
+                root.method = "";
+                supervisor.restart();
+            } else {
+                root.stale = false;
+            }
+        }
 
         stdout: SplitParser {
             onRead: line => {
