@@ -3,9 +3,20 @@
 # Qt reads none of this unless QT_QPA_PLATFORMTHEME names a platform theme
 # plugin; config/env.lua sets it to kde, which loads
 # KDEPlasmaPlatformTheme6.so from plasma-integration. Without that a KDE
-# application ignores this file entirely and draws in its own default light
-# palette, which is how a file manager ends up white on a dark desktop.
+# application ignores this file and draws its own default light palette,
+# which is how a file manager ends up white on a dark desktop.
 #
+# The colours are here, in full, on purpose. A .colors file is not read by
+# applications: the settings dialog copies its contents into this file when
+# someone picks a scheme by name. Naming a scheme here without the blocks
+# below leaves every colour at the Qt default.
+#
+# The colour blocks below are duplicated in kde/kdeglobals, and have to stay
+# identical. Qt and KDE applications read kdeglobals directly; this file is
+# only what the settings dialog copies from when someone picks the scheme by
+# name there. Editing one and not the other means the desktop and the settings
+# dialog disagree about what the scheme is.
+
 # Everything named here comes from an official package or from this
 # repository. No AUR.
 
@@ -13,14 +24,145 @@
 ColorScheme=SpaceduckDark
 Name=Spaceduck Dark
 # Breeze is the only widget style that is both compiled code and an official
-# package. The colours come from kde/SpaceduckDark.colors, so the style only
-# decides shapes.
+# package. The colours above decide the palette, so the style only decides
+# shapes.
 widgetStyle=Breeze
 font=Inter,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 fixed=CaskaydiaCove Nerd Font Mono,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 menuFont=Inter,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 smallestReadableFont=Inter,9,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 toolBarFont=Inter,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
+
+[Colors:Window]
+BackgroundNormal=15,17,27
+BackgroundAlternate=27,28,54
+DecorationFocus=122,162,247
+DecorationHover=125,207,255
+ForegroundNormal=236,240,193
+ForegroundActive=122,162,247
+ForegroundInactive=104,111,154
+ForegroundLink=125,207,255
+ForegroundVisited=187,154,247
+ForegroundNegative=247,118,142
+ForegroundNeutral=224,175,104
+ForegroundPositive=158,206,106
+
+[Colors:View]
+BackgroundNormal=15,17,27
+BackgroundAlternate=27,28,54
+DecorationFocus=122,162,247
+DecorationHover=125,207,255
+ForegroundNormal=236,240,193
+ForegroundActive=122,162,247
+ForegroundInactive=104,111,154
+ForegroundLink=125,207,255
+ForegroundVisited=187,154,247
+ForegroundNegative=247,118,142
+ForegroundNeutral=224,175,104
+ForegroundPositive=158,206,106
+
+[Colors:Button]
+BackgroundNormal=27,28,54
+BackgroundAlternate=15,17,27
+DecorationFocus=122,162,247
+DecorationHover=125,207,255
+ForegroundNormal=236,240,193
+ForegroundActive=122,162,247
+ForegroundInactive=104,111,154
+ForegroundLink=125,207,255
+ForegroundVisited=187,154,247
+ForegroundNegative=247,118,142
+ForegroundNeutral=224,175,104
+ForegroundPositive=158,206,106
+
+[Colors:Selection]
+BackgroundNormal=122,162,247
+BackgroundAlternate=122,162,247
+DecorationFocus=122,162,247
+DecorationHover=125,207,255
+ForegroundNormal=15,17,27
+ForegroundActive=15,17,27
+ForegroundInactive=15,17,27
+ForegroundLink=15,17,27
+ForegroundVisited=15,17,27
+ForegroundNegative=247,118,142
+ForegroundNeutral=224,175,104
+ForegroundPositive=158,206,106
+
+[Colors:Tooltip]
+BackgroundNormal=27,28,54
+BackgroundAlternate=15,17,27
+DecorationFocus=122,162,247
+DecorationHover=125,207,255
+ForegroundNormal=236,240,193
+ForegroundActive=122,162,247
+ForegroundInactive=104,111,154
+ForegroundLink=125,207,255
+ForegroundVisited=187,154,247
+ForegroundNegative=247,118,142
+ForegroundNeutral=224,175,104
+ForegroundPositive=158,206,106
+
+[Colors:Complementary]
+BackgroundNormal=27,28,54
+BackgroundAlternate=15,17,27
+DecorationFocus=122,162,247
+DecorationHover=125,207,255
+ForegroundNormal=236,240,193
+ForegroundActive=122,162,247
+ForegroundInactive=104,111,154
+ForegroundLink=125,207,255
+ForegroundVisited=187,154,247
+ForegroundNegative=247,118,142
+ForegroundNeutral=224,175,104
+ForegroundPositive=158,206,106
+
+[Colors:Header]
+BackgroundNormal=27,28,54
+BackgroundAlternate=15,17,27
+DecorationFocus=122,162,247
+DecorationHover=125,207,255
+ForegroundNormal=236,240,193
+ForegroundActive=122,162,247
+ForegroundInactive=104,111,154
+ForegroundLink=125,207,255
+ForegroundVisited=187,154,247
+ForegroundNegative=247,118,142
+ForegroundNeutral=224,175,104
+ForegroundPositive=158,206,106
+
+# Window manager colours. Hyprland draws its own borders and ignores these,
+# but Qt applications with client side decorations read them.
+[WM]
+activeBackground=27,28,54
+activeForeground=236,240,193
+inactiveBackground=15,17,27
+inactiveForeground=104,111,154
+activeBlend=122,162,247
+inactiveBlend=104,111,154
+
+[ColorEffects:Disabled]
+Color=104,111,154
+ColorAmount=0
+ColorEffect=0
+ContrastAmount=0.65
+ContrastEffect=1
+IntensityAmount=0
+IntensityEffect=0
+
+# Off. An unfocused window that dims its own text is a window you have to
+# click before you can read it, and with one screen there is always exactly
+# one focused window and everything else greyed out.
+[ColorEffects:Inactive]
+ChangeSelectionColor=false
+Enable=false
+Color=104,111,154
+ColorAmount=0
+ColorEffect=0
+ContrastAmount=0
+ContrastEffect=0
+IntensityAmount=0
+IntensityEffect=0
 
 [Icons]
 # breeze-dark ships with breeze-icons, which is official. breeze-plus-dark
