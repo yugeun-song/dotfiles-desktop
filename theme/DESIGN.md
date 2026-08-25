@@ -114,7 +114,7 @@ section 1 says they live, spread across the files listed in the survey.
 
 ### 2.2 파일 형식
 
-경로는 `/home/archgeek/workspace/dotfiles-desktop/theme/palettes/<name>.json`이다.
+경로는 `~/workspace/dotfiles-desktop/theme/palettes/<name>.json`이다.
 
 ```json
 {
@@ -167,7 +167,7 @@ section 1 says they live, spread across the files listed in the survey.
 
 ### 3.1 위치와 인터페이스
 
-파일은 `/home/archgeek/workspace/dotfiles-desktop/bin/theme`다. `bin/bar`와 `bin/unlock` 옆이고 `install.sh`가 `~/.local/bin/theme`로 링크한다.
+파일은 `~/workspace/dotfiles-desktop/bin/theme`다. `bin/bar`와 `bin/unlock` 옆이고 `install.sh`가 `~/.local/bin/theme`로 링크한다.
 
 ```
 theme list                    팔레트 목록과 현재 선택을 낸다
@@ -1046,7 +1046,7 @@ matugen 잔존물이 저장소보다 우선하고 있어서 지금 GTK 앱은 �
 
 ### 6.2 macos-dark
 
-`/home/archgeek/workspace/dotfiles-desktop/theme/palettes/macos-dark.json`이다.
+`~/workspace/dotfiles-desktop/theme/palettes/macos-dark.json`이다.
 
 ```json
 {

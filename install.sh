@@ -103,6 +103,47 @@ link "$SRC/gtk/gtk-4.0-settings.ini" "$CONFIG/gtk-4.0/settings.ini"
 link "$SRC/kde/kdeglobals"        "$CONFIG/kdeglobals"
 link "$SRC/kde/SpaceduckDark.colors" "$HOME/.local/share/color-schemes/SpaceduckDark.colors"
 
+# hypr/config/execs.lua starts hyprland-session.target when the compositor
+# comes up, and that target is the only thing that pulls graphical-session.target
+# in. Without it the start fails, graphical-session.target never activates, and
+# every service keyed to it -- the four xdg-desktop-portal implementations
+# among them -- never starts. The visible result is a desktop that looks right
+# until a file dialog or a screen share is needed.
+#
+# It is written here rather than linked from the repository on purpose. systemd
+# reads user units at login, and a symlink pointing into a working tree is a
+# unit that disappears whenever that tree is not where it was: before the
+# repository has been cloned on a fresh machine, or after it is moved. Five
+# lines are not worth putting the graphical session behind that.
+install_session_target() {
+    local dir="$CONFIG/systemd/user"
+    local unit="$dir/hyprland-session.target"
+    local body
+    body=$(cat <<'UNIT'
+[Unit]
+Description=Hyprland session
+BindsTo=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target
+UNIT
+)
+    if [[ -f "$unit" ]] && [[ "$(cat "$unit")" == "$body" ]]; then
+        echo "already current $unit"
+        return 0
+    fi
+    mkdir -p "$dir"
+    printf '%s\n' "$body" > "$unit" || {
+        echo "could not write $unit, so the graphical session will not come up" >&2
+        return 1
+    }
+    echo "wrote $unit"
+    # Without this systemd keeps serving the unit list it read at login and the
+    # new file is not there yet.
+    systemctl --user daemon-reload 2>/dev/null \
+        || echo "  could not reload the user manager; the unit applies at the next login" >&2
+}
+install_session_target
+
 make_executable() {
     local dir="$1" consumer="$2" f found=0 failed=0
     for f in "$dir"/*.sh; do
