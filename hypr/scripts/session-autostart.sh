@@ -16,6 +16,9 @@ set -uo pipefail
 
 SELF=$$
 SCRIPTS="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
+# Resolved through the symlink install.sh leaves behind, so bin/ is found
+# from the repository rather than from wherever ~/.config points.
+REPO="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)"
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
 
 log() { printf 'session-autostart: %s\n' "$*" >&2; }
@@ -73,13 +76,29 @@ start() {
 # Outputs first, so the first frame lands on the right screen.
 start argv "auto_monitors_watcher" "$SCRIPTS/auto_monitors_watcher.sh"
 
-# The status bar. -n makes quickshell refuse to start a second copy, which is
-# a second line of defence behind the check above.
-QS="$(command -v quickshell || command -v qs || true)"
-if [[ -n "$QS" ]]; then
-    start argv "quickshell/bar" "$QS" -n -p "$CONFIG/quickshell/bar"
+# The status bar, under bin/bar rather than started directly. quickshell does
+# crash, and an unsupervised bar stays gone until the next login; bar brings it
+# back and gives up only if it is crashing in a loop. bar takes an exclusive
+# lock on its pidfile, so a second one started by anything is a no-op.
+#
+# Started bare rather than via PATH: this runs from the compositor, not from a
+# login shell, and ~/.local/bin is not reliably there.
+BAR=""
+for candidate in "$HOME/.local/bin/bar" "$REPO/bin/bar"; do
+    [[ -x "$candidate" ]] && { BAR="$candidate"; break; }
+done
+
+if [[ -n "$BAR" ]]; then
+    start argv "quickshell/bar" "$BAR"
 else
-    log "quickshell is not installed, no status bar"
+    # No supervisor installed. -n makes quickshell refuse a second copy, which
+    # is the same guarantee without the restarts.
+    QS="$(command -v quickshell || command -v qs || true)"
+    if [[ -n "$QS" ]]; then
+        start argv "quickshell/bar" "$QS" -n -p "$CONFIG/quickshell/bar"
+    else
+        log "quickshell is not installed, no status bar"
+    fi
 fi
 
 # Wallpaper. A separate program rather than something drawn by the shell: when

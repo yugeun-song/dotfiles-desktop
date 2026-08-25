@@ -73,6 +73,29 @@ running_pids() {
     done
 }
 
+# quickshell's QML spawns the pill watchers as its own children, and they are
+# loops with no end condition. When quickshell dies they are reparented to init
+# and keep polling forever, so without this every restart leaves another set
+# behind and they accumulate for as long as the session lasts.
+#
+# Only orphans are touched. A live bar's scripts still have that bar as their
+# parent, so they never match and a running bar is never disturbed.
+reap_orphan_scripts() {
+    local d p ppid args victims=()
+    for d in /proc/[0-9]*; do
+        p="${d#/proc/}"
+        [[ -r "$d/status" ]] || continue
+        ppid=$(awk '/^PPid:/ { print $2; exit }' "$d/status" 2>/dev/null) || continue
+        [[ "$ppid" == 1 ]] || continue
+        args=$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null) || continue
+        [[ "$args" == *"$CONFIG_DIR/scripts/"* ]] || continue
+        victims+=("$p")
+    done
+    (( ${#victims[@]} )) || return 0
+    log "reaping orphaned bar scripts: ${victims[*]}"
+    kill "${victims[@]}" 2>/dev/null
+}
+
 # The supervisor holds an exclusive lock on its pidfile for as long as it
 # runs, so a pid left behind by a killed supervisor never reads as alive.
 supervisor_alive() {
@@ -166,6 +189,9 @@ if (( ${#orphans[@]} )); then
     fi
 fi
 
+# Anything left by an instance that died before this supervisor existed.
+reap_orphan_scripts
+
 crash_times=()
 crashes=0
 backoff=1
@@ -179,6 +205,7 @@ while :; do
     wait "$child"
     rc=$?
     child=
+    reap_orphan_scripts
 
     # -n returns non-zero when another instance already holds this config.
     # That is a correct outcome, not a crash: something else is drawing the
