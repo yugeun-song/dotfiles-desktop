@@ -9,7 +9,6 @@ status bar written in QML for quickshell.
 hypr/config/      Hyprland configuration in Lua: keybinds, rules, env, monitors
 hypr/scripts/     what those keybinds call: monitor switching, capture, lock
 quickshell/bar/   the status bar, written from scratch
-shell/            zsh and bash, the prompt, and what to clone for them
 bin/              commands on $PATH: bar, unlock
 fontconfig/       font chain: Inter for latin, Pretendard for Hangul
 gtk/              GTK 3 and 4 settings
@@ -50,17 +49,10 @@ battery at 1%.
 
 Existing configuration is moved aside with a timestamp, never replaced.
 
-On a machine that has never had this setup, the shell needs one more step.
-`shell/zshrc` expects an Oh My Zsh tree with a theme and two plugins cloned
-into it, none of which is an Arch package:
-
-```sh
-./shell/bootstrap.sh
-```
-
-It clones what is missing, updates what is already there, and switches the
-login shell to zsh. It is kept out of `install.sh` because it reaches the
-network and changes an account setting, and `install.sh` only places links.
+The shell, terminal emulator and prompt are not here. They live in
+[dotfiles-terminal](https://github.com/yugeun-song/dotfiles-terminal), which
+has its own `install.sh` and a `bootstrap.sh` for the parts that have to be
+cloned rather than installed.
 
 ## Credits
 

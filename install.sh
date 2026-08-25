@@ -103,17 +103,6 @@ link "$SRC/gtk/gtk-4.0-settings.ini" "$CONFIG/gtk-4.0/settings.ini"
 link "$SRC/kde/kdeglobals"        "$CONFIG/kdeglobals"
 link "$SRC/kde/SpaceduckDark.colors" "$HOME/.local/share/color-schemes/SpaceduckDark.colors"
 
-# The shell files sit in $HOME rather than under .config because zsh and bash
-# look for them there and nowhere else. shell/bootstrap.sh fetches the Oh My
-# Zsh tree that zshrc expects; it is not run from here because it clones from
-# the network and changes the login shell, neither of which belongs in a
-# script whose job is to place links.
-link "$SRC/shell/zshrc"            "$HOME/.zshrc"
-link "$SRC/shell/zshenv"           "$HOME/.zshenv"
-link "$SRC/shell/zprofile"         "$HOME/.zprofile"
-link "$SRC/shell/p10k.zsh"         "$HOME/.p10k.zsh"
-link "$SRC/shell/bashrc"           "$HOME/.bashrc"
-
 make_executable() {
     local dir="$1" consumer="$2" f found=0 failed=0
     for f in "$dir"/*.sh; do
