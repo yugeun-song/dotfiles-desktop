@@ -91,7 +91,7 @@ Scope {
             // ignored above, so this margin is measured from the screen edge
             // and has to account for the bar itself.
             margins {
-                top: Theme.barHeight + Theme.px(12)
+                top: Theme.barHeight + Theme.px(4)
             }
 
             // Nothing here accepts input; the mask keeps clicks going through
