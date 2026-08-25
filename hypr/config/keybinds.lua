@@ -21,6 +21,7 @@ local capture   = scripts .. "/capture.sh"
 local launch    = scripts .. "/launch.sh"
 local clipboard = scripts .. "/clipboard.sh"
 local shellkey  = scripts .. "/shell-global.sh"
+local wswalk    = scripts .. "/workspace-walk.sh"
 
 local app = {
     browser  = launch .. " 'google-chrome-stable' 'firefox' 'chromium' 'brave' 'librewolf'",
@@ -125,25 +126,30 @@ end
 -- Walking the workspaces that actually exist rather than by number. The
 -- vertical pair jumps five at a time, which is what makes this usable once
 -- there are more workspaces than fingers.
+--
+-- Through a script rather than Hyprland's own r+n and r-n, because those wrap:
+-- left from the first workspace lands on the last one. That is a jump across
+-- the whole set at the exact moment the intent was to find out there is
+-- nothing further left. scripts/workspace-walk.sh clamps instead.
 local walk = {
-    { keys = { "H", "Left",  "BracketLeft" },  focus = "r-1", send = "r-1" },
-    { keys = { "L", "Right", "BracketRight" }, focus = "r+1", send = "r+1" },
-    { keys = { "K", "Up" },                    focus = "r-5", send = "r-5" },
-    { keys = { "J", "Down" },                  focus = "r+5", send = "r+5" },
+    { keys = { "H", "Left",  "BracketLeft" },  step = "-1" },
+    { keys = { "L", "Right", "BracketRight" }, step = "+1" },
+    { keys = { "K", "Up" },                    step = "-5" },
+    { keys = { "J", "Down" },                  step = "+5" },
 }
 for _, w in ipairs(walk) do
     for _, k in ipairs(w.keys) do
-        hl.bind("CTRL + SUPER + " .. k, hl.dsp.focus({ workspace = w.focus }),
-            { description = "Workspace " .. w.focus })
-        hl.bind("CTRL + SUPER + SHIFT + " .. k, hl.dsp.window.move({ workspace = w.send, follow = true }),
-            { description = "Send window to workspace " .. w.send })
+        hl.bind("CTRL + SUPER + " .. k, hl.dsp.exec_cmd(wswalk .. " focus " .. w.step),
+            { description = "Workspace " .. w.step })
+        hl.bind("CTRL + SUPER + SHIFT + " .. k, hl.dsp.exec_cmd(wswalk .. " move " .. w.step),
+            { description = "Send window to workspace " .. w.step })
     end
 end
 
-hl.bind("SUPER + Page_Up", hl.dsp.focus({ workspace = "r-1" }))
-hl.bind("SUPER + Page_Down", hl.dsp.focus({ workspace = "r+1" }))
-hl.bind("SUPER + SHIFT + Page_Up", hl.dsp.window.move({ workspace = "r-1" }))
-hl.bind("SUPER + SHIFT + Page_Down", hl.dsp.window.move({ workspace = "r+1" }))
+hl.bind("SUPER + Page_Up", hl.dsp.exec_cmd(wswalk .. " focus -1"))
+hl.bind("SUPER + Page_Down", hl.dsp.exec_cmd(wswalk .. " focus +1"))
+hl.bind("SUPER + SHIFT + Page_Up", hl.dsp.exec_cmd(wswalk .. " move -1"))
+hl.bind("SUPER + SHIFT + Page_Down", hl.dsp.exec_cmd(wswalk .. " move +1"))
 
 -- Scroll up goes to the previous workspace. The opposite of the upstream
 -- default, and the status bar's own scroll handler matches it; a bar that

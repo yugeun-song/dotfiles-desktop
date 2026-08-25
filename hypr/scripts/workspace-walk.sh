@@ -1,0 +1,56 @@
+#!/usr/bin/env bash
+#
+# Step through the workspaces that exist, and stop at the ends.
+#
+# Hyprland's own relative form, r+n and r-n, wraps: pressing left on the
+# first workspace lands on the last one. That is a jump across the whole set
+# dressed up as a step, and it happens exactly when the intent was to find
+# out there is nothing further left. So the index is clamped here instead.
+#
+# Only regular workspaces are walked. Special workspaces have negative ids and
+# are reached by their own binding, not by stepping into them by accident.
+#
+# Usage: workspace-walk.sh focus|move <signed step>
+
+set -euo pipefail
+
+mode="${1-}"
+step="${2-}"
+
+case "$mode" in
+    focus|move) ;;
+    *) printf 'workspace-walk: usage: %s focus|move <signed step>\n' "${0##*/}" >&2; exit 2 ;;
+esac
+[[ "$step" =~ ^[+-]?[0-9]+$ ]] || {
+    printf 'workspace-walk: step must be a signed integer, got %s\n' "${step:-<empty>}" >&2
+    exit 2
+}
+
+current=$(hyprctl -j activeworkspace 2>/dev/null | jq -r '.id') || {
+    printf 'workspace-walk: hyprctl is not answering\n' >&2; exit 1; }
+[[ "$current" =~ ^-?[0-9]+$ ]] || {
+    printf 'workspace-walk: no active workspace id\n' >&2; exit 1; }
+
+# A special workspace is showing. Stepping from it would leave the caller on
+# whatever regular workspace happens to sort next, which is not a step.
+(( current < 1 )) && exit 0
+
+mapfile -t ids < <(hyprctl -j workspaces 2>/dev/null | jq -r '.[] | select(.id > 0) | .id' | sort -n)
+(( ${#ids[@]} > 0 )) || exit 0
+
+index=-1
+for i in "${!ids[@]}"; do
+    [[ "${ids[$i]}" == "$current" ]] && { index=$i; break; }
+done
+(( index < 0 )) && exit 0
+
+target=$(( index + step ))
+(( target < 0 )) && target=0
+(( target > ${#ids[@]} - 1 )) && target=$(( ${#ids[@]} - 1 ))
+(( target == index )) && exit 0
+
+if [[ "$mode" == "focus" ]]; then
+    hyprctl dispatch workspace "${ids[$target]}" >/dev/null
+else
+    hyprctl dispatch movetoworkspace "${ids[$target]}" >/dev/null
+fi
