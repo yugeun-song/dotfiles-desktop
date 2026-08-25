@@ -1,0 +1,50 @@
+#!/usr/bin/env bash
+#
+# Break out of a lock screen from a text console.
+#
+# Run this from Ctrl+Alt+F3, then Ctrl+Alt+F2 back to a working desktop.
+#
+# Why two steps. ext-session-lock hands the lock to the compositor, and the
+# compositor keeps it when the locker dies. That is the protocol working: a
+# locker that crashes must not expose the desktop. It is also why killing
+# hyprlock by itself leaves a blank locked screen instead of a session. So the
+# locker is ended first, and then the lock it left behind is cleared.
+#
+# Hyprland refuses to clear a lock that still has a live client
+# ("session is locked with a client, refusing"), so this cannot be used to walk
+# past a working lock screen. It only reaches one with nothing behind it, which
+# is what the first step arranges.
+#
+# Usage: unlock
+
+set -uo pipefail
+
+# The signature is in the graphical session's environment, not in a console
+# login's, so it is read from the runtime directory instead.
+if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+    sig=$(ls -1 "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr" 2>/dev/null | head -1)
+    [[ -n "$sig" ]] || { echo "unlock: no running Hyprland instance found" >&2; exit 1; }
+    export HYPRLAND_INSTANCE_SIGNATURE="$sig"
+fi
+
+hyprctl version >/dev/null 2>&1 || {
+    echo "unlock: hyprctl cannot reach the compositor" >&2; exit 1; }
+
+if pidof hyprlock >/dev/null 2>&1; then
+    echo "unlock: ending hyprlock"
+    pkill -x hyprlock
+    # Give it a moment to let go of the lock before asking to clear it.
+    for _ in {1..40}; do
+        pidof hyprlock >/dev/null 2>&1 || break
+        sleep 0.25
+    done
+    pidof hyprlock >/dev/null 2>&1 && pkill -9 -x hyprlock
+fi
+
+out=$(hyprctl eval 'hl.clear_crashed_lockscreen()' 2>&1)
+case "$out" in
+    ok*)                    echo "unlock: cleared, switch back with Ctrl+Alt+F2" ;;
+    *"is not locked"*)      echo "unlock: the session was not locked" ;;
+    *"refusing"*)           echo "unlock: a lock client is still alive; run this again" >&2; exit 1 ;;
+    *)                      echo "unlock: $out" >&2; exit 1 ;;
+esac
