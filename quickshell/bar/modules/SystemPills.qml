@@ -73,6 +73,8 @@ Row {
                 "Managed with scripts/alarm.sh"
             ].join("\n");
         }
+        // Only a ringing alarm can be dismissed, so only then is it clickable.
+        interactive: Alarms.ringing
         onActivated: {
             if (Alarms.ringing)
                 Alarms.dismiss();
@@ -256,6 +258,7 @@ Location  ${Weather.place}`
                  ? "No notifications yet\nClick to open the history"
                  : `Unread    ${Notifications.unread}\nKept      ${Notifications.history.length}\nClick to open the history`
 
+        interactive: true
         onActivated: Notifications.toggleCentre()
     }
 

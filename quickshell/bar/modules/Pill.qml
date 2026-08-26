@@ -24,6 +24,13 @@ Rectangle {
     property var menuEntries: []
     property var command: null
 
+    // Whether a click does anything, which decides the cursor. The pill can
+    // derive this for the two mechanisms it implements itself, but a pill that
+    // acts through onActivated is invisible to it -- QML gives no way to ask
+    // whether a signal has a handler -- so those set it themselves. Leaving it
+    // derived is what made the notification pill keep an arrow cursor.
+    property bool interactive: root.command !== null || root.menuEntries.length > 0
+
     signal activated
 
     implicitHeight: Theme.pillHeight
@@ -85,7 +92,7 @@ Rectangle {
         id: click
 
         anchors.fill: parent
-        cursorShape: root.command !== null || root.menuEntries.length > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
+        cursorShape: root.interactive ? Qt.PointingHandCursor : Qt.ArrowCursor
         onPressed: {
             tip.shown = false;
             root.tooltipSuppressed = true;

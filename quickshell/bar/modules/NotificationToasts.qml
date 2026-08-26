@@ -188,6 +188,7 @@ Scope {
                                 id: closer
 
                                 anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
                                 anchors.margins: -Theme.px(6)
                                 hoverEnabled: true
 
@@ -198,6 +199,7 @@ Scope {
                         MouseArea {
                             anchors.fill: parent
                             z: -1
+                            cursorShape: Qt.PointingHandCursor
 
                             // The freedesktop convention is that an action named
                             // "default" is what a click on the body means.

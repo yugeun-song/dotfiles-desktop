@@ -156,6 +156,7 @@ Scope {
                                     id: sweep
 
                                     anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
                                     anchors.margins: -Theme.px(5)
                                     hoverEnabled: true
 
@@ -301,6 +302,7 @@ Scope {
                                                 id: press
 
                                                 anchors.fill: parent
+                                                cursorShape: Qt.PointingHandCursor
                                                 hoverEnabled: true
 
                                                 onClicked: {
@@ -329,6 +331,7 @@ Scope {
                                     id: kill
 
                                     anchors.fill: parent
+                                    cursorShape: Qt.PointingHandCursor
                                     anchors.margins: -Theme.px(5)
                                     hoverEnabled: true
 
