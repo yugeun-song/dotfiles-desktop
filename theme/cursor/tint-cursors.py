@@ -29,6 +29,44 @@ import sys
 XCURSOR_MAGIC = b"Xcur"
 CHUNK_IMAGE = 0xFFFD0002
 
+# The names cursor-shape-v1 asks for, and the legacy X name each one means.
+#
+# A Wayland client on the modern protocol asks for "default", not "left_ptr",
+# and Oxygen_White carries no such name: neither file nor alias. The result is
+# the one pointer nobody can miss going untinted while every cursor a client
+# sets by hand comes out right, because those still travel under their X names.
+#
+# Filled in only where the target actually exists, so this stays a completion of
+# whatever theme is handed in rather than a promise about one particular theme.
+SHAPE_ALIASES = {
+    "default": "left_ptr",
+    "context-menu": "left_ptr",
+    "help": "help",
+    "pointer": "pointing_hand",
+    "progress": "half-busy",
+    "wait": "wait",
+    "cell": "plus",
+    "crosshair": "cross",
+    "text": "xterm",
+    "vertical-text": "xterm",
+    "alias": "link",
+    "copy": "copy",
+    "move": "fleur",
+    "no-drop": "forbidden",
+    "not-allowed": "forbidden",
+    "grab": "openhand",
+    "grabbing": "closedhand",
+    "all-scroll": "fleur",
+    "col-resize": "split_h",
+    "row-resize": "split_v",
+    "ew-resize": "size_hor",
+    "ns-resize": "size_ver",
+    "nesw-resize": "size_bdiag",
+    "nwse-resize": "size_fdiag",
+    "zoom-in": "left_ptr",
+    "zoom-out": "left_ptr",
+}
+
 
 def parse(path):
     """Every image chunk in an Xcursor file, in file order.
@@ -159,6 +197,18 @@ def main():
             os.symlink(target, os.path.join(dst, name))
             linked += 1
 
+    # Fill in the shape names the source theme never had. Existing names are
+    # never touched: the source's own idea of what "pointer" means wins.
+    added = 0
+    for name, target in SHAPE_ALIASES.items():
+        link = os.path.join(dst, name)
+        if os.path.exists(link) or os.path.islink(link):
+            continue
+        if not os.path.exists(os.path.join(dst, target)):
+            continue
+        os.symlink(target, link)
+        added += 1
+
     with open(os.path.join(root, "index.theme"), "w") as fh:
         fh.write("[Icon Theme]\n")
         fh.write(f"Name={args.name}\n")
@@ -166,7 +216,7 @@ def main():
         fh.write("Inherits=Adwaita\n")
 
     print(f"tint-cursors: {args.name} <- {args.source} at {args.tint}: "
-          f"{made} cursors, {linked} aliases"
+          f"{made} cursors, {linked} aliases, {added} shape names added"
           + (f", {skipped} skipped (not Xcursor)" if skipped else ""))
     return 0
 
