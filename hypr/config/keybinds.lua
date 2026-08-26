@@ -214,10 +214,16 @@ hl.bind("CTRL + Print", hl.dsp.exec_cmd(capture .. " window"),
 -- people arrive with, and the cost is real: an application that uses it for
 -- save-as never sees it again, because the compositor takes the key before
 -- any window does.
-hl.bind("CTRL + SHIFT + S", hl.dsp.exec_cmd(capture .. " region-edit"),
+hl.bind("CTRL + SHIFT + S", hl.dsp.exec_cmd(capture .. " region"),
     { description = "Capture: region, then edit" })
-hl.bind("SUPER + SHIFT + S", hl.dsp.exec_cmd(capture .. " region-edit"),
+hl.bind("SUPER + SHIFT + S", hl.dsp.exec_cmd(capture .. " region"),
     { description = "Capture: region, then annotate" })
+-- Editing is the exception, not the rule. Nearly every capture here is taken
+-- and used as it is, and opening an annotator on each one is a window to close
+-- before getting back to whatever the shot was for. This key is the one that
+-- opens it, for the times a shot does need marking up.
+hl.bind("SUPER + SHIFT + ALT + S", hl.dsp.exec_cmd(capture .. " region-edit"),
+    { description = "Capture a region and annotate it" })
 hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd(capture .. " color"),
     { description = "Capture: pick a colour" })
 
