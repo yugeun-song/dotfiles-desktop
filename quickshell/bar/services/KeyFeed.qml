@@ -67,8 +67,36 @@ Singleton {
         "Right":     "\u2192"
     })
 
+    // The keys Inter has no symbol for. These come from the icon font instead,
+    // and every one is a codepoint Theme already draws somewhere in the bar, so
+    // it has been looked at on a screen rather than guessed from a table.
+    readonly property var keyIcon: ({
+        "Playpause":  Theme.iconPlay,
+        "Play":       Theme.iconPlay,
+        "Pause":      Theme.iconPause,
+        "Nextsong":   Theme.iconNext,
+        "Previoussong": Theme.iconPrev,
+        "Stopcd":     Theme.iconStop,
+        "Mute":       Theme.iconVolumeOff,
+        "Volumedown": Theme.iconVolumeLow,
+        "Volumeup":   Theme.iconVolume,
+        "Brightnessdown": Theme.iconBrightness,
+        "Brightnessup":   Theme.iconBrightness,
+        "Power":      Theme.iconPower,
+        "Sleep":      Theme.iconSleep,
+        "Search":     Theme.iconSearch,
+        "Compose":    Theme.iconApps
+    })
+
     function keyLabel(name) {
-        return root.keySymbol[name] ?? name;
+        return root.keyIcon[name] ?? root.keySymbol[name] ?? name;
+    }
+
+    // Which family draws it. A glyph from the icon font rendered in Inter is a
+    // box, and the reverse loses the symbol's proportions, so the label has to
+    // say where it came from.
+    function keyIsIcon(name) {
+        return root.keyIcon[name] !== undefined;
     }
 
     // Ctrl, Alt, Shift, Super, which is the order they are printed in and so
@@ -86,14 +114,27 @@ Singleton {
     property int nextId: 0
     property string failure: ""
 
+    // Chords that have been asked to leave but are still on screen playing the
+    // exit. Cutting one out of the model instead would make it disappear where
+    // every other one falls, and the difference is exactly what a viewer reads
+    // as the drawing having glitched.
+    property var expiring: []
+
     readonly property bool running: feed.running
 
     function push(mods, key) {
-        const next = root.chords.concat([{ mods: mods, key: key, id: root.nextId }]);
+        root.chords = root.chords.concat([{ mods: mods, key: key, id: root.nextId }]);
         root.nextId = root.nextId + 1;
-        while (next.length > root.maxVisible)
-            next.shift();
-        root.chords = next;
+
+        // Count only the ones not already on their way out, or a burst of keys
+        // would ask the same chord to leave several times over and the ones
+        // behind it would never be asked at all.
+        const live = [];
+        for (let i = 0; i < root.chords.length; i++)
+            if (root.expiring.indexOf(root.chords[i].id) === -1)
+                live.push(root.chords[i]);
+        if (live.length > root.maxVisible)
+            root.expiring = root.expiring.concat([live[0].id]);
     }
 
     function drop(id) {
@@ -102,10 +143,17 @@ Singleton {
             if (root.chords[i].id !== id)
                 next.push(root.chords[i]);
         root.chords = next;
+
+        const still = [];
+        for (let i = 0; i < root.expiring.length; i++)
+            if (root.expiring[i] !== id)
+                still.push(root.expiring[i]);
+        root.expiring = still;
     }
 
     function clear() {
         root.chords = [];
+        root.expiring = [];
     }
 
     function toggle() {

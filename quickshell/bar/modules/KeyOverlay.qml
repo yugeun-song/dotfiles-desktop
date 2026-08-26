@@ -42,14 +42,17 @@ Scope {
                 right: true
             }
 
+            // The surface reaches the bottom of the screen, and the row is held
+            // off it by restHeight instead. A margin here would put the window
+            // edge under the row, and a cap sliding out would be cut off at
+            // that edge rather than leaving the screen.
             margins {
-                bottom: Theme.px(56)
+                bottom: 0
             }
 
-            // Room below the row for a cap to travel into on its way out. The
-            // window does not paint, so the space costs nothing and a card that
-            // slid to the window edge would be cut off instead of leaving.
-            implicitHeight: Math.max(1, row.implicitHeight + Theme.px(46))
+            readonly property int restHeight: Theme.px(56)
+
+            implicitHeight: Math.max(1, row.implicitHeight + restHeight + Theme.px(24))
 
             // Nothing to show yet, and nothing to say about it: an empty strip
             // at the foot of the screen reads as a rendering fault.
@@ -98,22 +101,25 @@ Scope {
                                 NumberAnimation {
                                     target: chord
                                     property: "y"
-                                    to: Theme.px(38)
-                                    duration: 260
+                                    // Past the bottom of the screen, not part
+                                    // of the way: the cap leaves rather than
+                                    // stopping somewhere and vanishing.
+                                    to: chord.height + Theme.px(80)
+                                    duration: 340
                                     easing.type: Easing.InCubic
                                 }
                                 NumberAnimation {
                                     target: chord
                                     property: "opacity"
                                     to: 0
-                                    duration: 260
+                                    duration: 340
                                     easing.type: Easing.InQuad
                                 }
                                 NumberAnimation {
                                     target: chord
                                     property: "scale"
                                     to: 0.9
-                                    duration: 260
+                                    duration: 340
                                     easing.type: Easing.InQuad
                                 }
                             }
@@ -133,7 +139,18 @@ Scope {
                             running: true
                             interval: KeyFeed.dwellMs
 
-                            onTriggered: leaving.start()
+                            onTriggered: if (!leaving.running) leaving.start()
+                        }
+
+                        // Pushed out by a newer chord rather than aged out. The
+                        // same exit either way: one route out means the stack
+                        // never has two ways of losing something.
+                        readonly property bool pushedOut:
+                            KeyFeed.expiring.indexOf(slot.modelData.id) !== -1
+
+                        onPushedOutChanged: {
+                            if (slot.pushedOut && !leaving.running)
+                                leaving.start();
                         }
 
                         Row {
@@ -179,6 +196,7 @@ Scope {
                             KeyCap {
                                 mods: KeyFeed.symbolsFor(slot.modelData.mods)
                                 text: KeyFeed.keyLabel(slot.modelData.key)
+                                iconGlyph: KeyFeed.keyIsIcon(slot.modelData.key)
                             }
                         }
                     }

@@ -7,3 +7,7 @@
 # An interrupted save leaves the temp behind, and one was committed once.
 fcitx5/conf/*_??????
 fcitx5/*_??????
+
+# Python leaves these behind when a script is imported rather than run.
+__pycache__/
+*.pyc

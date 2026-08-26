@@ -9,44 +9,46 @@ import qs.services
 // and inside the same cap, which is the convention every keyboard shortcut in
 // print has used for decades.
 //
-// The shape is two rectangles rather than one with a shadow. The lower one is
-// the side of the key and the upper one its face, offset up by a few pixels.
-// Qt Quick has no cheap drop shadow without the effects module, and this reads
-// as a physical key in a way a flat chip does not.
+// The shadow is a second rectangle offset down and to the right, not a blur.
+// Qt Quick has no cheap drop shadow without the effects module, and a hard
+// offset in a dark colour reads as a card lifted off the screen in a way a
+// soft one does not at this size.
 Item {
     id: root
 
-    // The modifier symbols, already assembled: "" or "⌃⇧".
+    // The modifier symbols, already assembled: "" or "\u2303\u21E7".
     property string mods: ""
     property string text: ""
 
+    // Set when the glyph came from the icon font rather than from Inter.
+    property bool iconGlyph: false
+
     readonly property color face: Theme.beige
-    readonly property color side: Theme.accentQuiet
+    readonly property color shadow: Theme.bg
     readonly property color ink: Theme.readableOn(root.face)
 
-    readonly property int lift: Theme.px(3)
+    // How far the shadow sits behind the face, on both axes.
+    readonly property int drop: Theme.px(5)
 
-    implicitWidth: Math.max(label.implicitWidth + Theme.px(20), Theme.px(42))
-    implicitHeight: label.implicitHeight + Theme.px(16) + root.lift
+    implicitWidth: Math.max(label.implicitWidth + Theme.px(20), Theme.px(42)) + root.drop
+    implicitHeight: label.implicitHeight + Theme.px(16) + root.drop
 
     Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        height: parent.height - root.lift
+        x: root.drop
+        y: root.drop
+        width: parent.width - root.drop
+        height: parent.height - root.drop
         radius: Theme.px(8)
-        color: root.side
+        color: root.shadow
     }
 
     Rectangle {
-        anchors.left: parent.left
-        anchors.right: parent.right
-        anchors.top: parent.top
-        height: parent.height - root.lift
+        width: parent.width - root.drop
+        height: parent.height - root.drop
         radius: Theme.px(8)
         color: root.face
         border.width: 1
-        border.color: Theme.bg
+        border.color: root.shadow
 
         Row {
             id: label
@@ -72,8 +74,10 @@ Item {
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.text
-                font.family: Theme.uiFont
-                font.pixelSize: Theme.px(17)
+                font.family: root.iconGlyph ? Theme.iconFont : Theme.uiFont
+                // Nerd Font glyphs sit well inside their em box, so asking for
+                // the same number gives a smaller drawing than Inter does.
+                font.pixelSize: root.iconGlyph ? Theme.px(20) : Theme.px(17)
                 font.weight: Font.DemiBold
                 color: root.ink
             }
