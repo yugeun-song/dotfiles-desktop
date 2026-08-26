@@ -28,6 +28,10 @@ ShellRoot {
 
     NotificationCentre {}
 
+    // Off until asked for. See Keys.enabled: a visualiser nobody switched on
+    // is a keylogger, and this one holds device descriptors to do it.
+    KeyOverlay {}
+
     Osd {
         id: osd
     }

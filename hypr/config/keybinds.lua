@@ -215,6 +215,9 @@ hl.bind("SUPER + SHIFT + slash", hl.dsp.global("quickshell:cheatsheet"))
 hl.bind("SUPER + N", hl.dsp.global("quickshell:notifications"),
     { description = "Show the notification history" })
 
+hl.bind("SUPER + Y", hl.dsp.global("quickshell:keyOverlay"),
+    { description = "Show the keys being pressed" })
+
 --##! Capture
 hl.bind("Print", hl.dsp.exec_cmd(capture .. " screen"),
     { description = "Capture: focused monitor" })
