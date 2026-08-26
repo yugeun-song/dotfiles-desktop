@@ -57,12 +57,26 @@ Singleton {
     // the Notification itself would mean reading properties off an object the
     // server has already destroyed.
     function snapshot(n) {
+        // Two kinds of action never become a button.
+        //
+        // "default" is what the sender wants run when the notification itself is
+        // clicked, and the freedesktop spec says it should not be displayed as
+        // one. Claude Code sends it with no label, so drawing it produced an
+        // empty chip that did nothing a reader could predict.
+        //
+        // Anything else with no label is the same problem without the excuse:
+        // a button whose text is blank cannot say what pressing it does.
         const actions = [];
+        let hasDefault = false;
         for (let i = 0; i < n.actions.length; i++) {
-            actions.push({
-                text: n.actions[i].text,
-                identifier: n.actions[i].identifier
-            });
+            const a = n.actions[i];
+            if (a.identifier === "default") {
+                hasDefault = true;
+                continue;
+            }
+            if (!a.text || a.text.trim() === "")
+                continue;
+            actions.push({ text: a.text, identifier: a.identifier });
         }
         return {
             id: n.id,
@@ -75,6 +89,7 @@ Singleton {
             // die" uses, and it should not disappear on a timer.
             critical: n.urgency === NotificationUrgency.Critical,
             actions: actions,
+            hasDefault: hasDefault,
             at: Date.now(),
             // Kept so an action can still be invoked from the history while the
             // sender is alive. Reading anything else off it after close is not

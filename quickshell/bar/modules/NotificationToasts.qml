@@ -286,12 +286,11 @@ Scope {
                                 onClicked: {
                                     if (card.x !== 0)
                                         return;
-                                    for (let i = 0; i < slot.modelData.actions.length; i++) {
-                                        if (slot.modelData.actions[i].identifier === "default") {
-                                            Notifications.invoke(slot.modelData, "default");
-                                            break;
-                                        }
-                                    }
+                                    // The default action is filtered out of the
+                                    // displayed list, so ask the flag rather than
+                                    // search a list it is no longer in.
+                                    if (slot.modelData.hasDefault)
+                                        Notifications.invoke(slot.modelData, "default");
                                     leaving.start();
                                 }
                             }
