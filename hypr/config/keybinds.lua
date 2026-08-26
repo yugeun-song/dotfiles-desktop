@@ -161,9 +161,14 @@ hl.bind("SUPER + SHIFT + Page_Down", hl.dsp.exec_cmd(wswalk .. " move +1"))
 -- Scroll up goes to the previous workspace. The opposite of the upstream
 -- default, and the status bar's own scroll handler matches it; a bar that
 -- scrolls the other way from the compositor is worse than neither.
-hl.bind("SUPER + mouse_up", hl.dsp.focus({ workspace = "-1" }),
+-- Through the same script the keyboard walk uses. "-1" and "+1" are a walk
+-- that wraps, so one more notch at the first workspace crosses the whole set
+-- and lands on the last, which happens at exactly the moment someone is
+-- checking whether they have reached the end. The Ctrl variants below keep
+-- "r-1" and "r+1" because cycling the open workspaces is what they are for.
+hl.bind("SUPER + mouse_up", hl.dsp.exec_cmd(wswalk .. " focus -1"),
     { description = "Previous workspace" })
-hl.bind("SUPER + mouse_down", hl.dsp.focus({ workspace = "+1" }),
+hl.bind("SUPER + mouse_down", hl.dsp.exec_cmd(wswalk .. " focus +1"),
     { description = "Next workspace" })
 hl.bind("CTRL + SUPER + mouse_up", hl.dsp.focus({ workspace = "r-1" }),
     { description = "Previous open workspace" })

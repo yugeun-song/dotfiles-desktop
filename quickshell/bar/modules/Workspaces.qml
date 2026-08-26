@@ -135,14 +135,38 @@ Item {
         // one flick. A notch is 120, and only a full notch moves.
         property real notch: 0
 
+        // The bounds the keyboard walk uses, so a wheel and Ctrl+Super+H land in
+        // the same place. hypr/scripts/workspace-walk.sh holds the same two.
+        readonly property int minWorkspace: 1
+        readonly property int maxWorkspace: 100
+
         acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
         onWheel: event => {
             wheel.notch += event.angleDelta.y;
             if (Math.abs(wheel.notch) < 120)
                 return;
-            const step = wheel.notch > 0 ? "-1" : "+1";
+            // Read before the accumulator is cleared, or the direction is lost
+            // and every notch scrolls the same way.
+            const step = wheel.notch > 0 ? -1 : 1;
             wheel.notch = 0;
-            Hyprland.dispatch(`hl.dsp.focus({workspace = "${step}"})`);
+
+            // A special workspace has a negative id. Stepping from one lands on
+            // whatever number happens to be next, which is not a step from
+            // anywhere the user is.
+            const current = Hyprland.focusedWorkspace?.id ?? 0;
+            if (current < wheel.minWorkspace)
+                return;
+
+            // An absolute target rather than a relative step. Hyprland treats
+            // "-1" and "+1" as a walk that wraps, so one more notch at the first
+            // workspace crosses the whole set and lands on the last. That is not
+            // a step, and it happens at exactly the moment someone is checking
+            // whether they have reached the end.
+            const target = Math.min(wheel.maxWorkspace,
+                                    Math.max(wheel.minWorkspace, current + step));
+            if (target === current)
+                return;
+            Hyprland.dispatch(`hl.dsp.focus({workspace = ${target}})`);
         }
     }
 
