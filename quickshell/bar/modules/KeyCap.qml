@@ -11,8 +11,10 @@ import qs.services
 //
 // The shadow is a second rectangle offset down and to the right, not a blur.
 // Qt Quick has no cheap drop shadow without the effects module, and a hard
-// offset in a dark colour reads as a card lifted off the screen in a way a
-// soft one does not at this size.
+// offset reads as a card lifted off the screen in a way a soft one does not at
+// this size. It takes the palette's yellow rather than a darker shade of the
+// face: against a dark desktop a dark shadow disappears into it, and the point
+// of the offset is that the edge is visible.
 Item {
     id: root
 
@@ -24,7 +26,7 @@ Item {
     property bool iconGlyph: false
 
     readonly property color face: Theme.beige
-    readonly property color shadow: Theme.bg
+    readonly property color shadow: Theme.yellow
     readonly property color ink: Theme.readableOn(root.face)
 
     // How far the shadow sits behind the face, on both axes.
@@ -48,7 +50,7 @@ Item {
         radius: Theme.px(8)
         color: root.face
         border.width: 1
-        border.color: root.shadow
+        border.color: Theme.bg
 
         Row {
             id: label
