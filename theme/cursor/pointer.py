@@ -30,31 +30,38 @@ import tempfile
 
 from PIL import Image
 
-# The arrow, as the centre line of its own outline, in a space 100 tall.
+# The arrow, as the centre line of its own outline, in a space 90 tall.
 #
 # Tip, then the long edge down to the right shoulder, then back in to the heel,
 # then out to the foot of the tail. The left edge closes it. The notch between
 # the shoulder and the heel is what separates an arrow from a triangle: without
 # it the shape reads as a play button.
 #
-# These are not eyeballed. They were fitted against the reference drawing by
-# rendering a candidate, classifying every pixel of both as background, fill or
-# outline, and walking each number until the agreement stopped improving: 89.1%
-# to 96.1%, the remainder being antialiasing and the reference's own uneven
-# corners. Note that the tip sits slightly to the right of the foot, so the left
-# edge leans rather than dropping straight; that came out of the fit and it is
-# what stops the shape reading as a right triangle.
-OUTLINE = [(11.75, 3), (82.25, 66.5), (42.75, 69), (10, 93)]
-
-# Fraction of the shape's height, when there is an outline at all. Measured off
-# the reference, where the dark band along the left edge is 15 pixels against a
-# path 275 tall, and then confirmed by the same fit as the coordinates above.
+# Fitted against the reference drawing rather than judged by eye. A candidate is
+# rendered, both it and the drawing are classified pixel by pixel as background,
+# fill or outline, and the score is the overlap of the two shapes at their best
+# alignment, found through their cross correlation so that where each one sits
+# never enters into it. Scoring on raw pixel agreement instead, over a canvas
+# they mostly share as white, let a shape buy back a positioning error by
+# growing: it settled 5.7% too wide and looked it.
 #
-# It carries its weight twice. Against a busy window it is what keeps a light
-# fill visible at all, which a hairline edge does not; and at the small end it
-# is the outline, not the fill, that keeps the notch readable, because at 24
-# pixels the notch is two dark lines before it is ever a gap.
-STROKE = 0.052
+# The width is not among the fitted numbers. It is pinned to the drawing's own
+# ratio, 0.7690 of the height once the outline is counted, so nothing the search
+# tries can come out wider than the thing it copies. That costs about a point of
+# overlap against letting it float, 94.5% rather than 95.6%, and buys a shape
+# that is the right shape.
+OUTLINE = [(10.00, 3.00), (78.07, 66.50), (44.21, 72.65), (10.35, 93.00)]
+
+# Outline width as a fraction of the rendered cursor, measured off the drawing:
+# a 15 pixel band down a shape 290 tall.
+STROKE = 15.0 / 290.0
+
+# Below roughly 40 pixels that fraction stops being a line. At 24, the size this
+# is actually used at, it comes to 1.2 pixels, which antialiasing turns into a
+# soft edge rather than the black border the drawing has. So the fraction is a
+# floor from here up and this is a floor from here down; the shape is drawn
+# slightly heavier when small, which is the trade every icon set makes.
+MIN_STROKE_PX = 2.0
 
 # Both measured from the reference drawing rather than taken from Theme.qml.
 #
@@ -81,14 +88,28 @@ def load_encoder():
     return mod
 
 
-def svg(fill, outline):
+def stroke_for(size, outline):
+    # Answers in path units, given what the outline has to measure in pixels
+    # once drawn. The viewBox spans the path plus the stroke, and that whole
+    # span is what maps onto `size`, so the two are tangled: widening the stroke
+    # widens the box it is measured against. Solving for it directly is shorter
+    # than iterating and lands exactly.
+    if outline == "none":
+        return 0.0
+    span = max(y for _, y in OUTLINE) - min(y for _, y in OUTLINE)
+    px = max(MIN_STROKE_PX, STROKE * size)
+    if px >= size:
+        return 0.0
+    return px * span / (size - px)
+
+
+def svg(fill, outline, sw):
     # The viewBox is the stroked bounds rather than the path's, so the shape
     # meets every edge of what is rendered and no size wastes a margin it would
     # then have to be scaled up to make up for. With no outline the two are the
     # same thing.
     xs = [p[0] for p in OUTLINE]
     ys = [p[1] for p in OUTLINE]
-    sw = 0.0 if outline == "none" else STROKE * (max(ys) - min(ys))
     x0, y0 = min(xs) - sw / 2, min(ys) - sw / 2
     w, h = (max(xs) - min(xs)) + sw, (max(ys) - min(ys)) + sw
     d = "M " + " L ".join(f"{x} {y}" for x, y in OUTLINE) + " Z"
@@ -166,9 +187,11 @@ def main():
         print(f"pointer: no theme named {args.theme}", file=sys.stderr)
         return 1
 
-    doc, aspect = svg(args.fill, args.outline)
     images = []
     for size in SIZES:
+        # A separate document per size, because the stroke is not the same
+        # fraction at every one of them.
+        doc, aspect = svg(args.fill, args.outline, stroke_for(size, args.outline))
         im = render(doc, aspect, size)
         xh, yh = tip(im)
         images.append({"nominal": size, "w": size, "h": size,
