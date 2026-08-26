@@ -253,7 +253,12 @@ Scope {
                                 id: swipe
 
                                 anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
+
+                                // A toast does answer a click -- it runs the
+                                // default action -- so it keeps the finger until
+                                // a drag actually starts.
+                                cursorShape: swipe.drag.active ? Qt.ClosedHandCursor
+                                                               : Qt.PointingHandCursor
                                 drag.target: card
                                 drag.axis: Drag.XAxis
                                 drag.minimumX: 0

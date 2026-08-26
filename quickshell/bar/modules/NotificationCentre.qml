@@ -278,6 +278,12 @@ Scope {
 
                                     anchors.fill: parent
                                     hoverEnabled: true
+
+                                    // A hand, not a pointing finger. The row has
+                                    // no click to offer -- it is dragged aside to
+                                    // delete -- and a finger would promise one.
+                                    cursorShape: hover.drag.active ? Qt.ClosedHandCursor
+                                                                   : Qt.OpenHandCursor
                                     drag.target: row
                                     drag.axis: Drag.XAxis
                                     drag.minimumX: 0
