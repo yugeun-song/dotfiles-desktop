@@ -187,17 +187,6 @@ Singleton {
         "Left":      "\u2190",
         "Right":     "\u2192"
     })
-
-    // What each of those means, for the legend the cheatsheet prints. A symbol
-    // that has to be guessed at is worse than the word it replaced.
-    readonly property var symbolName: ({
-        "\u2303": "Ctrl", "\u2325": "Alt", "\u21E7": "Shift", "\u2756": "Super",
-        "\u23CE": "Enter", "\u21E5": "Tab", "\u232B": "Backspace",
-        "\u2326": "Delete", "\u238B": "Esc", "\u2423": "Space",
-        "\u21EA": "Caps Lock", "\u21DE": "Page Up", "\u21DF": "Page Down",
-        "\u2191": "Up", "\u2193": "Down", "\u2190": "Left", "\u2192": "Right"
-    })
-
     readonly property int workspaceCount: 10
 
     // Nerd Font glyphs are written as code points, not literals: the astral

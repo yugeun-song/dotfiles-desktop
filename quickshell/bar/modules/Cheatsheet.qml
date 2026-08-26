@@ -49,9 +49,6 @@ Scope {
     property var columns: []
     property int total: 0
 
-    // Only the symbols this machine's bindings actually use. A legend that
-    // lists glyphs which are not on the page is a second thing to keep true.
-    property var legend: []
 
     // Hyprland reports the modifiers as a bitmask. The mask is a sum, so 69 is
     // SUPER+CTRL+SHIFT.
@@ -73,31 +70,19 @@ Scope {
         return bits * 1000 + mask;
     }
 
-    // The whole chord, written the way the caps in the key overlay write it:
-    // the modifiers as their printed symbols, run together because they are one
-    // hand shape, then the key.
+    // The whole chord, in the order the fingers take it.
     //
-    // "Super + Ctrl + Alt + Shift + Delete" is thirty-four characters of mostly
-    // the same four words repeated down the column, and a reader scanning for
-    // one binding has to read all of it to rule each row out. The symbols are
-    // four glyphs, and the shape of them is recognised without being read.
-    //
-    // The cost is that a symbol has to be learned once, which is what the
-    // legend along the bottom is for.
+    // Words, not the symbols the key overlay draws. A symbol is quicker to
+    // recognise once it is known, and this is the page someone opens because
+    // they do not know it yet; a legend that has to be consulted to read the
+    // table is a second lookup inside the first one.
     function chordLabel(mask, key) {
-        // Spaced, not run together. Four glyphs with nothing between them read
-        // as one mark rather than as four keys, and the eye has to stop and
-        // separate them, which is the work the symbols were meant to save.
-        const mods = [];
+        const parts = [];
         for (let i = 0; i < root.modNames.length; i++)
             if (mask & root.modNames[i].bit)
-                mods.push(Theme.modSymbol[root.modNames[i].name]);
-        const k = root.keyLabel(key);
-        const sym = Theme.keySymbol[k];
-        const tail = sym !== undefined ? sym : k;
-        // A wider gap before the key than between the modifiers, because the
-        // modifiers are one thing held down and the key is the other.
-        return mods.length ? mods.join(" ") + "   " + tail : tail;
+                parts.push(root.modNames[i].name);
+        parts.push(root.keyLabel(key));
+        return parts.join(" + ");
     }
 
     // A key name as it is typed, not as X11 spells it.
@@ -180,25 +165,6 @@ Scope {
                 for (let c = 0; c < root.columnCount; c++)
                     cols.push(rows.slice(c * per, (c + 1) * per));
 
-                // Everything the chords ended up drawing, in the order the
-                // legend should read: modifiers first, then keys.
-                const seen = {};
-                for (let i = 0; i < rows.length; i++) {
-                    const c = rows[i].chord;
-                    for (let j = 0; j < c.length; j++)
-                        if (Theme.symbolName[c[j]] !== undefined)
-                            seen[c[j]] = Theme.symbolName[c[j]];
-                }
-                const order = Object.keys(Theme.modSymbol)
-                                    .map(n => Theme.modSymbol[n])
-                                    .concat(Object.keys(Theme.keySymbol)
-                                                  .map(n => Theme.keySymbol[n]));
-                const key = [];
-                for (let i = 0; i < order.length; i++)
-                    if (seen[order[i]] !== undefined)
-                        key.push({ sym: order[i], name: seen[order[i]] });
-
-                root.legend = key;
                 root.total = rows.length;
                 root.columns = cols;
             }
@@ -376,12 +342,10 @@ Scope {
                     // table is that the second column starts in the same place
                     // on every line whether or not the first one filled it.
                     //
-                    // Narrower than it was, because the chords are symbols now.
-                    // What sets it is no longer the modifiers but the handful of
-                    // keys that keep their words: "Brightness Down" and
-                    // "Super (right)" are the longest, and they sit under four
-                    // modifier glyphs at worst.
-                    readonly property int chordWidth: Theme.px(255)
+                    // Sized against the longest chord this machine has rather
+                    // than guessed: "Super + Ctrl + Alt + Shift + Delete", which
+                    // Inter draws in a little under 260 at this size.
+                    readonly property int chordWidth: Theme.px(300)
 
                     Flickable {
                         id: body
@@ -389,7 +353,7 @@ Scope {
                         anchors.top: head.bottom
                         anchors.left: parent.left
                         anchors.right: parent.right
-                        anchors.bottom: foot.top
+                        anchors.bottom: parent.bottom
                         anchors.leftMargin: card.gutter
                         anchors.rightMargin: card.gutter
                         anchors.topMargin: Theme.px(14)
@@ -480,61 +444,6 @@ Scope {
                                                 opacity: 0.28
                                             }
                                         }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    // The legend, which is the only thing under the table.
-                    Item {
-                        id: foot
-
-                        anchors.bottom: parent.bottom
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.leftMargin: card.gutter
-                        anchors.rightMargin: card.gutter
-                        anchors.bottomMargin: Theme.px(22)
-                        height: Theme.px(48)
-
-                        Rectangle {
-                            anchors.top: parent.top
-                            width: parent.width
-                            height: 1
-                            color: Theme.accentQuiet
-                            opacity: 0.5
-                        }
-
-                        // What each glyph in the chords stands for. This is the
-                        // whole price of writing them as symbols, and it is paid
-                        // once, here, where the eye lands after the table.
-                        Flow {
-                            anchors.left: parent.left
-                            anchors.right: parent.right
-                            anchors.bottom: parent.bottom
-                            spacing: Theme.px(20)
-
-                            Repeater {
-                                model: root.legend
-
-                                Row {
-                                    required property var modelData
-
-                                    spacing: Theme.px(6)
-
-                                    Text {
-                                        text: parent.modelData.sym
-                                        font.family: Theme.uiFont
-                                        font.pixelSize: Theme.px(15)
-                                        color: Theme.beige
-                                    }
-
-                                    Text {
-                                        text: parent.modelData.name
-                                        font.family: Theme.uiFont
-                                        font.pixelSize: Theme.px(14)
-                                        color: Theme.muted
                                     }
                                 }
                             }
