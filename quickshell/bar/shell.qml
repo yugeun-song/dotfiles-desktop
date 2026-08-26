@@ -18,6 +18,8 @@ ShellRoot {
 
     PowerMenu {}
 
+    Cheatsheet {}
+
     Osd {
         id: osd
     }

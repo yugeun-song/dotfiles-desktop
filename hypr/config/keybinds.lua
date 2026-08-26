@@ -203,6 +203,15 @@ hl.bind("SUPER + Equal", function() zoom_by(0.3) end, { repeating = true, descri
 hl.bind("SUPER + code:82", function() zoom_by(-0.3) end, { repeating = true })
 hl.bind("SUPER + code:86", function() zoom_by(0.3) end, { repeating = true })
 
+--##! Help
+-- The sheet reads the bindings back out of the compositor rather than keeping
+-- its own copy, so this list is whatever is actually bound at the moment it is
+-- opened. A binding without a description does not appear; that is what the
+-- description field is for.
+hl.bind("SUPER + slash", hl.dsp.global("quickshell:cheatsheet"),
+    { description = "Show every key binding" })
+hl.bind("SUPER + SHIFT + slash", hl.dsp.global("quickshell:cheatsheet"))
+
 --##! Capture
 hl.bind("Print", hl.dsp.exec_cmd(capture .. " screen"),
     { description = "Capture: focused monitor" })
@@ -215,9 +224,9 @@ hl.bind("CTRL + Print", hl.dsp.exec_cmd(capture .. " window"),
 -- save-as never sees it again, because the compositor takes the key before
 -- any window does.
 hl.bind("CTRL + SHIFT + S", hl.dsp.exec_cmd(capture .. " region"),
-    { description = "Capture: region, then edit" })
+    { description = "Capture: drag a region" })
 hl.bind("SUPER + SHIFT + S", hl.dsp.exec_cmd(capture .. " region"),
-    { description = "Capture: region, then annotate" })
+    { description = "Capture: drag a region" })
 -- Editing is the exception, not the rule. Nearly every capture here is taken
 -- and used as it is, and opening an annotator on each one is a window to close
 -- before getting back to whatever the shot was for. This key is the one that
