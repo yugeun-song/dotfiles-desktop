@@ -62,32 +62,44 @@ Singleton {
 
         reloadableId: "notificationArrivals"
 
-        property var times: ({})
+        // JSON, not an object. These values are carried across a reload into a
+        // new QML engine and a JS object cannot make that crossing: quickshell
+        // reports "JSValue can't be reassigned to another engine" and the
+        // property arrives undefined, which is worse than not persisting at
+        // all because every read of it then throws. A string crosses.
+        property string times: "{}"
+    }
+
+    function arrivalMap() {
+        try {
+            return JSON.parse(arrivals.times);
+        } catch (e) {
+            return {};
+        }
     }
 
     // The time this id first arrived, remembered the first time it is asked for.
     function arrivalOf(id) {
-        const known = root.arrivals.times[id];
-        if (known !== undefined)
-            return known;
+        const m = root.arrivalMap();
+        if (m[id] !== undefined)
+            return m[id];
         const now = Date.now();
-        // Reassigned rather than mutated: a var property tells its dependents
-        // nothing when the object it holds is changed in place.
-        const next = Object.assign({}, root.arrivals.times);
-        next[id] = now;
-        root.arrivals.times = next;
+        m[id] = now;
+        arrivals.times = JSON.stringify(m);
         return now;
     }
 
     // Anything the history no longer holds. Without this the map is the only
     // thing here that never forgets, and it grows for as long as the session.
     function prune() {
+        const m = root.arrivalMap();
         const live = {};
         for (let i = 0; i < root.history.length; i++) {
             const e = root.history[i];
-            live[e.id] = root.arrivals.times[e.id];
+            if (m[e.id] !== undefined)
+                live[e.id] = m[e.id];
         }
-        root.arrivals.times = live;
+        arrivals.times = JSON.stringify(live);
     }
 
     // The sending utility puts its own basename in app_name when the caller

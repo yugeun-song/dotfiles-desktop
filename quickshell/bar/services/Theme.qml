@@ -147,6 +147,11 @@ Singleton {
     readonly property string uiFont:   "Inter"
     readonly property string iconFont: "CaskaydiaCove Nerd Font Mono"
 
+    // The same family under the name that says what it is for. iconFont is
+    // asked for when a glyph is wanted and this when columns have to line up,
+    // and a reader of either should not have to know they are the same file.
+    readonly property string monoFont: "CaskaydiaCove Nerd Font Mono"
+
     readonly property int workspaceCount: 10
 
     // Nerd Font glyphs are written as code points, not literals: the astral
