@@ -145,7 +145,7 @@ seed() {
             echo "already seeded $to"
         else
             echo "left $to alone: it exists and differs from $from"
-            echo "  fcitx5 owns it now; copy it back into $from to keep the change"
+            echo "  whatever owns it has rewritten it; copy it back into $from to keep the change"
         fi
         return 0
     fi
@@ -181,10 +181,13 @@ if [[ -n "$cursor_tint" ]]; then
     if "$SRC/theme/cursor/tint-cursors.py" --from Oxygen_White \
            --name Spaceduck-Sky --tint "$cursor_tint" \
            --comment "Oxygen_White in the bar's sky blue"; then
-        # Only after the theme exists, and only over its plain arrow. The fill
-        # is the same value the tint above used, so the pointer and the bar are
-        # never two shades of nearly the same blue.
-        "$SRC/theme/cursor/pointer.py" --theme Spaceduck-Sky --fill "$cursor_tint" \
+        # Only after the theme exists, and only over its plain arrow. Both
+        # colours come out of Theme.qml, so the pointer is drawn from the same
+        # two the bar behind it uses and neither is written twice.
+        cursor_ink=$(sed -n 's/.*bg: *"\(#[0-9a-fA-F]\{6\}\)".*/\1/p' \
+                     "$SRC/quickshell/bar/services/Theme.qml" | head -1)
+        "$SRC/theme/cursor/pointer.py" --theme Spaceduck-Sky \
+            --fill "$cursor_tint" --outline "${cursor_ink:-#0f111b}" \
             || echo "install: the arrow stayed as the tint left it" >&2
     else
         echo "install: could not build the cursor theme; the pointer is unchanged" >&2
@@ -198,6 +201,18 @@ seed "$SRC/fcitx5/conf"            "$CONFIG/fcitx5/conf"
 seed "$SRC/gtk/gtk-3.0-settings.ini" "$CONFIG/gtk-3.0/settings.ini"
 seed "$SRC/gtk/gtk-4.0-settings.ini" "$CONFIG/gtk-4.0/settings.ini"
 seed "$SRC/kde/kdeglobals"        "$CONFIG/kdeglobals"
+seed "$SRC/kde/baloofilerc"      "$CONFIG/baloofilerc"
+
+# The other half of turning Baloo off; the reasoning is in kde/baloofilerc.
+#
+# Removing the unit's enabling symlink is separate from the config key because
+# they fail differently. The key is read through an ExecCondition, so it stops
+# the daemon but leaves systemd starting and immediately stopping a unit at
+# every login. Disabling stops that, and does nothing if the unit was never
+# enabled, which is the usual case on a machine that has not run Plasma.
+if command -v systemctl >/dev/null 2>&1; then
+    systemctl --user disable kde-baloo.service >/dev/null 2>&1 || true
+fi
 seed "$SRC/kde/SpaceduckDark.colors" "$HOME/.local/share/color-schemes/SpaceduckDark.colors"
 
 # hypr/config/execs.lua starts hyprland-session.target when the compositor

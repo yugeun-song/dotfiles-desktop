@@ -1,0 +1,23 @@
+# Baloo, KDE's file content indexer, off.
+#
+# It is never installed on purpose. dolphin and gwenview both depend on the
+# baloo package, so it arrives with the file manager, and the package ships
+# kde-baloo.service as a systemd user unit. Once that unit is enabled systemd
+# starts it at every login regardless of which desktop is running, which is why
+# it was running here. The autostart entry in /etc/xdg/autostart is not the
+# route: it carries OnlyShowIn=KDE;GNOME;Unity;XFCE and never fires on Hyprland.
+#
+# Nothing here reads the index. It is consumed by Dolphin's search over file
+# contents and by KRunner, and this is not a Plasma session. Dolphin still opens,
+# browses and searches by name with the index gone.
+#
+# Left alone it indexed the contents of every file under the home directory.
+# With a kernel tree in ~/workspace that is over a million files: it held half a
+# core for the better part of an hour, its database reached 668 MiB, and it
+# still had 482,522 files queued for content indexing when it was stopped.
+#
+# The unit reads this key through an ExecCondition, so this file stops it even
+# when the unit is enabled. install.sh removes the enabling symlink as well,
+# because two switches down costs nothing and one of them is enough.
+[Basic Settings]
+Indexing-Enabled=false

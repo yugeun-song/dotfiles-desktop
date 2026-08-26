@@ -36,12 +36,14 @@ from PIL import Image
 # then out to the foot of the tail. The left edge closes it. The notch between
 # the shoulder and the heel is what separates an arrow from a triangle: without
 # it the shape reads as a play button.
-OUTLINE = [(8, 3), (76, 68), (35, 70), (10, 93)]
+OUTLINE = [(8, 3), (78, 69), (40, 74), (10, 93)]
 
-# Fraction of the shape's height, when there is an outline at all. Heavy when
-# used: a thin edge is what the tinted arrow already had, so half an outline
-# would be the worst of both.
-STROKE = 0.072
+# Fraction of the shape's height, when there is an outline at all. Heavy on
+# purpose. A thin edge is what the tinted Oxygen arrow already had and it
+# disappears against a busy window; and at the small end it is the outline, not
+# the fill, that keeps the notch between the head and the tail readable, because
+# the notch is two dark lines before it is ever a gap.
+STROKE = 0.06
 
 # The sizes a client is likely to ask for. Anything not here is served by
 # XCursor picking the nearest, which this list exists to make rare.
@@ -131,7 +133,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--theme", default="Spaceduck-Sky")
     ap.add_argument("--fill", default="#7dcfff")
-    ap.add_argument("--outline", default="none",
+    ap.add_argument("--outline", default="#0f111b",
                     help='a colour, or "none" for a flat shape with no edge')
     ap.add_argument("--name", default="left_ptr",
                     help="the cursor file to replace; every standard alias for "
