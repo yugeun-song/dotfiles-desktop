@@ -85,13 +85,19 @@ Scope {
     // The cost is that a symbol has to be learned once, which is what the
     // legend along the bottom is for.
     function chordLabel(mask, key) {
-        let mods = "";
+        // Spaced, not run together. Four glyphs with nothing between them read
+        // as one mark rather than as four keys, and the eye has to stop and
+        // separate them, which is the work the symbols were meant to save.
+        const mods = [];
         for (let i = 0; i < root.modNames.length; i++)
             if (mask & root.modNames[i].bit)
-                mods += Theme.modSymbol[root.modNames[i].name];
+                mods.push(Theme.modSymbol[root.modNames[i].name]);
         const k = root.keyLabel(key);
         const sym = Theme.keySymbol[k];
-        return mods + (mods ? "  " : "") + (sym !== undefined ? sym : k);
+        const tail = sym !== undefined ? sym : k;
+        // A wider gap before the key than between the modifiers, because the
+        // modifiers are one thing held down and the key is the other.
+        return mods.length ? mods.join(" ") + "   " + tail : tail;
     }
 
     // A key name as it is typed, not as X11 spells it.
@@ -313,10 +319,10 @@ Scope {
                         anchors.top: title.bottom
                         anchors.left: parent.left
                         anchors.right: parent.right
-                        anchors.topMargin: Theme.px(22)
+                        anchors.topMargin: Theme.px(40)
                         anchors.leftMargin: card.gutter
                         anchors.rightMargin: card.gutter
-                        height: Theme.px(30)
+                        height: Theme.px(36)
 
                         Row {
                             anchors.fill: parent
@@ -333,7 +339,7 @@ Scope {
                                     Text {
                                         anchors.left: parent.left
                                         anchors.bottom: parent.bottom
-                                        anchors.bottomMargin: Theme.px(6)
+                                        anchors.bottomMargin: Theme.px(10)
                                         text: "KEYS"
                                         font.family: Theme.uiFont
                                         font.pixelSize: Theme.px(13)
@@ -345,7 +351,7 @@ Scope {
                                         anchors.left: parent.left
                                         anchors.leftMargin: card.chordWidth + Theme.px(18)
                                         anchors.bottom: parent.bottom
-                                        anchors.bottomMargin: Theme.px(6)
+                                        anchors.bottomMargin: Theme.px(10)
                                         text: "ACTION"
                                         font.family: Theme.uiFont
                                         font.pixelSize: Theme.px(13)
@@ -375,7 +381,7 @@ Scope {
                     // keys that keep their words: "Brightness Down" and
                     // "Super (right)" are the longest, and they sit under four
                     // modifier glyphs at worst.
-                    readonly property int chordWidth: Theme.px(215)
+                    readonly property int chordWidth: Theme.px(255)
 
                     Flickable {
                         id: body
@@ -386,7 +392,8 @@ Scope {
                         anchors.bottom: foot.top
                         anchors.leftMargin: card.gutter
                         anchors.rightMargin: card.gutter
-                        anchors.bottomMargin: Theme.px(6)
+                        anchors.topMargin: Theme.px(14)
+                        anchors.bottomMargin: Theme.px(22)
 
                         contentHeight: table.height
                         clip: true
@@ -443,6 +450,10 @@ Scope {
                                                 font.pixelSize: Theme.px(15)
                                                 color: Theme.beige
                                                 elide: Text.ElideRight
+                                                // The gaps in a chord are runs
+                                                // of spaces, and AutoText would
+                                                // be free to collapse them.
+                                                textFormat: Text.PlainText
                                             }
 
                                             Text {
@@ -484,8 +495,8 @@ Scope {
                         anchors.right: parent.right
                         anchors.leftMargin: card.gutter
                         anchors.rightMargin: card.gutter
-                        anchors.bottomMargin: Theme.px(16)
-                        height: Theme.px(30)
+                        anchors.bottomMargin: Theme.px(22)
+                        height: Theme.px(48)
 
                         Rectangle {
                             anchors.top: parent.top
