@@ -51,8 +51,12 @@ hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
 hl.env("XDG_SESSION_TYPE", "wayland")
 hl.env("XDG_SESSION_DESKTOP", "Hyprland")
 
-hl.env("XCURSOR_SIZE", "24")
-hl.env("HYPRCURSOR_SIZE", "24")
+-- Three places name the cursor size and all three have to agree: XCURSOR_SIZE
+-- for XCursor clients, HYPRCURSOR_SIZE for Hyprland's own format, and
+-- cursor-size in gsettings-apply.sh for GTK. Changing one leaves the pointer
+-- resizing as it crosses between a GTK window and everything else.
+hl.env("XCURSOR_SIZE", "32")
+hl.env("HYPRCURSOR_SIZE", "32")
 
 -- Intel Lunar Lake uses the xe driver, not i915. VA-API lives in a different
 -- package there and the wrong driver name silently disables hardware video

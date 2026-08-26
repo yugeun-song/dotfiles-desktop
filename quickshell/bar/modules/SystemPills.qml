@@ -84,17 +84,12 @@ Row {
         }
     }
 
-    // Networking.wifiEnabled is false both when the radio is off and when
-    // NetworkManager is not there to report on it, so an empty device list
-    // means unknown rather than off. Saying "off" over a working link is the
-    // one answer that cannot be recovered from by looking at the bar.
     Pill {
+        unknown: Net.unknown
         icon: Net.preferWired ? Theme.iconEthernet : Net.wifiIcon()
         label: {
             if (Net.preferWired)
                 return "wired";
-            if (Net.devices.length === 0)
-                return "n/a";
             if (!Net.wifiDevice)
                 return "none";
             if (!Net.wifiRadioOn)
@@ -106,13 +101,14 @@ Row {
         fill: Net.preferWired || Net.wifiConnected ? Theme.accentGreen : Theme.muted
         command: root.terminal.concat([root.hyprScripts + "/launch.sh", "nmtui"])
         tooltip: {
-            if (Net.devices.length === 0)
-                return "Network   unknown\nNo device is being reported, so NetworkManager is not running\nClick to open nmtui";
             const lines = [];
             if (Net.wiredConnected)
                 lines.push(`Wired     ${Net.wiredDevice?.name ?? "connected"}`);
+            // A port with a cable in it that carries no connection and a port
+            // with nothing plugged in used to read the same. They ask for
+            // different things: one is a switch or a profile, the other a cable.
             else if (Net.wiredDevice)
-                lines.push(`Wired     ${Net.wiredDevice.name} (no link)`);
+                lines.push(`Wired     ${Net.wiredDevice.name} (${Net.wiredHasLink ? "cable in, not connected" : "no cable"})`);
             else
                 lines.push("Wired     no interface");
 
@@ -123,7 +119,7 @@ Row {
             else if (!Net.wifiConnected)
                 lines.push("Wi-Fi     not connected");
             else
-                lines.push(`Wi-Fi     ${Net.ssid !== "" ? Net.ssid : "connected"}   ${Net.signal}%`);
+                lines.push(`Wi-Fi     ${Net.ssid !== "" ? Net.ssid : "connected"}   ${Net.signal >= 0 ? Net.signal + "%" : "strength unknown"}`);
 
             const addr = Net.preferWired ? Net.wiredDevice?.address : Net.wifiDevice?.address;
             if (addr)

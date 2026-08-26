@@ -44,7 +44,7 @@ I=org.gnome.desktop.interface
 set_key "$I" gtk-theme      "Breeze-Dark"
 set_key "$I" icon-theme     "breeze-dark"
 set_key "$I" cursor-theme   "breeze_cursors"
-set_key "$I" cursor-size    24
+set_key "$I" cursor-size    32
 set_key "$I" font-name      "Inter 11"
 set_key "$I" monospace-font-name "CaskaydiaCove Nerd Font Mono 11"
 # The portal reports this as org.freedesktop.appearance color-scheme, which is

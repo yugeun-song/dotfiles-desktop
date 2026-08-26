@@ -22,11 +22,15 @@ Singleton {
     // hour later, short enough that it stays in memory without thought.
     readonly property int historyLimit: 100
 
-    // Notifications that have not been looked at since they arrived. The count
-    // the bar shows, and what "mark all read" clears.
-    property int unread: 0
-
     property var history: []
+
+    // Derived, never counted. Five separate paths used to move a number that
+    // history already answers: dismiss() rebuilt the list without touching it,
+    // historyLimit truncated the list while the counter kept climbing, the
+    // panel zeroed it on click, and a notification arriving into the open
+    // panel incremented it. A count kept beside the thing it counts can only
+    // be wrong in ways the thing itself cannot.
+    readonly property int unread: root.history.filter(e => !e.read).length
 
     // Whether the history panel is showing. It lives here rather than in the
     // panel because the bar's pill toggles it and the panel renders it, and a
@@ -91,6 +95,7 @@ Singleton {
             actions: actions,
             hasDefault: hasDefault,
             at: Date.now(),
+            read: false,
             // Kept so an action can still be invoked from the history while the
             // sender is alive. Reading anything else off it after close is not
             // safe; see snapshot above.
@@ -99,13 +104,16 @@ Singleton {
     }
 
     function add(n) {
+        // Already read if it arrived into an open panel: the user is looking at
+        // it as it lands. Counting it unread there left a badge that outlived
+        // the reading of every notification it stood for.
         const entry = root.snapshot(n);
+        entry.read = root.centreOpen;
 
         const next = [entry].concat(root.history);
         if (next.length > root.historyLimit)
             next.length = root.historyLimit;
         root.history = next;
-        root.unread = root.unread + 1;
 
         root.toast(entry);
     }
@@ -120,11 +128,12 @@ Singleton {
 
     function clear() {
         root.history = [];
-        root.unread = 0;
     }
 
+    // Rebuilt rather than marked in place: unread is a binding over history, and
+    // a var property only tells its dependents anything when it is reassigned.
     function markRead() {
-        root.unread = 0;
+        root.history = root.history.map(e => Object.assign({}, e, { read: true }));
     }
 
     // Invoking an action tells the sending application to do something, which

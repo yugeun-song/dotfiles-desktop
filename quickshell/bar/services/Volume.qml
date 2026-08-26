@@ -19,7 +19,22 @@ Singleton {
     readonly property var audio: root.sink?.audio ?? null
     readonly property bool present: root.audio !== null
 
-    readonly property int percent: root.audio ? Math.round(root.audio.volume * 100) : -1
+    // The audio object exists before Pipewire has said anything about it, and
+    // until the node is bound `volume` reads its default of 0. present answers
+    // "is there a sink", known answers "has it been read"; folding the two
+    // published a confident 0% for a sink that was playing at 24, and that
+    // fake reading was what consumed `seeded` below, so the first real value
+    // arrived looking like a change and raised the OSD that flag exists to
+    // prevent. Reproduced against live Pipewire: -1, then 0, then 24.
+    readonly property bool known: root.present && (root.sink?.ready ?? false)
+
+    // -1 for unread, and never a number that was not measured. Clamped here
+    // rather than at the display: Pipewire allows a node past 1.0 -- the
+    // volume keys pass -l 1.0, an external mixer need not -- and Osd.qml caps
+    // whatever it is handed, so 150 reached the screen as a settled 100.
+    readonly property int percent: root.known
+                                   ? Math.min(100, Math.round(root.audio.volume * 100))
+                                   : -1
     readonly property bool muted: root.audio?.muted ?? false
 
     signal changed
@@ -44,20 +59,27 @@ Singleton {
         root.changed();
     }
 
+    // known as well as seeded. muted has no sentinel to fall back on, so it
+    // reads false while the sink is unbound; firing on it alone showed the OSD
+    // with a percentage nobody had read yet. Nothing is lost by waiting: the
+    // reading lands a moment later and raises the OSD with the number in it.
     onMutedChanged: {
-        if (root.seeded)
+        if (root.seeded && root.known)
             root.changed();
     }
 
     // ---- writing --------------------------------------------------------
     //
     // Used by the bar, not by the keys. Pipewire is the fast path; wpctl is
-    // there for the case where the Pipewire service found no sink at all,
-    // which is what a machine with a bare ALSA setup looks like.
+    // there for the case where there is nothing here to write to -- no sink at
+    // all, which is what a machine with a bare ALSA setup looks like, or a
+    // sink whose properties have not arrived. The second case is why these
+    // branch on `known` rather than on the object: an unbound node hands back
+    // its defaults, so toggleMute would invert a `muted` nobody had read.
 
     function set(value) {
         const clamped = Math.max(0, Math.min(100, Math.round(value)));
-        if (root.audio) {
+        if (root.known) {
             root.audio.volume = clamped / 100;
             return;
         }
@@ -76,7 +98,7 @@ Singleton {
     }
 
     function toggleMute() {
-        if (root.audio) {
+        if (root.known) {
             root.audio.muted = !root.audio.muted;
             return;
         }
