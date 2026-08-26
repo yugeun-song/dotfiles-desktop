@@ -76,6 +76,9 @@ Singleton {
     readonly property int pillPadding: root.px(11)
     readonly property int pillGlyphGap: root.px(6)
     readonly property int gap:         root.px(6)
+    // Between groups that are different kinds of thing, rather than between
+    // items of one kind. Small enough to stay a gap and not a division.
+    readonly property int groupGap:    root.px(13)
     readonly property int edgeMargin:  root.px(10)
     // The right group ends at the screen corner, where a margin equal to
     // the left one reads as too tight: there is nothing beyond it to

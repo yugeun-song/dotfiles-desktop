@@ -61,7 +61,12 @@ PanelWindow {
             anchors.left: parent.left
             anchors.leftMargin: Theme.edgeMargin
             anchors.verticalCenter: parent.verticalCenter
-            spacing: Theme.gap
+
+            // Wider than Theme.gap, which is the spacing inside a group. These
+            // three are separate things -- the badge, the readouts, the
+            // workspaces -- and at the same gap as the pills within LeftPills
+            // they read as one long row.
+            spacing: Theme.groupGap
 
             SystemBadge {
                 anchors.verticalCenter: parent.verticalCenter
