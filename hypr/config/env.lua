@@ -71,7 +71,7 @@ hl.env("XDG_SESSION_DESKTOP", "Hyprland")
 -- to nothing and every client falls back to its own default, which is visible
 -- immediately rather than silently wrong.
 local cursor_theme = "Spaceduck-Sky"
-local cursor_size = "48"
+local cursor_size = "32"
 
 hl.env("XCURSOR_THEME", cursor_theme)
 hl.env("XCURSOR_SIZE", cursor_size)
