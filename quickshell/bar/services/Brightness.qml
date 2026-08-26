@@ -25,10 +25,18 @@ Singleton {
 
     readonly property string monitor: Hyprland.focusedMonitor?.name ?? ""
 
+    // A backlight class device belongs to the panel wired into the machine, so
+    // it is only the right target when that panel is the one being looked at.
+    // Falling back to it for any monitor meant a key pressed on an external
+    // that speaks no DDC would silently dim the laptop instead.
+    function isInternal(name) {
+        return /^(eDP|LVDS|DSI)(-|$)/.test(name);
+    }
+
     readonly property string mechanism: {
         if (root.buses[root.monitor] !== undefined)
             return "ddc";
-        if (root.hasBacklight)
+        if (root.hasBacklight && (root.monitor === "" || root.isInternal(root.monitor)))
             return "backlight";
         return "";
     }
@@ -65,16 +73,36 @@ Singleton {
         command: ["ddcutil", "detect", "--brief"]
 
         property string pendingBus: ""
+        property bool pendingUsable: false
 
         stdout: SplitParser {
             onRead: line => {
+                // ddcutil heads each block with "Display N" or with "Invalid
+                // display", and that verdict is the whole point of asking it.
+                // The laptop panel is enumerated on i2c like any other output
+                // and answers nothing -- getvcp on it returns DDCRC_RETRIES --
+                // so ddcutil calls it invalid. Recording its bus anyway made
+                // the shell drive the internal panel over DDC and never touch
+                // its backlight, and the brightness keys did nothing whenever
+                // that panel held focus.
+                const head = line.trim();
+                if (/^Display\s+\d+/.test(head)) {
+                    ddcDetect.pendingUsable = true;
+                    ddcDetect.pendingBus = "";
+                    return;
+                }
+                if (/^Invalid display/.test(head)) {
+                    ddcDetect.pendingUsable = false;
+                    ddcDetect.pendingBus = "";
+                    return;
+                }
                 const bus = line.match(/\/dev\/i2c-(\d+)/);
                 if (bus) {
                     ddcDetect.pendingBus = bus[1];
                     return;
                 }
                 const conn = line.match(/DRM connector:\s+card\d+-(\S+)/);
-                if (conn && ddcDetect.pendingBus !== "") {
+                if (conn && ddcDetect.pendingBus !== "" && ddcDetect.pendingUsable) {
                     const next = Object.assign({}, root.buses);
                     next[conn[1]] = ddcDetect.pendingBus;
                     root.buses = next;
