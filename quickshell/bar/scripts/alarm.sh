@@ -68,7 +68,9 @@ cmd_add() {
        --argjson epoch "$epoch" --argjson daily "$daily" \
        '. + [{id: $id, at: $at, label: $label, epoch: $epoch, daily: $daily, fired: false}]' \
        "$STATE_FILE" | write || { echo "could not save alarm" >&2; return 1; }
-    echo "added $at ($(date -d "@$epoch" '+%Y-%m-%d %H:%M')) $label"
+    # Day before month, the order every human-readable date in this repository
+    # uses. File names keep the sortable one; this is not a file name.
+    echo "added $at ($(date -d "@$epoch" '+%-d %b %Y %H:%M')) $label"
 }
 
 cmd_in() {

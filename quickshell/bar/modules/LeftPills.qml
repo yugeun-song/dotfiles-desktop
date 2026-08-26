@@ -41,7 +41,10 @@ Row {
     // weather does beside it then reads as the weather having changed.
     Pill {
         icon: Theme.iconClock
-        label: `${Qt.formatDateTime(clock.date, "MM-dd  HH:mm")}  ${root.zoneLabel(clock.date)}`
+        // Day before month, matching the tooltip below and hyprlock. The
+        // month is a name at three letters, which costs one column over "08"
+        // and removes the only ambiguity a numeric date has.
+        label: `${Qt.formatDateTime(clock.date, "d MMM  HH:mm")}  ${root.zoneLabel(clock.date)}`
         fill: Theme.beige
         textColor: Theme.readableOn(fill)
         tooltip: `${Qt.formatDateTime(clock.date, "dddd, d MMMM yyyy")}

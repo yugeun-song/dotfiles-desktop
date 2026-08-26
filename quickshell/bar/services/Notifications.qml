@@ -46,6 +46,50 @@ Singleton {
 
     signal toast(var entry)
 
+    // Arrival times, kept across a configuration reload.
+    //
+    // The server hands its retained notifications back after every reload and
+    // add() runs on each one, so every timestamp in the history used to collapse
+    // onto the moment of the reload: thirty notifications spanning an hour all
+    // reading the same second. It went unnoticed while the display was hours and
+    // minutes and the reload usually fell in the same minute.
+    //
+    // There is nothing to recover the real time from. A Notification carries an
+    // id, its text, an urgency and an expireTimeout, and no arrival time. So the
+    // times are kept here, in the one thing whose contents outlive a reload.
+    PersistentProperties {
+        id: arrivals
+
+        reloadableId: "notificationArrivals"
+
+        property var times: ({})
+    }
+
+    // The time this id first arrived, remembered the first time it is asked for.
+    function arrivalOf(id) {
+        const known = root.arrivals.times[id];
+        if (known !== undefined)
+            return known;
+        const now = Date.now();
+        // Reassigned rather than mutated: a var property tells its dependents
+        // nothing when the object it holds is changed in place.
+        const next = Object.assign({}, root.arrivals.times);
+        next[id] = now;
+        root.arrivals.times = next;
+        return now;
+    }
+
+    // Anything the history no longer holds. Without this the map is the only
+    // thing here that never forgets, and it grows for as long as the session.
+    function prune() {
+        const live = {};
+        for (let i = 0; i < root.history.length; i++) {
+            const e = root.history[i];
+            live[e.id] = root.arrivals.times[e.id];
+        }
+        root.arrivals.times = live;
+    }
+
     // The sending utility puts its own basename in app_name when the caller
     // passes no --app-name, so "notify-send" means nobody identified themselves
     // rather than naming an application. Labelling every scripted notification
@@ -94,7 +138,7 @@ Singleton {
             critical: n.urgency === NotificationUrgency.Critical,
             actions: actions,
             hasDefault: hasDefault,
-            at: Date.now(),
+            at: root.arrivalOf(n.id),
             read: false,
             // Kept so an action can still be invoked from the history while the
             // sender is alive. Reading anything else off it after close is not
@@ -114,6 +158,7 @@ Singleton {
         if (next.length > root.historyLimit)
             next.length = root.historyLimit;
         root.history = next;
+        root.prune();
 
         root.toast(entry);
     }
@@ -124,10 +169,12 @@ Singleton {
             if (root.history[i].id !== id)
                 next.push(root.history[i]);
         root.history = next;
+        root.prune();
     }
 
     function clear() {
         root.history = [];
+        root.prune();
     }
 
     // Rebuilt rather than marked in place: unread is a binding over history, and

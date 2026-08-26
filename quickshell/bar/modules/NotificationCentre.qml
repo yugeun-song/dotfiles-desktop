@@ -41,6 +41,12 @@ Scope {
     // LeftPills gives: an abbreviation has to be recognised before it says
     // anything, and several are ambiguous across regions. Minutes appear only
     // when they are not zero, so Seoul reads UTC+9 and Kathmandu UTC+5:45.
+    //
+    // Day, then month, then year, which is the order hypr/hyprlock.conf and the
+    // clock's tooltip already use. The month is a name rather than a number
+    // because that is the half of this convention that carries its weight: 03
+    // and 08 swap places between one country and the next and nothing on screen
+    // says which was meant, while "Mar" and "Aug" cannot be read backwards.
     function stamp(ms) {
         const d = new Date(ms);
         const p = n => (n < 10 ? "0" : "") + n;
@@ -49,8 +55,7 @@ Scope {
         const oh = Math.floor(Math.abs(mins) / 60);
         const om = Math.abs(mins) % 60;
         const zone = "UTC" + sign + oh + (om === 0 ? "" : ":" + p(om));
-        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} `
-             + `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())} ${zone}`;
+        return `${Qt.formatDateTime(d, "d MMM yyyy HH:mm:ss")} ${zone}`;
     }
 
     GlobalShortcut {
@@ -137,34 +142,47 @@ Scope {
                     readonly property int limit:
                         Math.round((parent.height - Theme.barHeight) * 0.45)
 
-                    // One row plus the gap under it, averaged over the list.
+                    // One row plus the gap under it, at the shape most of them
+                    // take: the sender and timestamp line, a summary, one
+                    // wrapped line of body, and the padding the row adds.
                     //
-                    // Rows are not all the same height, so this is an average
-                    // and the alignment it buys is approximate. It is worth
-                    // having anyway: these notifications mostly arrive from two
-                    // or three senders in the same shape, so in practice the
-                    // average is the height, and the limit lands on a boundary
-                    // between rows instead of through the middle of one.
-                    readonly property real rowUnit: {
-                        const n = Notifications.history.length;
-                        return n > 0 ? (list.contentHeight + list.spacing) / n : 0;
+                    // A constant, and deliberately not measured off the list.
+                    // It was (contentHeight + spacing) / count, which looks
+                    // like the right answer and is not: ListView reports
+                    // contentHeight as an estimate for the rows it has not
+                    // built yet and refines it as delegates come and go, so the
+                    // panel changed height while it was being scrolled.
+                    //
+                    // Rows are not all this tall. A body that wraps to two
+                    // lines, which is what a screenshot path does, adds about
+                    // twenty pixels. So the alignment this buys is approximate,
+                    // and it is still worth having: the alternative is a strip
+                    // of a row along the bottom edge, which reads as a
+                    // rendering fault rather than as "there is more below".
+                    readonly property int rowUnit: Theme.px(16)   // sender, time
+                                                 + Theme.px(4)    // gap
+                                                 + Theme.px(21)   // summary
+                                                 + Theme.px(4)    // gap
+                                                 + Theme.px(19)   // one body line
+                                                 + Theme.px(20)   // row padding
+                                                 + list.spacing
+
+                    // The tallest this may be: whole rows inside the limit,
+                    // and nothing about the list in it, so it does not move
+                    // while the list is scrolled.
+                    readonly property int cap: {
+                        const rows = Math.max(1, Math.floor(
+                            (card.limit - card.chrome + list.spacing) / card.rowUnit));
+                        return card.chrome + rows * card.rowUnit - list.spacing;
                     }
 
                     height: {
-                        const n = Notifications.history.length;
-                        if (n === 0)
+                        if (Notifications.history.length === 0)
                             return card.chrome + Theme.px(30);
-                        const full = card.chrome + list.contentHeight;
-                        if (full <= card.limit)
-                            return full;
-                        if (card.rowUnit <= 0)
-                            return card.limit;
-                        // Whole rows only. Anything left over would be a strip
-                        // of a row, which reads as a rendering fault rather
-                        // than as "there is more below".
-                        const rows = Math.max(1, Math.floor(
-                            (card.limit - card.chrome + list.spacing) / card.rowUnit));
-                        return Math.round(card.chrome + rows * card.rowUnit - list.spacing);
+                        // contentHeight is exact once every row exists, which
+                        // is the only case this branch decides: a list short
+                        // enough to fit is a list with nothing left to estimate.
+                        return Math.min(card.chrome + list.contentHeight, card.cap);
                     }
                     radius: Theme.px(14)
                     color: Theme.bgAlt
