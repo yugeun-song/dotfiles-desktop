@@ -141,8 +141,14 @@ Scope {
                         Rectangle {
                             id: card
 
+                            // One number for every edge. Deriving the height from
+                            // the content plus twice this is what keeps the space
+                            // under the last line equal to the space above the
+                            // first one.
+                            readonly property int pad: Theme.px(13)
+
                             width: parent.width
-                            implicitHeight: text.implicitHeight + Theme.px(24)
+                            implicitHeight: text.implicitHeight + card.pad * 2
                             height: implicitHeight
                             radius: Theme.px(12)
                             color: Theme.bgAlt
@@ -187,9 +193,9 @@ Scope {
                                 id: icon
 
                                 anchors.left: parent.left
-                                anchors.leftMargin: Theme.px(13)
+                                anchors.leftMargin: card.pad
                                 anchors.top: parent.top
-                                anchors.topMargin: Theme.px(12)
+                                anchors.topMargin: card.pad
                                 text: Theme.iconBell
                                 font.family: Theme.iconFont
                                 font.pixelSize: Theme.iconSize
@@ -202,9 +208,9 @@ Scope {
                                 anchors.left: icon.right
                                 anchors.leftMargin: Theme.px(10)
                                 anchors.right: parent.right
-                                anchors.rightMargin: Theme.px(46)
+                                anchors.rightMargin: card.pad + Theme.px(30)
                                 anchors.top: parent.top
-                                anchors.topMargin: Theme.px(11)
+                                anchors.topMargin: card.pad
                                 spacing: Theme.px(2)
 
                                 Text {
@@ -235,8 +241,11 @@ Scope {
 
                                 Text {
                                     width: parent.width
-                                    visible: text !== ""
-                                    height: visible ? implicitHeight : 0
+                                    // Against the model, not against `text`: the
+                                    // enclosing Column is id: text, so the bare
+                                    // name resolves to it and the comparison is
+                                    // always true.
+                                    visible: slot.modelData.appName !== ""
                                     text: slot.modelData.appName
                                     font.family: Theme.uiFont
                                     font.pixelSize: Theme.px(12)
@@ -293,9 +302,9 @@ Scope {
                             // record of what it said.
                             Text {
                                 anchors.right: parent.right
-                                anchors.rightMargin: Theme.px(12)
+                                anchors.rightMargin: card.pad
                                 anchors.top: parent.top
-                                anchors.topMargin: Theme.px(11)
+                                anchors.topMargin: card.pad
                                 text: Theme.iconClose
                                 font.family: Theme.iconFont
                                 font.pixelSize: Theme.px(25)
