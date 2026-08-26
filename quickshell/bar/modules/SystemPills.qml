@@ -102,11 +102,12 @@ Row {
         command: root.terminal.concat([root.hyprScripts + "/launch.sh", "nmtui"])
         tooltip: {
             const lines = [];
+            // A port with a cable in it carrying no connection and a port with
+            // nothing plugged in used to read the same "(no link)". They ask
+            // for different things: one wants a profile or a working switch,
+            // the other wants a cable.
             if (Net.wiredConnected)
                 lines.push(`Wired     ${Net.wiredDevice?.name ?? "connected"}`);
-            // A port with a cable in it that carries no connection and a port
-            // with nothing plugged in used to read the same. They ask for
-            // different things: one is a switch or a profile, the other a cable.
             else if (Net.wiredDevice)
                 lines.push(`Wired     ${Net.wiredDevice.name} (${Net.wiredHasLink ? "cable in, not connected" : "no cable"})`);
             else

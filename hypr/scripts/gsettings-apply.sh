@@ -43,8 +43,13 @@ I=org.gnome.desktop.interface
 
 set_key "$I" gtk-theme      "Breeze-Dark"
 set_key "$I" icon-theme     "breeze-dark"
-set_key "$I" cursor-theme   "breeze_cursors"
-set_key "$I" cursor-size    32
+# Taken from the environment rather than written again here. This script is
+# started by session-autostart.sh from inside the Hyprland session, so the
+# values hypr/config/env.lua exported are already present. A second copy of the
+# number is how the pointer ends up a different size in GTK windows than
+# everywhere else. The fallbacks cover being run by hand from a plain shell.
+set_key "$I" cursor-theme   "${XCURSOR_THEME:-Oxygen_White}"
+set_key "$I" cursor-size    "${XCURSOR_SIZE:-32}"
 set_key "$I" font-name      "Inter 11"
 set_key "$I" monospace-font-name "CaskaydiaCove Nerd Font Mono 11"
 # The portal reports this as org.freedesktop.appearance color-scheme, which is

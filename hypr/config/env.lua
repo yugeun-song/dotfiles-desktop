@@ -51,12 +51,28 @@ hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
 hl.env("XDG_SESSION_TYPE", "wayland")
 hl.env("XDG_SESSION_DESKTOP", "Hyprland")
 
--- Three places name the cursor size and all three have to agree: XCURSOR_SIZE
--- for XCursor clients, HYPRCURSOR_SIZE for Hyprland's own format, and
--- cursor-size in gsettings-apply.sh for GTK. Changing one leaves the pointer
--- resizing as it crosses between a GTK window and everything else.
-hl.env("XCURSOR_SIZE", "32")
-hl.env("HYPRCURSOR_SIZE", "32")
+-- The pointer, named once.
+--
+-- Four consumers read this and each reads it from somewhere different:
+-- XCURSOR_* for XCursor clients, HYPRCURSOR_* for Hyprland's own format, and
+-- gsettings for GTK. Naming the size in three files is how the pointer ends up
+-- changing size as it crosses from a GTK window to anything else, which is
+-- exactly what it was doing. scripts/gsettings-apply.sh reads these variables
+-- out of the environment rather than carrying its own copy, so this block is
+-- the only place either value is written.
+--
+-- HYPRCURSOR_THEME names an XCursor theme on purpose. No hyprcursor-format
+-- theme is installed, so Hyprland does not find one and falls back to XCursor,
+-- which is the same set of images the other clients are using. Leaving it unset
+-- would have Hyprland pick its own default instead, and the pointer would
+-- differ between the compositor's own surfaces and everything else.
+local cursor_theme = "Oxygen_White"
+local cursor_size = "32"
+
+hl.env("XCURSOR_THEME", cursor_theme)
+hl.env("XCURSOR_SIZE", cursor_size)
+hl.env("HYPRCURSOR_THEME", cursor_theme)
+hl.env("HYPRCURSOR_SIZE", cursor_size)
 
 -- Intel Lunar Lake uses the xe driver, not i915. VA-API lives in a different
 -- package there and the wrong driver name silently disables hardware video
