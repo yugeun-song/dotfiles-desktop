@@ -3,7 +3,7 @@
 -- Dialogs and pickers belong in the middle, not tiled into a corner.
 hl.window_rule({ match = { class = "^(xdg-desktop-portal-gtk|xdg-desktop-portal-hyprland)$" }, float = true })
 hl.window_rule({ match = { class = "^(org.fcitx.)" }, float = true })
-hl.window_rule({ match = { class = "^(nm-connection-editor|blueman-manager)$" }, float = true })
+hl.window_rule({ match = { class = "^(nm-connection-editor)$" }, float = true })
 hl.window_rule({ match = { class = "^(pavucontrol|org.pulseaudio.pavucontrol)$" }, float = true })
 hl.window_rule({ match = { class = "^(swappy)$" }, float = true })
 hl.window_rule({ match = { title = "^(Open File|Save File|Save As|Open Folder)" }, float = true })
