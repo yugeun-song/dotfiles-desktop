@@ -29,9 +29,17 @@ Singleton {
 
     // Long enough to read a chord that went past quickly, short enough that the
     // overlay is gone before it becomes furniture.
-    readonly property int dwellMs: 2600
+    readonly property int dwellMs: 2000
 
     readonly property int maxVisible: 5
+
+    // A hard ceiling on what is on screen, counting the ones playing their exit.
+    // maxVisible alone bounds only the live ones, and an exit takes about half a
+    // second, so typing faster than that stacked five live chords on top of
+    // however many were still falling and the row grew across the screen.
+    // Past this the oldest is cut rather than asked to leave: at that rate
+    // nobody is reading the animation anyway.
+    readonly property int maxOnScreen: root.maxVisible * 2
 
     // The symbols every printed keyboard shortcut has used for decades. They
     // are not in the Nerd Font the icons come from, but they are in Inter,
@@ -135,6 +143,16 @@ Singleton {
                 live.push(root.chords[i]);
         if (live.length > root.maxVisible)
             root.expiring = root.expiring.concat([live[0].id]);
+
+        while (root.chords.length > root.maxOnScreen) {
+            const gone = root.chords[0].id;
+            root.chords = root.chords.slice(1);
+            const still = [];
+            for (let i = 0; i < root.expiring.length; i++)
+                if (root.expiring[i] !== gone)
+                    still.push(root.expiring[i]);
+            root.expiring = still;
+        }
     }
 
     function drop(id) {

@@ -30,7 +30,7 @@ Item {
     readonly property color ink: Theme.readableOn(root.face)
 
     // How far the shadow sits behind the face, on both axes.
-    readonly property int drop: Theme.px(5)
+    readonly property int drop: Theme.px(3)
 
     implicitWidth: Math.max(label.implicitWidth + Theme.px(20), Theme.px(42)) + root.drop
     implicitHeight: label.implicitHeight + Theme.px(16) + root.drop
