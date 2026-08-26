@@ -9,12 +9,13 @@ import qs.services
 // and inside the same cap, which is the convention every keyboard shortcut in
 // print has used for decades.
 //
-// The shadow is a second rectangle offset down and to the right, not a blur.
-// Qt Quick has no cheap drop shadow without the effects module, and a hard
-// offset reads as a card lifted off the screen in a way a soft one does not at
-// this size. It takes the palette's yellow rather than a darker shade of the
-// face: against a dark desktop a dark shadow disappears into it, and the point
-// of the offset is that the edge is visible.
+// The shadow is a second rectangle directly beneath the face, not offset to one
+// side and not blurred. It is the side of the key rather than a shadow cast on
+// the desktop, which is why it goes straight down: a key has a side, and it is
+// the same side whichever way the light falls.
+//
+// It takes the palette's yellow rather than a darker shade of the face. The
+// desktop behind it is dark, and a dark side disappears into it.
 Item {
     id: root
 
@@ -29,23 +30,25 @@ Item {
     readonly property color shadow: Theme.yellow
     readonly property color ink: Theme.readableOn(root.face)
 
-    // How far the shadow sits behind the face, on both axes.
+    // How far the side shows below the face.
     readonly property int drop: Theme.px(3)
 
-    implicitWidth: Math.max(label.implicitWidth + Theme.px(20), Theme.px(42)) + root.drop
+    implicitWidth: Math.max(label.implicitWidth + Theme.px(20), Theme.px(42))
     implicitHeight: label.implicitHeight + Theme.px(16) + root.drop
 
     Rectangle {
-        x: root.drop
-        y: root.drop
-        width: parent.width - root.drop
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
         height: parent.height - root.drop
         radius: Theme.px(8)
         color: root.shadow
     }
 
     Rectangle {
-        width: parent.width - root.drop
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.top: parent.top
         height: parent.height - root.drop
         radius: Theme.px(8)
         color: root.face

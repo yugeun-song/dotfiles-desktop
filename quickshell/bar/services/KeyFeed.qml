@@ -41,6 +41,19 @@ Singleton {
     // nobody is reading the animation anyway.
     readonly property int maxOnScreen: root.maxVisible * 2
 
+    // The shortest gap allowed between two departures. Each chord already has
+    // its own timer started when it arrived, but typing puts five of them
+    // inside a couple of hundred milliseconds, so five timers fire inside a
+    // couple of hundred milliseconds and the stack looks like it emptied at
+    // once. Holding each exit this far behind the one before it lets a burst
+    // unravel in the order it was typed.
+    readonly property int minGapMs: 130
+
+    // When the chord scheduled furthest out is due to leave. A new arrival is
+    // scheduled after it rather than a flat dwell from now, which is what keeps
+    // the departures in arrival order.
+    property real lastLeaveAt: 0
+
     // The symbols every printed keyboard shortcut has used for decades. They
     // are not in the Nerd Font the icons come from, but they are in Inter,
     // which is what the caps already draw their labels with.
@@ -131,7 +144,15 @@ Singleton {
     readonly property bool running: feed.running
 
     function push(mods, key) {
-        root.chords = root.chords.concat([{ mods: mods, key: key, id: root.nextId }]);
+        const now = Date.now();
+        let leaveAt = now + root.dwellMs;
+        if (leaveAt < root.lastLeaveAt + root.minGapMs)
+            leaveAt = root.lastLeaveAt + root.minGapMs;
+        root.lastLeaveAt = leaveAt;
+
+        root.chords = root.chords.concat([{
+            mods: mods, key: key, id: root.nextId, leaveAt: leaveAt
+        }]);
         root.nextId = root.nextId + 1;
 
         // Count only the ones not already on their way out, or a burst of keys

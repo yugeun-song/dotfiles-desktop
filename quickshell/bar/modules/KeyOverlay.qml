@@ -135,9 +135,13 @@ Scope {
                             }
                         }
 
+                        // Fires at the moment the service booked for this
+                        // chord, not a flat dwell from when the delegate was
+                        // built. A burst is booked in sequence, so it leaves in
+                        // sequence rather than all at once.
                         Timer {
                             running: true
-                            interval: KeyFeed.dwellMs
+                            interval: Math.max(60, slot.modelData.leaveAt - Date.now())
 
                             onTriggered: if (!leaving.running) leaving.start()
                         }
