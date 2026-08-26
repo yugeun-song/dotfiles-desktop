@@ -126,9 +126,21 @@ for i = 1, 10 do
     hl.bind("SUPER + ALT + " .. n, hl.dsp.window.move({ workspace = i, follow = false }),
         { description = "Send window to workspace " .. i })
 
-    hl.bind("SUPER + code:" .. numpad_code[i], hl.dsp.focus({ workspace = i }))
-    hl.bind("SUPER + ALT + code:" .. numpad_code[i], hl.dsp.window.move({ workspace = i, follow = false }))
 end
+
+-- The keypad is not bound, and the twenty lines that used to try are gone.
+--
+-- They read `hl.bind("SUPER + code:" .. numpad_code[i], ...)`, which is the
+-- hyprlang spelling. The Lua bind takes a string and does not parse `code:` out
+-- of it, so all twenty registered with an empty key AND an empty keycode and
+-- could never fire: `hyprctl binds` showed 22 entries with neither field set.
+-- Nothing reported it. Passing a table instead is worse -- `bind: bad argument
+-- 1: expected string, got table` on every line, and the whole loop is dropped.
+--
+-- Binding them by keysym is possible but not equivalent: the keypad sends
+-- KP_End/KP_Down/... with NumLock off and KP_1/KP_2/... with it on, so it would
+-- take both sets and would then fire twice on any layout where they coincide,
+-- which is the double-fire this section's comment above warns about.
 
 -- Walking the workspaces that actually exist rather than by number. The
 -- vertical pair jumps five at a time, which is what makes this usable once

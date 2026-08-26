@@ -136,6 +136,15 @@ start comm "fcitx5" fcitx5 -d
 # The packaged unit has Restart=on-failure and WantedBy=graphical-session.target,
 # which is the supervision and the ordering both. Enabled once:
 #   systemctl --user enable hypridle.service
+# Enable it here rather than only start it. The gate used to be is-enabled, and
+# nothing in either repository ever enabled it, so on a machine that had not had
+# it turned on by hand the screen simply never locked and the log line explaining
+# that was the only sign. Enabling is idempotent and takes effect immediately.
+if ! systemctl --user is-enabled hypridle.service >/dev/null 2>&1; then
+    systemctl --user enable hypridle.service >/dev/null 2>&1 \
+        || log "could not enable hypridle.service; the screen will not lock"
+fi
+
 if systemctl --user is-enabled hypridle.service >/dev/null 2>&1; then
     systemctl --user start hypridle.service 2>/dev/null \
         || log "could not start hypridle.service; the screen will not lock"
