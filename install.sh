@@ -169,9 +169,9 @@ mirror "$SRC/bin/unlock"            "$HOME/.local/bin/unlock"
 # XCursor themes are bitmaps with the colour baked in, so a themed pointer is
 # not something a setting can ask for. theme/cursor/tint-cursors.py recolours a
 # packaged theme by luminance, which keeps every hotspot, size and alias the
-# source had. The tint is read out of Theme.qml so the palette stays the only
-# place the colour is written; hard-coding it here would be a second copy that
-# drifts the first time the bar's blue changes.
+# source had. That tint is read out of Theme.qml rather than written here, so it
+# cannot drift the first time the bar's blue changes. The plain arrow is the one
+# exception and carries its own two colours; see the note further down.
 #
 # Failure is not fatal. A machine that cannot build it keeps whatever pointer it
 # had, which is a worse-looking desktop and not a broken one.
@@ -181,13 +181,11 @@ if [[ -n "$cursor_tint" ]]; then
     if "$SRC/theme/cursor/tint-cursors.py" --from Oxygen_White \
            --name Spaceduck-Sky --tint "$cursor_tint" \
            --comment "Oxygen_White in the bar's sky blue"; then
-        # Only after the theme exists, and only over its plain arrow. Both
-        # colours come out of Theme.qml, so the pointer is drawn from the same
-        # two the bar behind it uses and neither is written twice.
-        cursor_ink=$(sed -n 's/.*bg: *"\(#[0-9a-fA-F]\{6\}\)".*/\1/p' \
-                     "$SRC/quickshell/bar/services/Theme.qml" | head -1)
+        # Only after the theme exists, and only over its plain arrow. No colours
+        # passed: the pointer's two were measured off the drawing it was asked to
+        # match and live in pointer.py, which is the only part of this theme that
+        # does not follow the bar's palette.
         "$SRC/theme/cursor/pointer.py" --theme Spaceduck-Sky \
-            --fill "$cursor_tint" --outline "${cursor_ink:-#0f111b}" \
             || echo "install: the arrow stayed as the tint left it" >&2
     else
         echo "install: could not build the cursor theme; the pointer is unchanged" >&2

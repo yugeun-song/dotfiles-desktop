@@ -36,14 +36,34 @@ from PIL import Image
 # then out to the foot of the tail. The left edge closes it. The notch between
 # the shoulder and the heel is what separates an arrow from a triangle: without
 # it the shape reads as a play button.
-OUTLINE = [(8, 3), (78, 69), (40, 74), (10, 93)]
+#
+# These are not eyeballed. They were fitted against the reference drawing by
+# rendering a candidate, classifying every pixel of both as background, fill or
+# outline, and walking each number until the agreement stopped improving: 89.1%
+# to 96.1%, the remainder being antialiasing and the reference's own uneven
+# corners. Note that the tip sits slightly to the right of the foot, so the left
+# edge leans rather than dropping straight; that came out of the fit and it is
+# what stops the shape reading as a right triangle.
+OUTLINE = [(11.75, 3), (82.25, 66.5), (42.75, 69), (10, 93)]
 
-# Fraction of the shape's height, when there is an outline at all. Heavy on
-# purpose. A thin edge is what the tinted Oxygen arrow already had and it
-# disappears against a busy window; and at the small end it is the outline, not
-# the fill, that keeps the notch between the head and the tail readable, because
-# the notch is two dark lines before it is ever a gap.
-STROKE = 0.06
+# Fraction of the shape's height, when there is an outline at all. Measured off
+# the reference, where the dark band along the left edge is 15 pixels against a
+# path 275 tall, and then confirmed by the same fit as the coordinates above.
+#
+# It carries its weight twice. Against a busy window it is what keeps a light
+# fill visible at all, which a hairline edge does not; and at the small end it
+# is the outline, not the fill, that keeps the notch readable, because at 24
+# pixels the notch is two dark lines before it is ever a gap.
+STROKE = 0.052
+
+# Both measured from the reference drawing rather than taken from Theme.qml.
+#
+# The rest of the theme is recoloured to the bar's accentSky by tint-cursors.py,
+# and these are deliberately not that: the arrow was asked for in the colours of
+# a particular drawing, and a pointer is looked at on its own, never beside the
+# resize handles it would be compared against.
+FILL = "#1d89e4"
+INK = "#212121"
 
 # The sizes a client is likely to ask for. Anything not here is served by
 # XCursor picking the nearest, which this list exists to make rare.
@@ -132,8 +152,8 @@ def to_bgra(im):
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--theme", default="Spaceduck-Sky")
-    ap.add_argument("--fill", default="#7dcfff")
-    ap.add_argument("--outline", default="#0f111b",
+    ap.add_argument("--fill", default=FILL)
+    ap.add_argument("--outline", default=INK,
                     help='a colour, or "none" for a flat shape with no edge')
     ap.add_argument("--name", default="left_ptr",
                     help="the cursor file to replace; every standard alias for "
