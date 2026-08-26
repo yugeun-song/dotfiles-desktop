@@ -248,9 +248,7 @@ Location  ${Weather.place}`
     }
     // Deliberately last, so it sits at the outer right edge of the bar.
     Pill {
-        icon: Notifications.unread > 0 ? Theme.iconBellRing
-            : Notifications.history.length > 0 ? Theme.iconBell
-            : Theme.iconBellOff
+        icon: Theme.iconBell
         label: Notifications.unread > 0 ? `${Notifications.unread}` : ""
         labelWidth: Notifications.unread > 0 ? Theme.percentWidth : 0
         fill: Notifications.unread > 0 ? Theme.accentAmber : Theme.muted

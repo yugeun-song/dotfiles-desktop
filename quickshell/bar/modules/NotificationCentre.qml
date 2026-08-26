@@ -307,6 +307,7 @@ Scope {
                                         spacing: Theme.px(6)
 
                                         Text {
+                                            visible: text !== ""
                                             text: slot.modelData.appName
                                             font.family: Theme.uiFont
                                             font.pixelSize: Theme.px(12)

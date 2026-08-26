@@ -42,6 +42,16 @@ Singleton {
 
     signal toast(var entry)
 
+    // The sending utility puts its own basename in app_name when the caller
+    // passes no --app-name, so "notify-send" means nobody identified themselves
+    // rather than naming an application. Labelling every scripted notification
+    // with the tool that sent it tells a reader nothing they cannot see.
+    function senderName(raw) {
+        if (!raw || raw === "notify-send" || raw === "notify-desktop")
+            return "";
+        return raw;
+    }
+
     // A notification is kept after it is closed, which is the whole point of a
     // history, so each one is copied into a plain object as it arrives. Holding
     // the Notification itself would mean reading properties off an object the
@@ -56,7 +66,7 @@ Singleton {
         }
         return {
             id: n.id,
-            appName: n.appName || "Notification",
+            appName: root.senderName(n.appName),
             appIcon: n.appIcon || "",
             summary: n.summary || "",
             body: n.body || "",

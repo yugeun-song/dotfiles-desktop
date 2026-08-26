@@ -190,7 +190,7 @@ Scope {
                                 anchors.leftMargin: Theme.px(13)
                                 anchors.top: parent.top
                                 anchors.topMargin: Theme.px(12)
-                                text: slot.modelData.critical ? Theme.iconBellAlert : Theme.iconBell
+                                text: Theme.iconBell
                                 font.family: Theme.iconFont
                                 font.pixelSize: Theme.iconSize
                                 color: slot.modelData.critical ? Theme.accentRed : Theme.accentTeal
@@ -235,6 +235,8 @@ Scope {
 
                                 Text {
                                     width: parent.width
+                                    visible: text !== ""
+                                    height: visible ? implicitHeight : 0
                                     text: slot.modelData.appName
                                     font.family: Theme.uiFont
                                     font.pixelSize: Theme.px(12)

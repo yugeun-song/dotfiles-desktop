@@ -190,10 +190,11 @@ Singleton {
     // presence in the font. F0A21 is in the font and is not a bell: it is a
     // window grid. Membership in the cmap says a glyph exists, never which
     // glyph it is.
+    // One bell, in every state. The ringing and exclamation-mark variants say
+    // the same thing the colour and the count already say, and a bell with a
+    // glyph struck through it reads as "notifications are off" rather than as
+    // "there are none".
     readonly property string iconBell:      String.fromCodePoint(0xF009A)
-    readonly property string iconBellRing:  String.fromCodePoint(0xF009E)
-    readonly property string iconBellAlert: String.fromCodePoint(0xF0D59)
-    readonly property string iconBellOff:   String.fromCodePoint(0xF009B)
     readonly property string iconClose:     String.fromCodePoint(0xF0159)
     readonly property string iconClearAll:  String.fromCodePoint(0xF0A79)
     readonly property string iconBatteryAlert: String.fromCodePoint(0xF0083)
