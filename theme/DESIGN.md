@@ -8,21 +8,30 @@ regenerating every consumer from the palette. Until then the colours live where
 section 1 says they live, spread across the files listed in the survey.
 -->
 
-# 테마 시스템 설계
+# Theme system design
 
-## 1. 무엇을 만드는가
+## 1. What is being built
 
-색을 한 곳에만 적고 나머지 파일은 전부 거기서 만들어 내는 생성기를 만든다. 사람이 손으로 쓰는 것은 팔레트 파일 하나뿐이고, 그 안에는 `#7aa2f7` 같은 값이 "파랑"이라는 이름이 아니라 "주 강조색"이라는 역할 이름으로 들어간다. 생성기는 그 역할표를 읽어 KDE, GTK, hyprlock, Hyprland, kitty, tmux, zsh, fcitx5, swappy, slurp, fuzzel, quickshell 바가 각자 읽는 형식으로 번역한다. 팔레트는 여러 개를 두고 이름으로 고른다. 전환은 저장소를 고치는 일이 아니라 이미 만들어 둔 산출물 묶음 하나를 가리키는 링크를 갈아 끼우는 일이다. matugen처럼 벽지에서 색을 뽑아내는 단계는 없다. 색은 사람이 정하고 기계는 옮겨 적기만 한다.
+A generator: colours are written in one place and every other file is produced
+from it. The only file written by hand is the palette, and inside it a value
+like `#7aa2f7` is filed under what it does, "primary accent", rather than under
+what it looks like, "blue". The generator reads that role table and translates
+it into the formats KDE, GTK, hyprlock, Hyprland, kitty, tmux, zsh, fcitx5,
+swappy, slurp, fuzzel and the quickshell bar each read. There can be several
+palettes, chosen by name. Switching is not an edit to the repository; it moves
+one link to point at a set of outputs that was built beforehand. There is no
+matugen-style step that extracts colours from a wallpaper. A person picks the
+colours and the machine only copies them out.
 
 ```
- 손으로 씀 (추적됨)
+ written by hand (tracked)
    theme/palettes/spaceduck.json
    theme/palettes/macos-dark.json
    theme/templates/*.in
           │
-          │  theme build            팔레트를 읽어 소비자 형식으로 번역한다
+          │  theme build            reads a palette, writes each consumer's format
           ▼
- 생성됨 (추적됨, 마커 있음)
+ generated (tracked, marked)
    theme/out/spaceduck/
    theme/out/macos-dark/
      palette.json   kdeglobals        Spaceduck.colors   gtk-colors.css
@@ -30,13 +39,13 @@ section 1 says they live, spread across the files listed in the survey.
      slurp.env      fuzzel-theme.ini  kitty.conf         tmux.conf
      fzf.env        fcitx5-theme.conf
           │
-          │  theme set <name>       저장소를 건드리지 않는다
+          │  theme set <name>       touches nothing in the repository
           │
-          ├─► 링크 하나로 따라오는 소비자
+          ├─► consumers that follow a single link
           │     ~/.local/state/theme/current ──► theme/out/<name>/
-          │     kitty, tmux, zsh(fzf, caps lock), capture.sh(slurp)
+          │     kitty, tmux, zsh (fzf, caps lock), capture.sh (slurp)
           │
-          ├─► 복사해야 하는 소비자
+          ├─► consumers that need a copy
           │     ~/.config/kdeglobals
           │     ~/.config/gtk-3.0/colors.css
           │     ~/.config/gtk-4.0/colors.css
@@ -49,72 +58,103 @@ section 1 says they live, spread across the files listed in the survey.
           │     ~/.local/share/fcitx5/themes/custom/theme.conf
           │     ~/.local/state/theme/palette.json
           │
-          └─► 신호
-                plasma-apply-colorscheme   Qt/KDE 앱 즉시 재색칠
-                qs ipc call theme reload   quickshell 바 즉시 재색칠
-                fcitx5-remote -r           후보창 즉시 재색칠
-                tmux source-file           상태줄 즉시 재색칠
-                hyprctl eval               창 테두리, 반영 여부 미확인
+          └─► signals
+                plasma-apply-colorscheme   repaints Qt/KDE apps at once
+                qs ipc call theme reload   repaints the quickshell bar at once
+                fcitx5-remote -r           repaints the candidate window at once
+                tmux source-file           repaints the status line at once
+                hyprctl eval               window borders, effect unconfirmed
 ```
 
-핵심은 `theme build`와 `theme set`을 나눈 것이다. `build`는 팔레트를 고쳤을 때만 돌고 결과를 커밋한다. `set`은 매일 돌지만 저장소에 어떤 변경도 남기지 않는다. 조사에서 걱정한 "테마를 바꿀 때마다 작업 트리가 더러워지는 문제"가 이 분리로 사라진다.
+The split between `theme build` and `theme set` is the point. `build` runs only
+when a palette changes and its results are committed. `set` runs every day and
+leaves no change in the repository at all. The worry the survey raised, that
+switching themes would dirty the working tree every time, disappears with that
+separation.
 
 ---
 
-## 2. 팔레트 형식
+## 2. Palette format
 
-### 2.1 역할을 정하는 기준
+### 2.1 How the roles were chosen
 
-역할(role)은 색이 무슨 일을 하는지를 가리키는 이름이다. "파랑"은 생김새이고 "주 강조색"은 역할이다. 생김새로 이름을 붙이면 밝은 테마나 초록 계열 테마로 갈아탈 때 `blue`라는 이름 안에 초록이 들어앉게 되고, 그 순간 이름이 거짓말을 시작한다.
+A role names what a colour does. "Blue" is an appearance; "primary accent" is a
+role. Naming by appearance means that moving to a light theme, or a green one,
+puts green inside something called `blue`, and from that moment the name lies.
 
-역할은 17개다. 셋으로 나뉜다.
+There are 17 roles, in three groups.
 
-**표면과 글자 7개.** 어떤 테마든 반드시 있어야 하는 뼈대다.
+**Seven for surfaces and text.** The skeleton every theme has to have.
 
-| 역할 | 하는 일 | 지금 값의 출처 |
+| Role | What it does | Where the value comes from today |
 |---|---|---|
-| `bg` | 바탕. 바 배경, 창 배경, 목록 뷰 배경, kitty 배경 | `Theme.qml:84` bg |
-| `surface` | 바탕 위에 얹힌 면. 알약, 버튼, 제목 표시줄, 툴팁 테두리 안쪽, 입력란 | `Theme.qml:85` bgAlt |
-| `border` | 경계선. GTK `borders_breeze`, hyprlock 입력란 테두리, slurp 선택 테두리, tmux 패널 경계 | `hyprlock.conf:45` |
-| `fg` | 바탕 위 글자 | `Theme.qml:86` fg |
-| `dim` | 흐린 글자. 비활성 항목, 자리표시자, 꺼진 알약 | `Theme.qml:87` muted |
-| `fill` | 뜻 없이 채워진 밝은 면. 툴팁 배경 | `Theme.qml:114` beige |
-| `ink` | 색이 칠해진 면 위에 얹는 글자. 알약 글자, 선택 행 글자, 툴팁 글자 | `Theme.qml:115` ink |
+| `bg` | The ground. Bar background, window background, list view background, kitty background | `Theme.qml:84` bg |
+| `surface` | A face laid on the ground. Pills, buttons, title bars, the inside of a tooltip border, input fields | `Theme.qml:85` bgAlt |
+| `border` | Edges. GTK `borders_breeze`, the hyprlock input border, the slurp selection border, tmux pane edges | `hyprlock.conf:45` |
+| `fg` | Text on the ground | `Theme.qml:86` fg |
+| `dim` | Faded text. Inactive entries, placeholders, pills that are off | `Theme.qml:87` muted |
+| `fill` | A bright face with no meaning attached. Tooltip background | `Theme.qml:114` beige |
+| `ink` | Text laid on a coloured face. Pill labels, the selected row, tooltip text | `Theme.qml:115` ink |
 
-`ink`를 `bg`와 따로 두는 이유는 지금 값이 같아서가 아니라 역할이 다르기 때문이다. 밝은 테마에서 `bg`는 흰색 쪽으로 가고 `ink`는 검은색 쪽에 남는다. 참조 횟수도 14회로 두 번째로 많다. `border`를 `dim`과 따로 두는 이유는 테두리를 아예 없앤 테마(경계선을 `bg`와 같게 두는 테마)를 만들 수 있어야 하기 때문이다.
+`ink` is separate from `bg` not because the values differ today but because the
+roles do. In a light theme `bg` moves toward white and `ink` stays near black.
+It is also the second most referenced role, at 14 uses. `border` is separate
+from `dim` so that a theme with no visible edges, one that sets its borders to
+`bg`, remains possible.
 
-**뜻이 있는 색 4개.** 이 넷은 소비자가 뜻으로 요구한다. `kdeglobals`의 `ForegroundNegative` / `ForegroundNeutral` / `ForegroundPositive`, GTK의 `error_color_breeze` / `warning_color_breeze` / `success_color_breeze`가 이름 그대로 이 셋을 요구하므로 없앨 수 없다.
+**Four that carry meaning.** These four are demanded by name. `kdeglobals` wants
+`ForegroundNegative` / `ForegroundNeutral` / `ForegroundPositive` and GTK wants
+`error_color_breeze` / `warning_color_breeze` / `success_color_breeze`, so three
+of them cannot be removed.
 
-| 역할 | 하는 일 |
+| Role | What it does |
 |---|---|
-| `accent` | 주 강조. 선택 배경, 포커스 테두리, 링크, Hyprland 활성 창 테두리, 런처 선택 행, 블루투스 연결됨 |
-| `positive` | 정상. 네트워크 연결됨, 충전 중, 메뉴 체크 표시, 볼륨 OSD |
-| `caution` | 주의. 배터리 30% 이하, 부하 65% 이상, 밝기 OSD, 한글 입력 상태 |
-| `critical` | 위험. 배터리 15% 이하, 부하 85% 이상, caps lock, 알람 울림, 전원 메뉴 종료, hyprlock 인증 실패 |
+| `accent` | The primary accent. Selection background, focus ring, links, the Hyprland active window border, the launcher's selected row, bluetooth connected |
+| `positive` | All is well. Network connected, charging, menu check marks, the volume OSD |
+| `caution` | Take note. Battery at 30% or below, load at 65% or above, the brightness OSD, Hangul input state |
+| `critical` | Something is wrong. Battery at 15% or below, load at 85% or above, caps lock, an alarm ringing, log out in the power menu, a failed hyprlock authentication |
 
-**구별용 색 6개.** 뜻이 없고 임무가 "나란히 놓였을 때 서로 구별되는 것" 하나뿐인 색이다. 상태 알약이 아홉 개 붙어 있는 바에서 이 여섯이 없으면 모든 알약이 같은 색이 된다. 어느 자리에 어느 번호가 가는지는 값이 아니라 규칙이므로 `Theme.qml` 안에 남고 팔레트는 여섯 개의 값만 준다.
+**Six for telling things apart.** These carry no meaning and have one job:
+looking distinct from each other side by side. A bar with nine status pills on
+it needs them, or every pill is the same colour. Which number goes where is a
+rule rather than a value, so that stays in `Theme.qml` and the palette supplies
+only six colours.
 
-| 역할 | 어디에 배정되는가 |
+| Role | Where it is assigned |
 |---|---|
-| `tone1` | 미디어 알약, 메모리 부하 기준색, 방문한 링크 |
-| `tone2` | 포커스한 창 칩 |
-| `tone3` | 워크스페이스 이동 표시 |
-| `tone4` | 시계와 시스템 배지, 호버 장식, 링크, hyprlock 인증 확인 표시 |
-| `tone5` | CPU 부하 기준색 |
-| `tone6` | 조용한 기본 알약, 배터리 정상, hyprlock 날짜 라벨 |
+| `tone1` | The media pill, the memory load base, visited links |
+| `tone2` | The focused window chip |
+| `tone3` | The workspace move indicator |
+| `tone4` | The clock and system badge, hover decoration, links, the hyprlock authentication tick |
+| `tone5` | The CPU load base |
+| `tone6` | The quiet default pill, battery normal, the hyprlock date label |
 
-**17개로 줄이면서 사라지는 것.** 지금 `Theme.qml`에 있는 22칸 가운데 다음이 없어진다.
+**What 17 roles leave behind.** Of the 22 slots in `Theme.qml` today, these go.
 
-- `red`(88행), `green`(89행), `blue`(91행)은 저장소 어디에서도 참조되지 않는다. 지운다.
-- `capsLock`(103행)은 값이 `accentRed`와 같고 `dotfiles-terminal/zsh/config/caps-lock.zsh:111`의 `-b '#f7768e' -f '#0f111b'`와 짝지어 손으로 맞춰 온 것이다. `critical` + `ink`로 대체한다. 생성기가 `caps-lock.zsh`가 읽는 값도 같이 만들므로 두 저장소 사이의 수동 동기화가 통째로 사라진다. `Theme.qml:100-102`의 고백 주석이 없어지는 자리다.
-- `accentTeal`(108행)은 볼륨 OSD와 배터리 정상 두 곳에서만 쓴다. 볼륨은 `positive`로, 배터리 정상은 `tone6`으로 나눠 보낸다. 충전 중이 `positive`, 정상이 `tone6`이므로 두 상태는 여전히 구별된다.
-- `purple`(92행, 미디어 알약)과 `accentPurple`(111행, 메모리 부하)은 둘 다 보라 계열이고 화면에서 나란히 놓이지 않는다. `tone1` 하나로 합친다.
+- `red` (line 88), `green` (89) and `blue` (91) are referenced nowhere in the
+  repository. Deleted.
+- `capsLock` (103) holds the same value as `accentRed` and has been kept in step
+  by hand with `-b '#f7768e' -f '#0f111b'` in
+  `dotfiles-terminal/zsh/config/caps-lock.zsh:111`. It becomes `critical` plus
+  `ink`. Since the generator also writes the file `caps-lock.zsh` reads, the
+  manual synchronisation between the two repositories disappears entirely. This
+  is where the confession in the comment at `Theme.qml:100-102` stops being
+  needed.
+- `accentTeal` (108) is used in two places, the volume OSD and battery normal.
+  Volume goes to `positive` and battery normal to `tone6`. Charging is
+  `positive` and normal is `tone6`, so the two states stay distinguishable.
+- `purple` (92, the media pill) and `accentPurple` (111, memory load) are both
+  purple and never sit next to each other on screen. They merge into `tone1`.
 
-**역할이 아닌 것 16칸.** ANSI 0번부터 15번까지는 역할이 아니라 계약이다. `ls`, `git`, `vim`이 "색 2번"을 초록이라고 믿고 인덱스로 지목하므로 이 16칸은 역할표에서 유도할 수 없다. 팔레트 파일에 `ansi` 배열로 따로 둔다. kitty만 이것을 소비하고, p10k의 256색 인덱스 가운데 0번부터 15번까지가 여기서 따라온다.
+**Sixteen slots that are not roles.** ANSI 0 through 15 are a contract, not
+roles. `ls`, `git` and `vim` point at "colour 2" by index and believe it is
+green, so those sixteen cannot be derived from the role table. They live in the
+palette file as a separate `ansi` array. Only kitty consumes it, and indexes 0
+through 15 of p10k's 256-colour numbering follow from it.
 
-### 2.2 파일 형식
+### 2.2 File format
 
-경로는 `~/workspace/dotfiles-desktop/theme/palettes/<name>.json`이다.
+The path is `~/workspace/dotfiles-desktop/theme/palettes/<name>.json`.
 
 ```json
 {
@@ -153,42 +193,61 @@ section 1 says they live, spread across the files listed in the survey.
 }
 ```
 
-`ansi` 배열의 3번과 5번 자리가 각각 보라와 노랑인 것은 오타가 아니다. `dotfiles-terminal/kitty/spaceduck.conf:13-15`가 밝히듯 원저자가 노랑과 보라를 일부러 맞바꾼 것이고, 그 스왑을 재현하지 않으면 spaceduck이 아니게 된다. 팔레트 파일이 배열이라 스왑이 값 자체로 표현되고 생성기는 그런 사정이 있다는 것을 몰라도 된다.
+Slots 3 and 5 of the `ansi` array holding purple and yellow is not a typo. As
+`dotfiles-terminal/kitty/spaceduck.conf:13-15` records, the original author
+swapped yellow and purple deliberately, and without reproducing that swap the
+result is not spaceduck. Because the palette holds an array, the swap is
+expressed in the values themselves and the generator never has to know there is
+a story behind it.
 
-`scheme`은 `"dark"` 또는 `"light"`다. 값이 `"light"`인 팔레트로 갈아탈 때만 `gsettings set org.gnome.desktop.interface color-scheme default`가 필요하다. 그 외에는 이 필드가 아무 일도 하지 않는다.
+`scheme` is `"dark"` or `"light"`. Only when switching to a palette whose value
+is `"light"` does `gsettings set org.gnome.desktop.interface color-scheme
+default` need to run. Otherwise the field does nothing.
 
-`name`은 파일 이름이자 `theme set`의 인자다. `label`은 KDE 색 구성 목록에 보이는 이름이고 `~/.local/share/color-schemes/<label에서 공백 뺀 이름>.colors`의 파일명이 된다.
+`name` is both the file name and the argument to `theme set`. `label` is the
+name shown in the KDE colour scheme list and becomes the file name of
+`~/.local/share/color-schemes/<label with spaces removed>.colors`.
 
-**팔레트 값의 이동 두 가지를 미리 밝힌다.** `accent`가 `#7aa2f7`이므로 Hyprland 활성 창 테두리가 지금의 `#5ccc96`(`hypr/config/general.lua:25`)에서 바뀐다. 그리고 hyprlock의 caps lock 색이 지금의 `#f2ce00`(`hypr/hyprlock.conf:50`)에서 `critical`인 `#f7768e`로 바뀐다. 둘 다 조사에서 지적된 팔레트 갈라짐을 한쪽으로 정리한 결과다. 반대로 정리하고 싶으면 `accent`를 `#5ccc96`으로 적으면 되고, 그러면 런처 선택 행과 KDE 선택 배경까지 초록으로 따라온다. 그 결정이 바로 역할표가 존재하는 이유다.
+**Two palette values move, stated up front.** `accent` is `#7aa2f7`, so the
+Hyprland active window border changes from today's `#5ccc96`
+(`hypr/config/general.lua:25`). And the hyprlock caps lock colour changes from
+today's `#f2ce00` (`hypr/hyprlock.conf:50`) to `critical`, `#f7768e`. Both
+settle a palette split the survey pointed at, in one direction. To settle it the
+other way, write `#5ccc96` as `accent`, and then the launcher's selected row and
+the KDE selection background turn green along with it. That decision is exactly
+why the role table exists.
 
 ---
 
-## 3. 생성기
+## 3. The generator
 
-### 3.1 위치와 인터페이스
+### 3.1 Where it lives and what it takes
 
-파일은 `~/workspace/dotfiles-desktop/bin/theme`다. `bin/bar`와 `bin/unlock` 옆이고 `install.sh`가 `~/.local/bin/theme`로 링크한다.
+The file is `~/workspace/dotfiles-desktop/bin/theme`, beside `bin/bar` and
+`bin/unlock`, and `install.sh` links it to `~/.local/bin/theme`.
 
 ```
-theme list                    팔레트 목록과 현재 선택을 낸다
-theme show [name]             역할표를 값과 함께 낸다. 인자가 없으면 현재 테마
-theme build [name...]         팔레트에서 theme/out/<name>/ 을 만든다. 저장소를 고친다
-theme set <name>              theme/out/<name>/ 을 실제 위치에 걸고 신호를 보낸다
-theme check                   생성물이 팔레트와 일치하는지 검사한다. 어긋나면 0이 아닌 값으로 끝난다
-theme sync-fallback           theme/palettes/spaceduck.json 에서 Theme.qml 의 바닥값 블록을 다시 쓴다
+theme list                    lists the palettes and which one is current
+theme show [name]             prints the role table with its values; the current theme if no argument
+theme build [name...]         builds theme/out/<name>/ from a palette. Modifies the repository
+theme set <name>              puts theme/out/<name>/ where it is read from, and signals
+theme check                   checks the outputs still match the palette; exits non-zero if not
+theme sync-fallback           rewrites the fallback block in Theme.qml from theme/palettes/spaceduck.json
 ```
 
-`theme set --reload-hypr`는 `hyprctl reload`를 명시적으로 요구할 때만 쓴다. 기본값이 아닌 이유는 3.6에 적는다.
+`theme set --reload-hypr` is for asking explicitly for `hyprctl reload`. Why it
+is not the default is in 3.6.
 
-### 3.2 골격과 팔레트 읽기
+### 3.2 The skeleton, and reading a palette
 
 ```bash
 #!/usr/bin/env bash
 #
-# 팔레트 하나에서 모든 소비자의 색 파일을 만든다.
+# Writes every consumer's colour file from a single palette.
 #
-# build 는 저장소를 고치고 set 은 고치지 않는다. 이 구분이 이 스크립트의
-# 전부다. 테마를 바꾸는 일이 커밋을 남기는 일이 되면 아무도 안 바꾼다.
+# build modifies the repository and set does not. That distinction is the whole
+# of this script. If changing a theme means leaving a commit behind, nobody
+# changes it.
 #
 set -euo pipefail
 
@@ -207,9 +266,10 @@ ROLE_NAMES=(bg surface border fg dim fill ink
 
 die() { echo "theme: $*" >&2; exit 1; }
 
-# 팔레트를 R_<역할> 셸 변수와 ANSI 배열로 푼다. 누락된 역할은 여기서
-# 잡는다. 뒤에서 빈 문자열이 sed 로 흘러들어가면 색이 사라진 파일이
-# 조용히 만들어지고, 그것은 화면을 봐야만 알아챌 수 있는 실패다.
+# Unpacks a palette into R_<role> shell variables and an ANSI array. A missing
+# role is caught here. Letting an empty string reach sed further down writes a
+# file with a colour silently absent, and that is a failure only a look at the
+# screen would find.
 load_palette() {
     local file="$PALETTES/$1.json"
     [[ -f "$file" ]] || die "no such palette: $1"
@@ -233,19 +293,22 @@ load_palette() {
     SCHEME_ID=${LABEL// /}
 }
 
-# "#rrggbb" -> "r,g,b". kdeglobals 와 .colors 만 십진 RGB 를 쓴다.
+# "#rrggbb" -> "r,g,b". Only kdeglobals and .colors want decimal RGB.
 rgb() {
     local h="${1#\#}"
     printf '%d,%d,%d' "0x${h:0:2}" "0x${h:2:2}" "0x${h:4:2}"
 }
 ```
 
-### 3.3 템플릿 치환
+### 3.3 Template substitution
 
-색을 단순히 끼워 넣기만 하면 되는 소비자는 전부 하나의 치환 함수로 처리한다. 템플릿에서 `@bg@`는 `#0f111b`으로, `@raw:bg@`는 샵 없는 `0f111b`으로, `@pango:dim@`은 hyprlock 마크업이 요구하는 `##686f9a`로 바뀐다.
+Every consumer that only needs colours dropped into place goes through one
+substitution function. In a template `@bg@` becomes `#0f111b`, `@raw:bg@`
+becomes `0f111b` without the hash, and `@pango:dim@` becomes `##686f9a`, which
+is what hyprlock's markup wants.
 
 ```bash
-# 템플릿 하나를 표준 출력으로 편다.
+# Expands one template to standard output.
 render() {
     local src="$1" role args=()
     for role in "${ROLE_NAMES[@]}"; do
@@ -263,8 +326,9 @@ render() {
     sed "${args[@]}" "$src"
 }
 
-# 생성물은 반드시 이 함수를 거쳐 나간다. 머리 세 줄이 마커이고,
-# 세 번째 줄의 해시는 본문 전체를 덮는다. 5절이 이 값을 쓴다.
+# Everything generated leaves through this function. The first three lines are
+# the marker, and the hash on the third covers the whole body. Section 5 uses
+# that value.
 emit() {
     local dest="$1" comment="$2" body
     body=$(cat)
@@ -281,12 +345,16 @@ emit() {
 }
 ```
 
-### 3.4 어려운 것 하나: kdeglobals 색 블록
+### 3.4 The first hard one: the kdeglobals colour block
 
-`kde/kdeglobals`의 색 부분은 92칸이지만 서로 다른 값은 10개뿐이고, 일곱 개 블록이 두 칸(`BackgroundNormal`, `BackgroundAlternate`)만 다르고 나머지 열 칸은 완전히 같다. 즉 손으로 쓰기에는 반복이 너무 많고 생성하기에는 규칙이 아주 단순하다. 생성기가 가장 크게 이기는 자리다.
+The colour part of `kde/kdeglobals` is 92 fields but only 10 distinct values.
+Seven blocks differ in exactly two fields (`BackgroundNormal`,
+`BackgroundAlternate`) and are identical in the other ten. That is too much
+repetition to write by hand and a very simple rule to generate. It is where a
+generator wins by the widest margin.
 
 ```bash
-# 일곱 블록 가운데 여섯이 이 모양이다. 배경 두 칸만 인자로 받는다.
+# Six of the seven blocks have this shape. Only the two backgrounds vary.
 kde_block() {
     local section="$1" normal="$2" alternate="$3"
     cat <<EOF
@@ -307,9 +375,10 @@ ForegroundPositive=$(rgb "$R_positive")
 EOF
 }
 
-# 선택 블록만 다르다. 배경이 강조색으로 칠해지므로 그 위의 글자가
-# 전부 ink 로 뒤집힌다. 뜻이 있는 세 색은 뒤집지 않는다. 오류 문구는
-# 선택된 행 안에서도 오류로 읽혀야 한다.
+# The selection block is the one that differs. Its background is painted in the
+# accent, so every piece of text on it flips to ink. The three colours that
+# carry meaning do not flip: an error message has to still read as an error
+# inside a selected row.
 kde_selection_block() {
     cat <<EOF
 [Colors:Selection]
@@ -329,9 +398,9 @@ ForegroundPositive=$(rgb "$R_positive")
 EOF
 }
 
-# 색 부분 전체. .colors 파일과 kdeglobals 가 같은 함수를 쓴다.
-# 조사에서 지적된 "두 파일이 어긋나면 이름으로 다시 적용하는 순간
-# 화면이 튄다"는 위험이 구조적으로 사라진다.
+# The whole colour part. The .colors file and kdeglobals call the same function,
+# which structurally removes the hazard the survey pointed at: two files drifting
+# apart, and the screen jumping the moment the scheme is reapplied by name.
 kde_colors() {
     cat <<EOF
 [General]
@@ -378,25 +447,27 @@ IntensityEffect=0
 EOF
 }
 
-# ~/.config/kdeglobals 가 될 파일. 색이 아닌 부분은 템플릿에서 온다.
-# theme/templates/kdeglobals.head 에는 지금 kde/kdeglobals 의 1~34행,
-# 168~177행이 들어간다. 글꼴, widgetStyle, 아이콘 테마, 소리 테마다.
+# The file that becomes ~/.config/kdeglobals. Everything that is not a colour
+# comes from a template. theme/templates/kdeglobals.head holds lines 1-34 and
+# 168-177 of today's kde/kdeglobals: fonts, widgetStyle, the icon theme and the
+# sound theme.
 build_kdeglobals() {
     { cat "$TEMPLATES/kdeglobals.head"; echo; kde_colors; } \
         | emit "$OUT/$NAME/kdeglobals" '#'
 }
 
-# 색 구성 등록본. 응용 프로그램은 읽지 않는다. 시스템 설정 목록에
-# 이름이 뜨게 하는 것과, plasma-apply-colorscheme 이 이름으로
-# 찾아갈 대상이 되는 것, 두 가지 용도뿐이다.
+# The registered copy of the colour scheme. No application reads it. It exists
+# to put a name in the System Settings list, and to give
+# plasma-apply-colorscheme something to find by that name.
 build_kde_scheme() {
     kde_colors | emit "$OUT/$NAME/$SCHEME_ID.colors" '#'
 }
 ```
 
-### 3.5 어려운 것 둘: quickshell 팔레트
+### 3.5 The second hard one: the quickshell palette
 
-바 쪽은 파일을 만들어 내는 일 자체는 가장 싸다. `roles` 객체를 그대로 뽑아 쓰면 된다.
+Producing the file is the cheapest part on the bar's side: the `roles` object
+can be lifted out as it is.
 
 ```bash
 build_quickshell() {
@@ -407,11 +478,18 @@ build_quickshell() {
 }
 ```
 
-주석을 넣을 수 없는 형식이므로 마커는 `emit`이 아니라 JSON 키로 넣는다. `jq`에 `_generated` 필드를 하나 더 붙이면 되고 `Theme.qml`은 모르는 키를 무시한다.
+The format takes no comments, so the marker goes in as a JSON key rather than
+through `emit`. One more `_generated` field from `jq` does it, and `Theme.qml`
+ignores keys it does not know.
 
-어려운 쪽은 `Theme.qml`을 어떻게 고치느냐다. 조사가 권한 대로 런타임 읽기를 택한다. 파일이 없거나 절반만 쓰였을 때의 바닥값은 QML 안에 리터럴로 남기고, 그 리터럴이 `theme/palettes/spaceduck.json`과 어긋나는 것을 막기 위해 마커 블록으로 감싸 생성 대상으로 삼는다. 이 블록만은 `set`이 아니라 `sync-fallback`이 쓰고 커밋된다.
+The hard part is what to do to `Theme.qml`. The survey's recommendation stands:
+read the palette at run time. The fallback for a file that is missing or half
+written stays in the QML as a literal, and to stop that literal drifting from
+`theme/palettes/spaceduck.json` it is wrapped in a marker block and generated
+too. This block alone is written by `sync-fallback` rather than `set`, and it is
+committed.
 
-`quickshell/bar/services/Theme.qml`의 84행부터 115행이 아래로 바뀐다.
+Lines 84 through 115 of `quickshell/bar/services/Theme.qml` become this.
 
 ```qml
 pragma Singleton
@@ -423,23 +501,25 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    // 팔레트는 이 저장소의 QML 밖에 산다. 테마 전환이 추적되는 소스를
-    // 고치는 일이 아니라 파일 하나를 쓰는 일이 되어야 하기 때문이다.
-    // config 가 아니라 state 에 두는 이유는 생성물이기 때문이고, 설정
-    // 디렉터리 안에 두면 quickshell 자신의 감시자가 셸 전체를 다시 올린다.
+    // The palette lives outside this repository's QML, because switching themes
+    // has to be writing one file rather than editing tracked source. It is in
+    // state rather than config because it is generated, and because putting it
+    // inside the config directory makes quickshell's own watcher restart the
+    // entire shell.
     readonly property string palettePath:
         (Quickshell.env("XDG_STATE_HOME") ?? `${Quickshell.env("HOME")}/.local/state`)
         + "/theme/palette.json"
 
-    // palette 보다 먼저 선언한다. 즉시 평가되는 바인딩이 아직 만들어지지
-    // 않은 id 를 참조하는 상황을 아예 만들지 않기 위한 것이다.
+    // Declared before palette. This is to make it impossible for an eagerly
+    // evaluated binding to reference an id that does not exist yet.
     FileView {
         id: paletteFile
 
         path: root.palettePath
-        // 동기로 읽는다. 비동기로 읽으면 첫 프레임이 바닥값으로 그려진
-        // 뒤 색 바인딩 85 개가 다시 돌고, Pill.qml:38-43 의 90ms 색
-        // 애니메이션 때문에 그것이 시작 직후의 색 번짐으로 보인다.
+        // Read synchronously. Reading asynchronously draws the first frame from
+        // the fallback and then re-runs 85 colour bindings, and the 90 ms colour
+        // animation at Pill.qml:38-43 turns that into a smear of colour right
+        // after startup.
         blockLoading: true
         watchChanges: true
 
@@ -448,17 +528,17 @@ Singleton {
             root.palette = root.readPalette();
         }
 
-        // 파일이 없다는 것은 theme set 이 아직 한 번도 돌지 않았다는
-        // 뜻뿐이다. 그 밖의 실패는 화면의 색을 믿을 수 없다는 뜻이다.
+        // A missing file means only that theme set has never run. Any other
+        // failure means the colours on screen cannot be trusted.
         onLoadFailed: error => {
             if (error !== FileViewError.FileNotFound)
                 console.warn("[theme] palette load failed:", error);
         }
     }
 
-    // bin/theme set 이 파일을 갈아 끼운 직후 부르는 확정 경로.
-    // mv -T 는 아이노드를 바꾸므로 감시자가 그것을 따라가는지는
-    // 미확인이고, 이 경로가 그 불확실성을 덮는다.
+    // The definite path, called by bin/theme set right after it swaps the file
+    // in. mv -T changes the inode, and whether the watcher follows that is
+    // unconfirmed; this covers that uncertainty.
     IpcHandler {
         target: "theme"
 
@@ -479,10 +559,10 @@ Singleton {
     }
 
     // ------------------------------------------------------------------
-    // 아래 리터럴은 팔레트를 읽지 못했을 때의 바닥값이고, 그 자체로
-    // 완결된 spaceduck 한 벌이다. 손으로 고치지 않는다.
-    // bin/theme sync-fallback 이 theme/palettes/spaceduck.json 에서
-    // 다시 쓰고, bin/theme check 가 어긋남을 잡는다.
+    // The literals below are the fallback for when no palette could be read,
+    // and they are a complete spaceduck set in their own right. Do not edit
+    // them by hand. bin/theme sync-fallback rewrites them from
+    // theme/palettes/spaceduck.json and bin/theme check catches any drift.
     // ------------------------------------------------------------------
     // THEME-FALLBACK-BEGIN
     readonly property color bg:       root.palette.bg       ?? "#0f111b"
@@ -506,7 +586,7 @@ Singleton {
 }
 ```
 
-바닥값 블록을 다시 쓰는 쪽이다.
+And the side that rewrites the fallback block.
 
 ```bash
 sync_fallback() {
@@ -528,7 +608,11 @@ sync_fallback() {
 }
 ```
 
-**소비자 QML 18개를 고치는 일이 따로 있다.** 속성 이름이 바뀌므로 `Theme.bgAlt`는 `Theme.surface`로, `Theme.muted`는 `Theme.dim`으로, `Theme.beige`는 `Theme.fill`로, `Theme.accentIndigo`는 `Theme.accent`로 바뀐다. 순수한 이름 바꾸기이고 `sed`로 끝난다. 함께 고쳐야 하는 것이 흰색 리터럴 다섯 곳이다.
+**Eighteen consumer QML files need editing separately.** The property names
+change, so `Theme.bgAlt` becomes `Theme.surface`, `Theme.muted` becomes
+`Theme.dim`, `Theme.beige` becomes `Theme.fill` and `Theme.accentIndigo` becomes
+`Theme.accent`. That is a pure rename and `sed` finishes it. What has to change
+alongside it is five white literals.
 
 ```
 quickshell/bar/modules/PopupMenu.qml:136   Qt.rgba(1, 1, 1, 0.09)
@@ -538,39 +622,55 @@ quickshell/bar/modules/Osd.qml:159         Qt.rgba(1, 1, 1, 0.12)
 quickshell/bar/modules/Launcher.qml:322    Qt.rgba(1, 1, 1, 0.08)
 ```
 
-이 다섯은 "바탕보다 살짝 밝은 면"을 뜻하므로 `Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.09)` 꼴로 바꾼다. 밝은 테마에서 `fg`가 어두워지면 이 면도 같이 어두워져 여전히 대비가 생긴다. 흰색으로 두면 밝은 테마에서 그대로 사라진다.
+All five mean "a face slightly brighter than the ground", so they become
+`Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.09)` and the like. In a light
+theme `fg` darkens and the face darkens with it, so there is still contrast.
+Left white, the face disappears entirely in a light theme.
 
-`Theme.qml:267`의 `batteryColor`와 `312`의 `loadColor`는 손으로 남는다. 값이 아니라 규칙이고, 참조하는 이름만 새 역할 이름으로 바꾸면 된다.
+`batteryColor` at `Theme.qml:267` and `loadColor` at `312` stay hand-written.
+They are rules rather than values; only the names they reference change to the
+new role names.
 
-### 3.6 나머지 소비자 전부
+### 3.6 Every remaining consumer
 
-| 소비자 | 만드는 파일 | 실제 위치 | 거는 방법 | 반영 |
+| Consumer | File produced | Where it goes | How | Takes effect |
 |---|---|---|---|---|
-| Qt / KDE 앱 (Dolphin) | `kdeglobals` | `~/.config/kdeglobals` | 복사 | `plasma-apply-colorscheme` 신호 |
-| KDE 색 구성 등록본 | `<Label>.colors` | `~/.local/share/color-schemes/` | 복사 | 없음 |
-| GTK3 앱 (swappy) | `gtk-colors.css` | `~/.config/gtk-3.0/colors.css` | 복사 | colorreload 모듈이 즉시 |
-| GTK4 앱 | `gtk-colors.css` | `~/.config/gtk-4.0/colors.css` | 복사 | 앱 재시작 |
-| libadwaita 앱 | `gtk4.css` | `~/.config/gtk-4.0/gtk.css` | 복사 | 앱 재시작 |
-| swappy 주석 색 | `swappy.config` | `~/.config/swappy/config` | 복사 | 다음 실행 |
-| slurp 오버레이 | `slurp.env` | 링크 경유 | `capture.sh`가 읽음 | 다음 캡처 |
-| hyprlock | `hyprlock.conf` | `~/.config/hypr/palette.conf` | 복사 | 다음 잠금 |
-| Hyprland 테두리 | `hypr-palette.lua` | `~/.config/hypr/palette.lua` | 복사 | `hyprctl eval`, 미확인 |
-| fuzzel | `fuzzel-theme.ini` | `~/.config/fuzzel/theme.ini` | 복사 | 다음 실행 |
-| fcitx5 후보창 | `fcitx5-theme.conf` | `~/.local/share/fcitx5/themes/custom/theme.conf` | 복사 | `fcitx5-remote -r` |
-| kitty | `kitty.conf` | 링크 경유 | `include` | 약 0.1초 뒤 자동 |
-| tmux | `tmux.conf` | 링크 경유 | `source-file -q` | `tmux source-file` |
-| zsh fzf, caps lock | `fzf.env` | 링크 경유 | `zshrc`가 읽음 | 새 셸 |
-| quickshell 바 | `palette.json` | `~/.local/state/theme/palette.json` | 복사 | `qs ipc call` |
+| Qt / KDE apps (Dolphin) | `kdeglobals` | `~/.config/kdeglobals` | copy | on the `plasma-apply-colorscheme` signal |
+| KDE colour scheme entry | `<Label>.colors` | `~/.local/share/color-schemes/` | copy | never needed |
+| GTK3 apps (swappy) | `gtk-colors.css` | `~/.config/gtk-3.0/colors.css` | copy | at once, via the colorreload module |
+| GTK4 apps | `gtk-colors.css` | `~/.config/gtk-4.0/colors.css` | copy | on app restart |
+| libadwaita apps | `gtk4.css` | `~/.config/gtk-4.0/gtk.css` | copy | on app restart |
+| swappy annotation colours | `swappy.config` | `~/.config/swappy/config` | copy | next run |
+| slurp overlay | `slurp.env` | through the link | read by `capture.sh` | next capture |
+| hyprlock | `hyprlock.conf` | `~/.config/hypr/palette.conf` | copy | next lock |
+| Hyprland borders | `hypr-palette.lua` | `~/.config/hypr/palette.lua` | copy | `hyprctl eval`, unconfirmed |
+| fuzzel | `fuzzel-theme.ini` | `~/.config/fuzzel/theme.ini` | copy | next run |
+| fcitx5 candidate window | `fcitx5-theme.conf` | `~/.local/share/fcitx5/themes/custom/theme.conf` | copy | on `fcitx5-remote -r` |
+| kitty | `kitty.conf` | through the link | `include` | automatically, after about 0.1 s |
+| tmux | `tmux.conf` | through the link | `source-file -q` | on `tmux source-file` |
+| zsh fzf, caps lock | `fzf.env` | through the link | read by `zshrc` | in a new shell |
+| quickshell bar | `palette.json` | `~/.local/state/theme/palette.json` | copy | on `qs ipc call` |
 
-링크 경유란 `~/.local/state/theme/current`가 `theme/out/<name>/`을 가리키는 심볼릭 링크이고 소비자가 그 아래 절대 경로를 읽는다는 뜻이다. `theme set`이 링크만 갈아 끼우면 그 아래 파일이 통째로 바뀐다.
+"Through the link" means `~/.local/state/theme/current` is a symlink to
+`theme/out/<name>/` and the consumer reads an absolute path under it. When
+`theme set` swaps the link, every file beneath it changes at once.
 
-**복사해야 하는 이유가 소비자마다 다르다.** `~/.config/kdeglobals`는 `plasma-apply-colorscheme`이 KConfig의 `QSaveFile`로 다시 쓰는데 그것이 심볼릭 링크를 따라가는지가 미확인이라, 실파일로 두면 그 미확인 자체가 없어진다. `~/.config/gtk-3.0/colors.css`는 `libcolorreload-gtk-module.so`가 그 경로를 `g_file_monitor_file`로 감시하고 있어서 아이노드가 아니라 경로 자체가 살아 있어야 한다. `~/.config/hypr/palette.lua`는 `hyprland.lua:16`이 계산한 `CONFIG` 아래 고정 경로여야 `load_module`이 찾는다.
+**The reason a copy is needed differs by consumer.** `~/.config/kdeglobals` is
+rewritten by `plasma-apply-colorscheme` through KConfig's `QSaveFile`, and
+whether that follows a symlink is unconfirmed; a real file removes the question.
+`~/.config/gtk-3.0/colors.css` is watched at that exact path by
+`libcolorreload-gtk-module.so` through `g_file_monitor_file`, so the path has to
+stay alive rather than the inode. `~/.config/hypr/palette.lua` has to be at a
+fixed path under the `CONFIG` computed at `hyprland.lua:16` for `load_module` to
+find it.
 
-**Hyprland 쪽에 필요한 손질.** `hypr/hyprland.lua`의 57행 앞에 팔레트 로딩을 넣는다.
+**What Hyprland needs.** Palette loading goes in ahead of line 57 of
+`hypr/hyprland.lua`.
 
 ```lua
--- 색은 config/ 밖에서 온다. bin/theme 가 쓰는 유일한 hypr 파일이고,
--- config/ 안에 두면 손으로 쓰는 파일과 생성물이 같은 디렉터리에 섞인다.
+-- Colours come from outside config/. This is the only hypr file bin/theme
+-- writes, and putting it inside config/ would mix generated files in with the
+-- hand-written ones.
 local palette = CONFIG .. "/palette.lua"
 if file_exists(palette) then
     local chunk = loadfile(palette)
@@ -583,7 +683,7 @@ PALETTE = PALETTE or { accent = "rgba(5ccc96ff)", clear = "rgba(00000000)" }
 load_module("env")
 ```
 
-`hypr/config/general.lua:25-26`과 `hypr/config/rules.lua:16`이 그 전역을 쓴다.
+`hypr/config/general.lua:25-26` and `hypr/config/rules.lua:16` use that global.
 
 ```lua
             active_border = PALETTE.accent,
@@ -594,13 +694,17 @@ load_module("env")
 hl.window_rule({ match = { pin = true }, border_color = PALETTE.accent .. " " .. PALETTE.clear })
 ```
 
-**hyprlock 쪽에 필요한 손질.** `hypr/hyprlock.conf` 맨 위에 한 줄을 넣고 13개 리터럴을 변수로 바꾼다.
+**What hyprlock needs.** One line at the top of `hypr/hyprlock.conf`, and 13
+literals become variables.
 
 ```
 source = ~/.config/hypr/palette.conf
 ```
 
-생성되는 `~/.config/hypr/palette.conf`는 이렇다. Pango 마크업이 들어가는 두 자리는 값의 일부만 치환하는 대신 문자열 전체를 변수 하나에 담는다. 변수 확장이 문자열 안쪽에서도 도는지가 미확인이므로 확실한 쪽을 고른 것이다.
+The generated `~/.config/hypr/palette.conf` looks like this. The two entries
+that carry Pango markup hold the whole string in one variable rather than
+substituting part of a value, because whether variable expansion runs inside a
+string is unconfirmed and this is the side that is certain.
 
 ```
 $bgColor        = rgba(@raw:surface@ff)
@@ -617,30 +721,35 @@ $placeholderText = <span foreground="@pango:dim@">password</span>
 $failText        = <span foreground="@pango:critical@">$FAIL</span>
 ```
 
-**터미널 저장소 쪽에 필요한 손질.** `dotfiles-terminal`은 `dotfiles-desktop`이 없어도 혼자 서야 하므로, 바닥값을 먼저 읽고 생성물을 뒤에 덮는 구조로 만든다.
+**What the terminal repository needs.** `dotfiles-terminal` has to stand on its
+own without `dotfiles-desktop`, so it reads its fallback first and lets the
+generated file override it afterwards.
 
-`kitty/kitty.conf`의 2행 다음에 한 줄을 더한다.
+One more line after line 2 of `kitty/kitty.conf`.
 
 ```
 include ./spaceduck.conf
 include ~/.local/state/theme/current/kitty.conf
 ```
 
-파일이 없으면 kitty가 stderr에 한 줄을 남기고 넘어가며 spaceduck이 그대로 남는다. `tmux/tmux.conf` 끝에는 `source-file -q`를 쓴다. `-q`가 없는 파일을 조용히 넘긴다.
+With the file absent, kitty writes one line to stderr and carries on, and
+spaceduck stands. At the end of `tmux/tmux.conf`, `source-file -q`; the `-q`
+passes over a missing file quietly.
 
 ```
 source-file -q ~/.local/state/theme/current/tmux.conf
 ```
 
-`zsh/zshrc`의 176~177행 Catppuccin 값은 지운다. 두 저장소를 통틀어 팔레트에서 가장 크게 벗어난 자리였다.
+The Catppuccin values at lines 176-177 of `zsh/zshrc` are deleted. Across both
+repositories that was the furthest anything strayed from the palette.
 
 ```zsh
-# fzf 와 caps lock 세그먼트의 색은 데스크톱 저장소의 bin/theme 가 만든다.
-# 없으면 색 없이 도는 것이 색이 어긋난 채로 도는 것보다 낫다.
+# The colours for fzf and the caps lock segment are written by bin/theme in the
+# desktop repository. Running with no colour beats running with the wrong one.
 [[ -r ~/.local/state/theme/current/fzf.env ]] && source ~/.local/state/theme/current/fzf.env
 ```
 
-`zsh/config/caps-lock.zsh:111`이 그 파일이 정의한 변수를 쓴다.
+`zsh/config/caps-lock.zsh:111` uses the variables that file defines.
 
 ```zsh
   p10k segment -c '$_capslock_on' \
@@ -648,11 +757,12 @@ source-file -q ~/.local/state/theme/current/tmux.conf
     -i $'\U000F033E' -t 'CAPS LOCK'
 ```
 
-**capture.sh 쪽에 필요한 손질.** `hypr/scripts/capture.sh:88`의 `slurp -d`가 색 인자를 받는다.
+**What capture.sh needs.** The `slurp -d` at `hypr/scripts/capture.sh:88` takes
+colour arguments.
 
 ```sh
-        # slurp 는 설정 파일이 없고 색을 인자로만 받는다. 파일이 없으면
-        # 인자 없이 도는 지금 동작 그대로 남는다.
+        # slurp has no configuration file and takes colours only as arguments.
+        # With the file absent this keeps today's behaviour of running with none.
         slurp_args=(-d)
         if [[ -r "$HOME/.local/state/theme/current/slurp.env" ]]; then
             # shellcheck source=/dev/null
@@ -662,16 +772,29 @@ source-file -q ~/.local/state/theme/current/tmux.conf
         geom=$(slurp "${slurp_args[@]}" 2>/dev/null) || exit 0
 ```
 
-**GTK 쪽에서 정해야 하는 것.** 조사가 낸 선택지 두 개 가운데 B를 택한다. kded6의 gtkconfig 모듈을 끄고 `colors.css`를 우리가 만든다. 이유는 두 가지다. 그 모듈은 `~/.config/gtk-3.0/settings.ini` 링크를 실파일로 갈아치우고(`settings.ini.bak-20260825-190746`이 그 흔적으로 보인다), kdeglobals에서 GTK 이름으로 가는 대응 규칙을 우리가 통제할 수 없다. `install.sh`가 `~/.config/kded6rc`에 다음을 넣는다.
+**The decision on the GTK side.** Of the two options the survey raised, B. Turn
+off kded6's gtkconfig module and write `colors.css` ourselves. Two reasons: the
+module replaces the `~/.config/gtk-3.0/settings.ini` symlink with a real file
+(`settings.ini.bak-20260825-190746` looks like the trace of exactly that), and
+the mapping it applies from kdeglobals to GTK names is not ours to control.
+`install.sh` puts this in `~/.config/kded6rc`.
 
 ```ini
 [Module-gtkconfig]
 autoload=false
 ```
 
-모듈 식별자가 `gtkconfig`인 것은 `/usr/lib/qt6/plugins/kf6/kded/gtkconfig.so`라는 파일 이름에서 추론한 것이고 이 기계에서 확인하지 않았다. `theme set` 뒤 `~/.config/gtk-3.0/settings.ini`가 여전히 링크인지 보면 바로 확인된다.
+That the module identifier is `gtkconfig` is inferred from the file name
+`/usr/lib/qt6/plugins/kf6/kded/gtkconfig.so` and was not confirmed on this
+machine. Checking whether `~/.config/gtk-3.0/settings.ini` is still a symlink
+after `theme set` settles it immediately.
 
-`theme/templates/gtk-colors.css.in`은 `_breeze` 이름 78개를 정의한다. `/usr/share/themes/Breeze-Dark/gtk-3.0/gtk.css`가 그 78개를 선언하고 나머지 4465행이 전부 그 이름을 참조하므로, 이름만 다시 선언하면 규칙을 한 줄도 쓰지 않고 테마 전체가 다시 칠해진다. GTK4판의 이름 집합이 GTK3판과 완전히 같다는 것은 확인했으므로 파일 하나를 두 곳에 복사하면 된다. 대응의 뼈대는 이렇다.
+`theme/templates/gtk-colors.css.in` defines 78 `_breeze` names.
+`/usr/share/themes/Breeze-Dark/gtk-3.0/gtk.css` declares those 78 and its
+remaining 4465 lines reference nothing else, so redeclaring the names alone
+repaints the whole theme without writing a single rule. The GTK4 edition uses
+exactly the same set of names, which was confirmed, so one file can be copied to
+both places. The skeleton of the mapping:
 
 ```css
 @define-color theme_fg_color_breeze @fg@;
@@ -700,14 +823,19 @@ autoload=false
 @define-color insensitive_fg_color_breeze @dim@;
 @define-color insensitive_bg_color_breeze @surface@;
 @define-color print_paper_backdrop_breeze @fill@;
-/* 나머지 unfocused_*, backdrop_*, insensitive_* 계열은 위 값을 그대로
-   되쓴다. 창이 포커스를 잃었다고 글자를 흐리는 동작은 kdeglobals 의
-   [ColorEffects:Inactive] 를 끈 것과 같은 이유로 끈다. */
+/* The remaining unfocused_*, backdrop_* and insensitive_* families reuse the
+   values above. Fading text because a window lost focus is turned off, for the
+   same reason [ColorEffects:Inactive] is turned off in kdeglobals. */
 ```
 
-지금 살아 있는 `~/.config/gtk-3.0/colors.css`가 정의한 `theme_header_*_breeze` 7개는 현재 Breeze-Dark에 없는 이름이고(지금은 `theme_titlebar_*`다) 아무 효과가 없다. 새 템플릿에는 넣지 않는다.
+The seven `theme_header_*_breeze` names defined by the live
+`~/.config/gtk-3.0/colors.css` do not exist in current Breeze-Dark, which uses
+`theme_titlebar_*` instead, and have no effect. They are not carried into the
+new template.
 
-`theme/templates/gtk4.css.in`은 libadwaita 이름을 따로 선언한다. libadwaita 앱은 `gtk-theme-name`을 아예 무시하고 `_breeze` 이름도 모른다.
+`theme/templates/gtk4.css.in` declares the libadwaita names separately.
+libadwaita applications ignore `gtk-theme-name` entirely and know nothing of the
+`_breeze` names.
 
 ```css
 @define-color window_bg_color @bg@;
@@ -737,7 +865,7 @@ autoload=false
 @import 'colors.css';
 ```
 
-### 3.7 build 와 set
+### 3.7 build and set
 
 ```bash
 cmd_build() {
@@ -774,13 +902,13 @@ cmd_set() {
     local out="$OUT/$NAME"
     [[ -d "$out" ]] || die "$out does not exist: run 'theme build $NAME' first"
 
-    # 1. 링크 하나로 따라오는 것들. 원자적이다.
+    # 1. Everything that follows the single link. Atomic.
     mkdir -p "$STATE/theme"
     ln -sfn "$out" "$STATE/theme/current.new"
     mv -T "$STATE/theme/current.new" "$STATE/theme/current"
 
-    # 2. 실파일이어야 하는 것들. install 은 mv 와 달리 감시자가 붙어 있는
-    #    경로를 유지하면서 내용만 바꾼다.
+    # 2. Everything that has to be a real file. Unlike mv, install keeps the path
+    #    a watcher is attached to and changes only the contents.
     install -Dm644 "$out/palette.json"       "$STATE/theme/palette.json"
     install -Dm644 "$out/kdeglobals"         "$CONFIG/kdeglobals"
     install -Dm644 "$out/gtk-colors.css"     "$CONFIG/gtk-3.0/colors.css"
@@ -801,13 +929,14 @@ cmd_set() {
 
     printf '%s\n' "$NAME" > "$STATE/theme/name"
 
-    # 3. 신호. 전부 실패해도 무방하다. 다음 실행 때 맞는다.
+    # 3. Signals. Every one of them may fail: the next start picks it up.
     qs -p "$CONFIG/quickshell/bar" ipc call theme reload  >/dev/null 2>&1 || true
     plasma-apply-colorscheme "$SCHEME_ID"                 >/dev/null 2>&1 || true
     fcitx5-remote -r                                      >/dev/null 2>&1 || true
     tmux source-file "$STATE/theme/current/tmux.conf"      >/dev/null 2>&1 || true
 
-    # gsettings 는 밝기가 뒤집힐 때만 만진다. 테마 이름은 건드리지 않는다.
+    # gsettings is touched only when the light/dark sense flips. The theme name
+    # is left alone.
     if [[ "$SCHEME" == light ]]; then
         gsettings set org.gnome.desktop.interface color-scheme default  2>/dev/null || true
     else
@@ -818,10 +947,10 @@ cmd_set() {
     echo "theme: $LABEL"
 }
 
-# hyprctl keyword 는 이 기계에서 쓸 수 없다. Hyprland 바이너리에
-# "keyword can't work with non-legacy parsers. Use eval." 이 들어 있고
-# 이 설정은 Lua 다. eval 이 남는 유일한 경로이고, 실행 시점에 실제로
-# 반영되는지는 미확인이므로 결과를 읽어서 확인한 뒤 보고한다.
+# hyprctl keyword cannot be used on this machine. The Hyprland binary carries
+# "keyword can't work with non-legacy parsers. Use eval." and this configuration
+# is Lua. eval is the only remaining route, and whether it actually takes effect
+# at run time is unconfirmed, so the result is read back and reported.
 apply_hypr_border() {
     command -v hyprctl >/dev/null 2>&1 || return 0
     hyprctl eval "hl.config({ general = { col = {
@@ -837,108 +966,199 @@ apply_hypr_border() {
 }
 ```
 
-### 3.8 스크립트가 하면 안 되는 것
+### 3.8 What the script must not do
 
-- **`hyprctl reload`를 스스로 부르지 않는다.** `hypr/config/execs.lua:5-7`과 `hypr/scripts/session-autostart.sh:5-10`이 적어 두었듯 리로드는 exec 블록 전체를 다시 돌린다. `hypr/scripts/auto_monitors.sh:39`는 리로드가 꺼 둔 노트북 패널을 다시 켠다고 적는다. 색 두 개를 위해 모니터 구성과 자동 시작을 다시 밟는 것은 비싼 값이다. `--reload-hypr`로 명시적으로 요구할 때만 부른다.
-- **모드 설정을 건드리지 않는다.** `hl.monitor`, 해상도, 스케일, 출력 켜고 끄기는 이 스크립트의 관할이 아니다. 이 기계는 `xe` 드라이버의 원자적 커밋 문제로 GRUB 커맨드라인 우회를 걸어 둔 상태이고, 색을 바꾸다가 모드 설정을 밟으면 화면이 죽는다.
-- **바를 재시작하지 않는다.** `bin/bar`에는 `--restart`가 없고 `--stop`(`bin/bar:124-158`)은 슈퍼바이저까지 죽인다. IPC 호출이 실패하면 그냥 다음 기동 때 읽히게 둔다.
-- **fcitx5를 재시작하지 않는다.** `hypr/scripts/session-autostart.sh:113-115`가 적듯 재시작하면 떠 있는 모든 클라이언트가 입력 컨텍스트를 잃는다. `fcitx5-remote -r`는 재적재이지 재시작이 아니다.
-- **`gsettings set gtk-theme` / `icon-theme` / `cursor-theme`를 건드리지 않는다.** 그 셋은 `hypr/scripts/gsettings-apply.sh:44-46`의 관할이고 팔레트와 무관하다. `color-scheme` 한 줄만 예외다.
-- **벽지를 바꾸지 않는다.** `hyprpaper.conf`와 `~/Pictures/Wallpapers/current.png`는 사용자 상태다. 벽지에서 색을 뽑는 방향은 이 설계가 명시적으로 거부한 것이다.
-- **세션을 끝내지 않는다.** 로그아웃이나 재로그인을 유도하지 않고, 재시작이 필요한 것은 필요하다고 말하고 끝낸다.
-- **손으로 고쳐진 생성물을 조용히 덮지 않는다.** 5절의 마커 검사가 걸리면 `build`는 멈춘다.
-
----
-
-## 4. 전환할 때 실제로 일어나는 일
-
-`theme set macos-dark`를 실행한 순간부터의 순서다.
-
-**0단계, 검증.** 팔레트를 읽고 역할 17개가 전부 `#rrggbb`인지 확인한다. `theme/out/macos-dark/`가 없으면 여기서 멈춘다. 화면에는 아무 변화도 없다.
-
-**1단계, 링크 교체.** `~/.local/state/theme/current`가 `theme/out/macos-dark/`를 가리킨다. `mv -T`라 중간 상태가 없다.
-
-이 순간 **kitty가 바뀐다.** `auto_reload_config`의 기본값이 0.1초이고(`/usr/share/doc/kitty/html/_downloads/433dadebd0bf504f8b008985378086ce/kitty.conf:2113`) 감시 대상은 `include`로 끌어온 파일 전부이므로, 떠 있는 모든 kitty 창이 0.1초 안에 다시 칠해진다. 사용자가 보는 것은 터미널 배경과 프롬프트 색이 한 번에 넘어가는 모습이다. 단서 하나가 있다. kitty가 시작될 때 `kitty.conf`가 이미 있었어야 자동 재적재가 돈다.
-
-다음 캡처부터 **slurp 오버레이**가 새 색으로 뜬다. 이미 떠 있는 선택 오버레이는 없다. slurp는 캡처마다 새로 뜨기 때문이다.
-
-**2단계, 실파일 복사.** 열한 개 파일이 제자리에 놓인다. 복사가 끝나는 순서대로 다음이 일어난다.
-
-`~/.config/gtk-3.0/colors.css`가 바뀌는 순간 **GTK3 앱 전부가 재시작 없이 다시 칠해진다.** `/usr/lib/gtk-3.0/modules/libcolorreload-gtk-module.so`가 그 경로 하나를 `g_file_monitor_file`로 감시하고 있고, `gtk/gtk-3.0-settings.ini:13`의 `gtk-modules=colorreload-gtk-module:...`이 이미 그 모듈을 켜 두었다. **여기가 사용자가 요청한 캡처 GUI가 따라오는 지점이다.** swappy는 `ldd /usr/bin/swappy`가 `libgtk-3.so.0`을 내는 GTK3 응용 프로그램이므로 헤더 바, 도구 패널, 버튼이 전부 이 한 파일을 따라온다. 주석 편집 창이 열려 있는 채로 테마를 바꿔도 그 자리에서 색이 바뀐다.
-
-`~/.local/state/theme/palette.json`이 바뀌면 **quickshell 바**가 따라온다. `FileView.watchChanges`가 아이노드 교체를 잡는지는 미확인이므로 확정 경로는 4단계의 IPC다.
-
-**3단계, 상태 기록.** `~/.local/state/theme/name`에 이름이 적힌다. `theme list`가 다음 실행에서 이 값을 읽는다.
-
-**4단계, 신호 네 개.**
-
-`qs -p ~/.config/quickshell/bar ipc call theme reload` — 바의 `IpcHandler`가 팔레트를 다시 읽고 `root.palette`를 다시 대입한다. 색 바인딩 85개가 재평가되고, `quickshell/bar/modules/Pill.qml:38-43`의 `ColorAnimation duration: 90` 덕분에 알약들이 90ms 크로스페이드로 넘어간다. 창이 다시 만들어지지 않고 "Reloading configuration..." 팝업도 뜨지 않는다. 사용자가 보는 것은 바가 부드럽게 색을 바꾸는 모습이다.
-
-`plasma-apply-colorscheme <SchemeId>` — 이 실행 파일이 `/KGlobalSettings`의 `org.kde.KGlobalSettings.notifyChange`를 발신하고, `KDEPlasmaPlatformTheme6.so`가 그것을 받아 떠 있는 Qt/KDE 앱의 팔레트를 갈아 끼운다. **열려 있던 Dolphin 창이 그 자리에서 다시 칠해진다.** 파일만 고쳐 쓰면 이 일은 일어나지 않는다. KConfig의 `ConfigChanged` 신호는 KConfig API를 거쳐 쓸 때만 나가고, 스크립트가 텍스트를 덮어쓰면 아무 신호도 나가지 않기 때문이다. 이 명령이 `~/.config/kdeglobals`를 KConfig로 다시 쓰지만 내용이 방금 복사한 것과 같으므로 결과는 같다. `/org/kde/KWin/BlendChanges` 호출도 함께 나가는데 KWin 전용이라 Hyprland에서는 조용히 실패한다.
-
-`fcitx5-remote -r` — `org.fcitx.Fcitx.Controller1`의 `ReloadConfig`를 부른다. 재시작이 아니므로 떠 있는 클라이언트의 입력 컨텍스트가 살아남는다. 다음 한글 입력부터 후보창이 새 색으로 뜬다.
-
-`tmux source-file ~/.local/state/theme/current/tmux.conf` — 모든 tmux 세션의 상태줄이 즉시 바뀐다.
-
-**5단계, Hyprland 테두리.** `hyprctl eval 'hl.config({...})'`를 부르고 `hyprctl getoption general:col.active_border`로 결과를 읽어 실제로 반영됐는지 확인한다. **이 경로가 먹히는지는 미확인이다.** `hyprctl keyword`는 이 기계에서 아예 못 쓴다. Hyprland 바이너리에 `keyword can't work with non-legacy parsers. Use eval.`과 `eval is only supported with the lua config manager`가 들어 있고, `parseKeyword`는 `/usr/include/hyprland/src/config/legacy/ConfigManager.hpp:76`에만 있고 Lua 쪽 헤더에는 없기 때문이다. 반영이 확인되지 않으면 스크립트가 그렇게 말하고 끝낸다. 사용자는 창 테두리만 옛 색으로 남은 상태를 본다. `hyprctl reload`나 재로그인으로 맞출 수 있다.
-
-### 재시작 없이는 바뀌지 않는 것
-
-정직하게 적는다.
-
-**GTK4와 libadwaita 앱은 재시작해야 한다.** GTK4는 모듈 체계를 없앴고 `colorreload`에 해당하는 감시자가 패키지에 없다. GTK4 자체가 `~/.config/gtk-4.0/gtk.css`를 감시하는지는 미확인이다. `libgtk-4.so.1`에서 나오는 문자열은 판단 근거가 되지 못한다. 재시작이 필요하다고 보고 설계했다.
-
-**셸은 새로 열어야 한다.** p10k는 셸이 뜰 때 한 번만 설정을 읽고 재적재 경로가 없다. `exec zsh` 또는 새 창이 필요하다. fzf 색도 마찬가지다.
-
-**hyprlock은 다음 잠금부터다.** hyprlock에는 설정 재적재 경로가 없다. 바이너리의 `reload_time`과 `reload_cmd`는 `hyprlock.conf:74`의 `cmd[update:60000]` 같은 라벨 위젯용이고, `Unlocking with a SIGUSR1`은 잠금 해제용이다. 데몬이 상주하지 않으므로 보낼 신호 자체가 없다. 이것은 문제가 아니다. 다음에 잠글 때 맞는다.
-
-**fuzzel과 swappy 주석 색은 다음 실행부터다.** 둘 다 호출마다 새로 뜬다. fuzzel 바이너리에는 `SIGUSR`도 `inotify`도 없다. swappy의 창 자체는 GTK3이라 즉시 따라오지만, `custom_color`(C 키에 묶인 주석 색)만은 시작할 때 읽으므로 다음 실행부터다.
-
-**이미 떠 있는 창 가운데 어느 방식으로도 다시 칠할 수 없는 것이 있다.** 아이콘은 이미 렌더링된 이미지이고, Breeze의 GTK 에셋 PNG는 Breeze 파랑 `#3daee9`로 구워져 있다. 7절이 이 이야기다.
+- **Never call `hyprctl reload` on its own.** As `hypr/config/execs.lua:5-7` and
+  `hypr/scripts/session-autostart.sh:5-10` record, a reload re-runs the entire
+  exec block. `hypr/scripts/auto_monitors.sh:39` notes that a reload switches
+  the laptop panel it had turned off back on. Re-treading monitor configuration
+  and autostart for the sake of two colours is a steep price. It runs only when
+  `--reload-hypr` asks for it.
+- **Never touch mode setting.** `hl.monitor`, resolutions, scales and enabling
+  or disabling outputs are outside this script's remit. This machine carries
+  GRUB cmdline workarounds for the `xe` driver's atomic commit problem, and
+  stepping on mode setting while changing colours kills the display.
+- **Never restart the bar.** `bin/bar` has no `--restart`, and `--stop`
+  (`bin/bar:124-158`) takes the supervisor down with it. If the IPC call fails,
+  leave it to be read at the next start.
+- **Never restart fcitx5.** As `hypr/scripts/session-autostart.sh:113-115`
+  records, a restart loses the input context of every client that is up.
+  `fcitx5-remote -r` is a reload, not a restart.
+- **Never touch `gsettings set gtk-theme`, `icon-theme` or `cursor-theme`.**
+  Those three belong to `hypr/scripts/gsettings-apply.sh:44-46` and have nothing
+  to do with the palette. The single line for `color-scheme` is the exception.
+- **Never change the wallpaper.** `hyprpaper.conf` and
+  `~/Pictures/Wallpapers/current.png` are user state. Deriving colours from the
+  wallpaper is the direction this design explicitly refuses.
+- **Never end the session.** Do not prompt for a logout or a relogin. Say what
+  needs a restart and stop there.
+- **Never quietly overwrite a generated file someone edited.** If the marker
+  check in section 5 catches one, `build` stops.
 
 ---
 
-## 5. 저장소에 무엇이 커밋되는가
+## 4. What actually happens on a switch
 
-### 5.1 추적되는 것
+The order of events from the moment `theme set macos-dark` runs.
+
+**Step 0, validation.** Read the palette and check all 17 roles are `#rrggbb`.
+If `theme/out/macos-dark/` is missing it stops here. Nothing on screen changes.
+
+**Step 1, the link is swapped.** `~/.local/state/theme/current` points at
+`theme/out/macos-dark/`. `mv -T` leaves no intermediate state.
+
+At that moment **kitty changes.** `auto_reload_config` defaults to 0.1 seconds
+(`/usr/share/doc/kitty/html/_downloads/433dadebd0bf504f8b008985378086ce/kitty.conf:2113`)
+and it watches every file pulled in by `include`, so every kitty window repaints
+within 0.1 s. What that looks like is the terminal background and the prompt
+colours turning over together. One caveat: `kitty.conf` had to exist when kitty
+started for the automatic reload to run.
+
+From the next capture onward the **slurp overlay** comes up in the new colours.
+There is no selection overlay already on screen to update, because slurp is
+launched fresh for each capture.
+
+**Step 2, the real files are copied.** Eleven files land in place. As each copy
+finishes:
+
+The moment `~/.config/gtk-3.0/colors.css` changes, **every GTK3 application
+repaints without restarting.** `/usr/lib/gtk-3.0/modules/libcolorreload-gtk-module.so`
+watches that one path through `g_file_monitor_file`, and
+`gtk/gtk-3.0-settings.ini:13` already enables the module with
+`gtk-modules=colorreload-gtk-module:...`. **This is where the capture GUI that
+prompted the request follows along.** swappy is a GTK3 application, which `ldd
+/usr/bin/swappy` confirms by naming `libgtk-3.so.0`, so its header bar, tool
+panel and buttons all follow this one file. The colours change in place even
+with the annotation window open.
+
+When `~/.local/state/theme/palette.json` changes the **quickshell bar** follows.
+Whether `FileView.watchChanges` catches an inode swap is unconfirmed, so the
+definite route is the IPC call in step 4.
+
+**Step 3, state is recorded.** The name is written to
+`~/.local/state/theme/name`. `theme list` reads it on its next run.
+
+**Step 4, four signals.**
+
+`qs -p ~/.config/quickshell/bar ipc call theme reload` makes the bar's
+`IpcHandler` re-read the palette and reassign `root.palette`. 85 colour bindings
+re-evaluate, and thanks to `ColorAnimation duration: 90` at
+`quickshell/bar/modules/Pill.qml:38-43` the pills cross-fade over 90 ms. No
+window is rebuilt and no "Reloading configuration..." popup appears. What it
+looks like is the bar changing colour smoothly.
+
+`plasma-apply-colorscheme <SchemeId>` emits
+`org.kde.KGlobalSettings.notifyChange` on `/KGlobalSettings`, and
+`KDEPlasmaPlatformTheme6.so` receives it and swaps the palette of every Qt/KDE
+application that is up. **A Dolphin window that was already open repaints where
+it stands.** Rewriting the file alone does not do this: KConfig's
+`ConfigChanged` signal is emitted only for writes that go through the KConfig
+API, and a script overwriting the text emits nothing. The command does rewrite
+`~/.config/kdeglobals` through KConfig, but the contents match what was just
+copied, so the result is the same. It also calls `/org/kde/KWin/BlendChanges`,
+which is KWin-specific and fails quietly under Hyprland.
+
+`fcitx5-remote -r` calls `ReloadConfig` on `org.fcitx.Fcitx.Controller1`. It is
+not a restart, so the input context of every client survives. The candidate
+window comes up in the new colours from the next Hangul input onward.
+
+`tmux source-file ~/.local/state/theme/current/tmux.conf` changes the status
+line of every tmux session at once.
+
+**Step 5, the Hyprland border.** Call `hyprctl eval 'hl.config({...})'`, then
+read `hyprctl getoption general:col.active_border` back to see whether it took.
+**Whether this route works is unconfirmed.** `hyprctl keyword` cannot be used on
+this machine at all: the Hyprland binary carries `keyword can't work with
+non-legacy parsers. Use eval.` and `eval is only supported with the lua config
+manager`, and `parseKeyword` exists only in
+`/usr/include/hyprland/src/config/legacy/ConfigManager.hpp:76`, not in the Lua
+headers. If the change cannot be confirmed the script says so and stops. What
+the user sees is the window border alone left in the old colour, fixable with
+`hyprctl reload` or a relogin.
+
+### What does not change without a restart
+
+Stated plainly.
+
+**GTK4 and libadwaita applications have to be restarted.** GTK4 dropped the
+module system and the package ships no watcher equivalent to `colorreload`.
+Whether GTK4 itself watches `~/.config/gtk-4.0/gtk.css` is unconfirmed; the
+strings in `libgtk-4.so.1` are not enough to decide. The design assumes a
+restart is needed.
+
+**A shell has to be opened fresh.** p10k reads its configuration once at shell
+start and has no reload path, so `exec zsh` or a new window is required. The
+same goes for the fzf colours.
+
+**hyprlock takes effect at the next lock.** hyprlock has no configuration reload
+path. The `reload_time` and `reload_cmd` in the binary are for label widgets
+like the `cmd[update:60000]` at `hyprlock.conf:74`, and `Unlocking with a
+SIGUSR1` is for unlocking. No daemon is resident, so there is no signal to send.
+This is not a problem: the next lock is correct.
+
+**fuzzel and swappy's annotation colour take effect on the next run.** Both are
+launched per invocation. The fuzzel binary has neither `SIGUSR` nor `inotify`.
+swappy's own window is GTK3 and follows at once, but `custom_color`, the
+annotation colour bound to the C key, is read at start and so waits for the next
+run.
+
+**Some windows already on screen cannot be repainted by any route.** Icons are
+already rendered images, and Breeze's GTK asset PNGs are baked in Breeze blue
+`#3daee9`. Section 7 is about this.
+
+---
+
+## 5. What gets committed
+
+### 5.1 Tracked
 
 ```
-theme/palettes/*.json          손으로 씀. 사람이 고르는 색이다
-theme/templates/*.in           손으로 씀. 출력 형식이다
-theme/templates/kdeglobals.head 손으로 씀. 글꼴과 widgetStyle 등 색이 아닌 부분
-bin/theme                      손으로 씀
-theme/default                  손으로 씀. 한 줄. 새 설치가 고르는 팔레트 이름
-theme/out/<name>/*             생성됨. 마커가 붙는다
-quickshell/bar/services/Theme.qml   손으로 씀 + 바닥값 블록만 생성됨
+theme/palettes/*.json          hand written. The colours a person picks
+theme/templates/*.in           hand written. The output formats
+theme/templates/kdeglobals.head hand written. Fonts, widgetStyle, the parts that are not colours
+bin/theme                      hand written
+theme/default                  hand written. One line: the palette a fresh install picks
+theme/out/<name>/*             generated, and marked
+quickshell/bar/services/Theme.qml   hand written, except the generated fallback block
 ```
 
-`theme/out/`을 추적하는 이유는 하나다. `install.sh`가 링크를 걸고 파일을 복사하는 순간에 그 내용이 이미 있어야 하고, 새로 체크아웃한 트리에서 `theme build`를 돌리려면 `jq`가 있어야 하는데 그 의존을 설치 단계로 미루면 설치가 실패할 수 있다. 산출물이 트리에 있으면 `install.sh`는 복사만 하면 되고, `theme build`는 팔레트를 고치는 사람만 돌린다.
+There is one reason to track `theme/out/`. `install.sh` links and copies those
+contents at a moment when they have to exist already, and running `theme build`
+in a freshly checked out tree needs `jq`, a dependency that could make the
+install fail if it were deferred to an install step. With the outputs in the
+tree `install.sh` only copies, and `theme build` is run by whoever edits a
+palette.
 
-`install.sh` 끝에 두 줄이 붙는다.
+Two lines are appended to `install.sh`.
 
 ```bash
 "$SRC/bin/theme" set "$(cat "$SRC/theme/default")"
 "$SRC/bin/theme" check || echo "theme: generated files do not match the palettes" >&2
 ```
 
-### 5.2 마커
+### 5.2 The marker
 
-생성된 파일을 누가 손으로 고치면 다음 `theme build`에 그 수정이 사라진다. 흔적도 남지 않는다. 이것이 생성기가 놓는 유일한 함정이고, 함정인 채로 두면 안 된다.
+If someone edits a generated file by hand, the next `theme build` erases the
+edit and leaves no trace of it. That is the one trap a generator sets, and it
+must not be left set.
 
-모든 생성물의 머리에 정확히 세 줄이 붙는다. 주석 문자만 형식에 맞춰 다르다.
+Exactly three lines go at the head of every generated file, differing only in
+the comment character the format wants.
 
 ```
 # generated by bin/theme from theme/palettes/spaceduck.json
 # hand edits are lost on the next build: edit the palette instead
-# theme-body-sha256: 3f1c9a...  (본문 전체의 sha256, 64자)
+# theme-body-sha256: 3f1c9a...  (sha256 of the whole body, 64 characters)
 ```
 
-세 번째 줄이 마커의 전부다. `theme build`는 덮어쓰기 전에 기존 파일의 4행 이하를 다시 해싱해서 기록된 값과 비교한다. 다르면 누군가 손으로 고쳤다는 뜻이므로 **멈춘다.**
+The third line is the whole of the marker. Before overwriting, `theme build`
+rehashes everything from line 4 down and compares it against the recorded value.
+A difference means someone edited it by hand, so it **stops**.
 
 ```bash
-# 손으로 고쳐진 생성물이 있으면 build 를 멈춘다. 조용히 덮으면 그 수정이
-# 어디로 갔는지 아무도 알 수 없고, 다음에 색이 틀어졌을 때 원인을
-# 찾을 실마리가 없다.
+# Stops the build if a generated file was edited by hand. Overwriting quietly
+# leaves nobody able to say where the edit went, and no thread to pull the next
+# time a colour is wrong.
 guard_hand_edits() {
     local dir="$1" f recorded actual
     shopt -s nullglob
@@ -958,11 +1178,19 @@ guard_hand_edits() {
 }
 ```
 
-`--force`는 사람이 명시적으로 버리겠다고 말할 때만 통한다.
+`--force` works only when a person says explicitly that the file is to be
+discarded.
 
-`palette.json`은 주석을 넣을 수 없는 형식이라 마커가 JSON 키로 들어간다. `_generated` 객체에 같은 세 정보를 담고, `Theme.qml`은 `.roles`만 읽으므로 무시한다.
+`palette.json` takes no comments, so its marker goes in as a JSON key. A
+`_generated` object holds the same three pieces, and `Theme.qml` reads only
+`.roles`, so it ignores them.
 
-`quickshell/bar/services/Theme.qml`은 생성물이 아니라 손으로 쓰는 파일이고, 그 안의 `THEME-FALLBACK-BEGIN` / `THEME-FALLBACK-END` 사이 17줄만 생성된다. 여기는 해시 마커 대신 `theme check`가 지킨다. 블록 안의 값과 `theme/palettes/spaceduck.json`의 역할표를 비교해서 다르면 실패한다. 두 번째 진실 원본이 생기는 것을 규율이 아니라 검사로 막는다.
+`quickshell/bar/services/Theme.qml` is hand written rather than generated, and
+only the 17 lines between `THEME-FALLBACK-BEGIN` and `THEME-FALLBACK-END` are
+produced. A hash marker does not guard that block; `theme check` does, comparing
+the values inside it against the role table in `theme/palettes/spaceduck.json`
+and failing on a difference. A second source of truth is prevented by a check
+rather than by discipline.
 
 ```bash
 cmd_check() {
@@ -972,8 +1200,9 @@ cmd_check() {
         guard_hand_edits "$OUT/$NAME" || failed=1
     done
 
-    # 바닥값 블록이 spaceduck 팔레트와 어긋나면 잡는다. 어긋난 채로 두면
-    # 상태 파일을 못 읽은 바만 조용히 옛 색으로 뜨고 아무도 모른다.
+    # Catches the fallback block drifting from the spaceduck palette. Left to
+    # drift, only a bar that failed to read the state file comes up in the old
+    # colours, quietly, and nobody knows.
     load_palette spaceduck
     local qml="$SRC/quickshell/bar/services/Theme.qml" role
     for role in "${ROLE_NAMES[@]}"; do
@@ -992,37 +1221,48 @@ cmd_check() {
 }
 ```
 
-### 5.3 추적되지 않는 것
+### 5.3 Not tracked
 
-`~/.local/state/theme/` 아래 전부다. `current` 링크, `palette.json`, `name`이 여기 있다. 세 개 모두 순수한 실행 시점 상태이고, 잃어버려도 `theme set`을 한 번 돌리면 복원된다.
+Everything under `~/.local/state/theme/`: the `current` link, `palette.json` and
+`name`. All three are pure run-time state and one `theme set` restores them.
 
-### 5.4 삭제되어야 하는 것
+### 5.4 What has to be deleted
 
-matugen 잔존물이 저장소보다 우선하고 있어서 지금 GTK 앱은 저장소가 지시한 팔레트가 아니라 Material You 회보라로 그려진다. `install.sh`가 이 목록을 안내하되 지우지는 않는다. 사용자 파일을 스크립트가 지우는 것은 이 저장소의 성격이 아니다.
+Leftovers from matugen currently take precedence over the repository, so GTK
+applications today are painted in Material You grey-purple rather than in the
+palette the repository specifies. `install.sh` points at this list without
+deleting anything: a script deleting a user's files is not what this repository
+is for.
 
 ```
-~/.config/matugen/                 템플릿과 설정. matugen 패키지 자체는 이미 없다
-~/.config/gtk-3.0/window_decorations.css 와 assets/
-~/.config/gtk-4.0/window_decorations.css 와 assets/
-~/.config/fuzzel/fuzzel_theme.ini  새 이름은 theme.ini 다
+~/.config/matugen/                 templates and configuration. The matugen package itself is already gone
+~/.config/gtk-3.0/window_decorations.css and assets/
+~/.config/gtk-4.0/window_decorations.css and assets/
+~/.config/fuzzel/fuzzel_theme.ini  the new name is theme.ini
 ~/.config/qt5ct/, ~/.config/qt6ct/, ~/.config/Kvantum/
-~/.local/share/color-schemes/MaterialYou*.colors   8개
-~/.config/xsettingsd/xsettingsd.conf 와 PID 237453 의 xsettingsd
+~/.local/share/color-schemes/MaterialYou*.colors   eight of them
+~/.config/xsettingsd/xsettingsd.conf and the xsettingsd at PID 237453
 ```
 
-`~/.config/gtk-3.0/gtk.css`와 `~/.config/gtk-4.0/colors.css`는 지우지 않는다. `theme set`이 덮어쓴다.
+`~/.config/gtk-3.0/gtk.css` and `~/.config/gtk-4.0/colors.css` are not deleted:
+`theme set` overwrites them.
 
-`~/.config/kdedefaults/kdeglobals`의 `ColorScheme=BreezeDark`도 새 이름으로 맞춰야 한다. 지금 `~/.config/kdeglobals`는 `SpaceduckDark`이고 둘이 어긋나 있어서, 무엇이든 이름으로 다시 적용하는 경로가 걸리면 화면 전체가 Breeze 파랑으로 튄다. `theme set`이 이 파일도 갱신하게 두는 것이 안전하다.
+`ColorScheme=BreezeDark` in `~/.config/kdedefaults/kdeglobals` has to be brought
+to the new name as well. `~/.config/kdeglobals` currently says `SpaceduckDark`
+and the two disagree, so any route that reapplies a scheme by name flips the
+whole screen to Breeze blue. Letting `theme set` update that file too is the
+safe answer.
 
 ---
 
-## 6. 첫 테마 두 개
+## 6. The first two themes
 
 ### 6.1 spaceduck
 
-지금 화면에 있는 색을 역할표로 옮긴 것이다. 전문은 2.2절에 있다. 값의 출처는 이렇다.
+The colours on screen today, moved into the role table. The full file is in
+section 2.2. Where the values came from:
 
-| 역할 | 값 | 어디서 왔는가 |
+| Role | Value | Source |
 |---|---|---|
 | `bg` | `#0f111b` | `Theme.qml:84`, `kitty/spaceduck.conf:17` |
 | `surface` | `#1b1c36` | `Theme.qml:85`, `hyprlock.conf:26` |
@@ -1031,22 +1271,25 @@ matugen 잔존물이 저장소보다 우선하고 있어서 지금 GTK 앱은 �
 | `dim` | `#686f9a` | `Theme.qml:87` |
 | `fill` | `#ecf0c1` | `Theme.qml:114` beige |
 | `ink` | `#0f111b` | `Theme.qml:115` |
-| `accent` | `#7aa2f7` | `Theme.qml:110` accentIndigo. Hyprland 테두리가 이 값으로 옮겨 온다 |
+| `accent` | `#7aa2f7` | `Theme.qml:110` accentIndigo. The Hyprland border moves to this value |
 | `positive` | `#9ece6a` | `Theme.qml:107` |
 | `caution` | `#e0af68` | `Theme.qml:106` |
 | `critical` | `#f7768e` | `Theme.qml:104`, `caps-lock.zsh:111` |
-| `tone1` | `#bb9af7` | `Theme.qml:111`. `purple`(92행)을 흡수했다 |
+| `tone1` | `#bb9af7` | `Theme.qml:111`, having absorbed `purple` at line 92 |
 | `tone2` | `#7a5ccc` | `Theme.qml:93` violet |
 | `tone3` | `#f2ce00` | `Theme.qml:90` yellow |
 | `tone4` | `#7dcfff` | `Theme.qml:109` accentSky |
 | `tone5` | `#ff9e64` | `Theme.qml:105` accentOrange |
-| `tone6` | `#c0caf5` | `Theme.qml:112` accentQuiet. `accentTeal`의 배터리 정상 자리를 넘겨받았다 |
+| `tone6` | `#c0caf5` | `Theme.qml:112` accentQuiet, taking over battery-normal from `accentTeal` |
 
-바탕은 spaceduck 원본이고 강조는 Tokyo Night다. 조사가 지적한 두 갈래를 한쪽으로 정리하지 않고 그대로 안고 간다. 지금 화면이 그렇게 생겼고, 그것이 이 테마의 정체이기 때문이다. 정리는 새 테마를 만드는 일이지 spaceduck을 고치는 일이 아니다.
+The ground is spaceduck's own and the accents are Tokyo Night. The two lineages
+the survey pointed at are carried as they are rather than reconciled, because
+that is what the screen looks like today and that is this theme's identity.
+Reconciling them is the work of making a new theme, not of editing spaceduck.
 
 ### 6.2 macos-dark
 
-`~/workspace/dotfiles-desktop/theme/palettes/macos-dark.json`이다.
+`~/workspace/dotfiles-desktop/theme/palettes/macos-dark.json`.
 
 ```json
 {
@@ -1085,36 +1328,96 @@ matugen 잔존물이 저장소보다 우선하고 있어서 지금 GTK 앱은 �
 }
 ```
 
-spaceduck과 정말로 다르다는 것이 요점이다. 바탕이 남색을 완전히 잃고 중성 그레이파이트로 간다. 전경이 크림색에서 거의 흰색으로 간다. 강조가 인디고에서 시스템 블루로 간다. 그리고 `ansi` 배열에는 spaceduck이 일부러 넣어 둔 노랑과 보라의 스왑이 없다. 3번 자리에 노랑이, 5번 자리에 보라가 제자리로 들어간다. 이 한 가지만으로도 두 테마가 같은 형식을 쓰면서 서로 다른 규약을 담을 수 있는지가 시험된다.
+The point is that it really is different from spaceduck. The ground loses its
+navy entirely and goes to neutral graphite. The foreground goes from cream to
+nearly white. The accent goes from indigo to system blue. And the `ansi` array
+carries none of the yellow-purple swap spaceduck put there deliberately: yellow
+sits at index 3 and purple at index 5, where they belong. That one difference is
+enough to test whether two themes can share a format while holding different
+conventions.
 
-`dim`이 `#8e8e93`, `tone6`이 `#98989d`로 둘 다 회색인 것은 의도한 것이다. macOS는 상태 표시를 색 대신 밝기로 구분하는 성향이 있고, 조용한 알약이 회색으로 앉는 것이 그 성향에 맞는다. `ink`가 `#1c1c1e`이므로 그 위의 글자는 여전히 읽힌다.
+`dim` at `#8e8e93` and `tone6` at `#98989d` are both grey on purpose. macOS
+tends to separate status by brightness rather than by hue, and a quiet pill
+sitting in grey suits that. `ink` is `#1c1c1e`, so text on top of it still
+reads.
 
-밝은 테마를 셋째로 만들 때가 이 설계의 진짜 시험이다. `scheme`을 `"light"`로 두면 `theme set`이 `color-scheme`을 `default`로 뒤집고, `ink`와 `bg`가 처음으로 갈라지며, 5개였던 흰색 리터럴이 이미 `fg` 기반으로 바뀌어 있어서 따라온다.
+The real test of this design comes with a third, light theme. Setting `scheme`
+to `"light"` makes `theme set` flip `color-scheme` to `default`, `ink` and `bg`
+part company for the first time, and the five white literals, already rewritten
+in terms of `fg`, follow along.
 
 ---
 
-## 7. 무엇을 하지 않는가
+## 7. What this does not do
 
-정직하게 한계를 적는다. 두 테마가 실제로 얼마나 달라질 수 있는지는 이 목록이 정한다.
+The limits, stated plainly. How different two themes can actually be is decided
+by this list.
 
-**Qt 위젯 스타일은 Breeze로 고정된다.** `kde/kdeglobals:29`의 `widgetStyle=Breeze`가 정하는 것은 색이 아니라 모양이다. 버튼 모서리의 둥근 정도, 스크롤바 두께, 체크박스 크기, 탭 생김새, 애니메이션 곡선이 전부 컴파일된 C++ 안에 있다. 색만 바꿀 수 있고 모양은 못 바꾼다. 공식 저장소에 있으면서 이것을 대체할 스타일은 사실상 없다. Kvantum은 설치되어 있으나 `QT_QPA_PLATFORMTHEME=kde`(`hypr/config/env.lua:20`) 아래에서는 읽히지 않고, 그것을 바꾸면 kdeglobals가 통째로 무시되어 색 체계 전체를 잃는다.
+**The Qt widget style is fixed at Breeze.** `widgetStyle=Breeze` at
+`kde/kdeglobals:29` decides shape, not colour. How rounded a button's corners
+are, how thick a scrollbar is, how large a checkbox is, what a tab looks like
+and what curve an animation follows are all inside compiled C++. Colour can
+change; shape cannot. There is effectively no replacement style in the official
+repositories. Kvantum is installed but is not read under
+`QT_QPA_PLATFORMTHEME=kde` (`hypr/config/env.lua:20`), and changing that makes
+kdeglobals ignored wholesale, which loses the entire colour scheme.
 
-**GTK 테마는 Breeze-Dark로 고정된다.** 같은 이유는 아니다. GTK 테마는 CSS지만 `/usr/share/themes/Breeze-Dark/gtk-3.0/gtk.css`가 4465행이고 그 안의 치수, 모서리 반지름, 여백, 그림자는 색 이름이 아니라 규칙이다. `@define-color` 78개를 다시 선언하는 방식은 색만 갈아 끼우고 규칙은 건드리지 않는다. 규칙까지 바꾸려면 4465행짜리 스타일시트를 테마마다 하나씩 쓰는 일이 되고, 그것은 이 설계가 하려는 일이 아니다.
+**The GTK theme is fixed at Breeze-Dark,** for a different reason. A GTK theme
+is CSS, but `/usr/share/themes/Breeze-Dark/gtk-3.0/gtk.css` is 4465 lines and
+the dimensions, corner radii, margins and shadows inside it are rules rather
+than colour names. Redeclaring 78 `@define-color` names swaps the colours and
+leaves the rules alone. Changing the rules too would mean one 4465-line
+stylesheet per theme, which is not what this design is for.
 
-**아이콘 테마는 생성할 수 없다.** `breeze-dark`는 수천 개의 SVG와 PNG이고 색이 각 파일 안에 들어 있다. 색을 바꾸려면 전부 다시 그려야 한다. matugen도 이것은 못 했고 그래서 end-4 설정도 아이콘 테마만은 통째로 가져다 썼다. 두 테마 모두 `breeze-dark` 아이콘을 쓴다.
+**Icon themes cannot be generated.** `breeze-dark` is thousands of SVG and PNG
+files with the colour inside each one. Changing it means redrawing all of them.
+matugen could not do this either, which is why the end-4 configuration took the
+icon theme wholesale. Both themes use `breeze-dark` icons.
 
-**Breeze의 GTK 에셋 PNG는 따라오지 않는다.** `/usr/share/themes/Breeze-Dark/assets/` 아래의 체크 표시와 화살표는 Breeze 파랑 `#3daee9`로 이미 렌더링된 이미지다. `colors.css`를 아무리 고쳐도 이 이미지들은 파랑으로 남는다. 체크박스를 켰을 때의 표시가 테마 강조색이 아니라 Breeze 파랑인 자리가 생긴다.
+**Breeze's GTK asset PNGs do not follow.** The check marks and arrows under
+`/usr/share/themes/Breeze-Dark/assets/` are images already rendered in Breeze
+blue `#3daee9`. No amount of editing `colors.css` moves them. There will be
+places, such as the mark inside a checked checkbox, that stay Breeze blue rather
+than the theme accent.
 
-**p10k 프롬프트는 사실상 팔레트를 따르지 않는다.** `dotfiles-terminal/zsh/p10k.zsh`의 색 지정 228줄 가운데 222줄이 256색 인덱스다. 0번부터 15번까지는 kitty의 `ansi` 배열을 따라오지만, 16번부터 255번까지는 고정 색 큐브 항목이라 팔레트와 무관하다. 이 파일을 진짜로 묶으려면 223개 할당을 전부 생성해야 하고 그것은 GTK 스타일시트를 통째로 쓰는 것과 같은 급의 작업이다. caps lock 세그먼트 하나만 예외로 묶는다. 그 자리가 바와 어긋난다는 사실이 이미 `Theme.qml:100-102`에 주석으로 적혀 있었기 때문이다.
+**The p10k prompt effectively does not follow the palette.** Of the 228 colour
+assignments in `dotfiles-terminal/zsh/p10k.zsh`, 222 are 256-colour indexes.
+Indexes 0 through 15 follow kitty's `ansi` array, but 16 through 255 are fixed
+colour-cube entries and have nothing to do with the palette. Really binding this
+file would mean generating all 223 assignments, work of the same order as
+writing an entire GTK stylesheet. The caps lock segment alone is bound as an
+exception, because the fact that it disagreed with the bar was already written
+down in a comment at `Theme.qml:100-102`.
 
-**알림은 칠할 대상이 없다.** 알림 데몬이 설치되어 있지 않다. `pacman -Qq`에 `libnotify`만 있고 dunst, mako, swaync 어느 것도 없다. `capture.sh:36-40`이 `notify-send`를 부르지만 서버가 없으면 그 알림은 아무 데도 뜨지 않는다. 데몬을 고르면 그때 소비자로 추가한다.
+**Notifications have nothing to paint.** No notification daemon is installed.
+`pacman -Qq` shows `libnotify` and neither dunst, mako nor swaync.
+`capture.sh:36-40` calls `notify-send`, and with no server that notification
+appears nowhere. When a daemon is chosen it becomes a consumer.
 
-**hyprpicker는 색이 없다.** `capture.sh:109`가 `hyprpicker -a -n`으로 부르고, 이 도구는 화면을 확대해 보여 줄 뿐 자기 색을 그리지 않는다. 설정 파일도 없다. 캡처 GUI 셋 가운데 이것만 팔레트 밖에 남는다.
+**hyprpicker has no colours.** `capture.sh:109` calls it as `hyprpicker -a -n`,
+and the tool magnifies the screen without drawing anything of its own. It has no
+configuration file either. Of the three capture GUIs it is the one that stays
+outside the palette.
 
-### 그래서 두 테마는 얼마나 다를 수 있는가
+### So how different can two themes be
 
-**완전히 다를 수 있는 것.** 모든 배경, 모든 글자, 모든 강조, 창 테두리, 선택 배경, 잠금 화면, 터미널 16색, 상태 바의 모든 알약, 후보창, 캡처 편집 창의 모든 면. 어두운 테마에서 밝은 테마로 뒤집는 것도 된다.
+**What can differ completely.** Every background, every piece of text, every
+accent, window borders, the selection background, the lock screen, the 16
+terminal colours, every pill on the status bar, the candidate window, every
+surface of the capture editor. Flipping from a dark theme to a light one works
+too.
 
-**같게 남는 것.** 모든 창의 모서리 둥근 정도, 버튼과 스크롤바와 체크박스의 크기와 생김새, 모든 아이콘, 체크박스 안의 표시, 애니메이션의 길이와 곡선, 글꼴. 글꼴은 `kde/kdeglobals`의 `font=` 다섯 줄과 `fontconfig/local.conf` 체인, `gsettings-apply.sh:48-49`에 함께 묶여 있어서 팔레트로 옮기면 생성기가 fontconfig까지 써야 한다. 1단계에서는 손으로 두고 확장 지점으로만 남긴다.
+**What stays the same.** How rounded every window is, the size and shape of
+buttons, scrollbars and checkboxes, every icon, the mark inside a checkbox, the
+length and curve of every animation, and the fonts. Fonts are tied together
+across the five `font=` lines in `kde/kdeglobals`, the `fontconfig/local.conf`
+chain and `gsettings-apply.sh:48-49`, so moving them into the palette would make
+the generator write fontconfig as well. In stage one they stay hand written and
+are left as an extension point.
 
-한 문장으로 요약하면, 두 테마는 **색이 전부 다른 같은 데스크톱**이 된다. 창의 실루엣과 버튼의 손맛은 같고 그 위에 칠해진 것만 바뀐다. macOS를 흉내 내는 팔레트가 macOS처럼 보이지는 않는다. macOS 느낌의 색을 입은 Breeze처럼 보인다. 그 이상을 하려면 위젯 스타일 하나를 새로 쓰는 일이고, 그것은 공식 패키지만 쓴다는 전제와 양립하지 않는다.
+In one sentence: the two themes are **the same desktop with all of its colours
+changed**. The silhouette of a window and the feel of a button stay put; only
+what is painted on them moves. A palette imitating macOS does not look like
+macOS. It looks like Breeze wearing macOS colours. Going further means writing a
+widget style from scratch, and that does not sit with the premise of using only
+official packages.
