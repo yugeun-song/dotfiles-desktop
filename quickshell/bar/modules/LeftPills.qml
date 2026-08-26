@@ -70,7 +70,8 @@ Zone      ${Qt.formatDateTime(clock.date, "t")}, ${root.zoneLabel(clock.date)}`
         visible: Weather.ready && weatherFresh.running
         icon: Theme.weatherIcon(Weather.code, Weather.day)
         label: Weather.place !== "" ? `${Weather.place}, ${Weather.temp}°` : `${Weather.temp}°`
-        fill: Theme.accentSky
+        fill: Theme.weatherColor(Weather.code, Weather.day)
+        textColor: Theme.readableOn(fill)
         tooltip: `Sky       ${Theme.weatherText(Weather.code)}
 Now       ${Weather.temp}°C, feels ${Weather.feels}°C
 Today     ${Weather.todayMin}° to ${Weather.todayMax}°C

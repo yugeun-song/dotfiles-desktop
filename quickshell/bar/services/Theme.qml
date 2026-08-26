@@ -205,6 +205,64 @@ Singleton {
     readonly property string iconPlug:         String.fromCodePoint(0xF06A5)
 
     // WMO weather codes, the same table the weather script prints from.
+    // Relative luminance, WCAG 2.1. QML gives r, g and b already normalised.
+    function luminance(c: color): real {
+        const f = v => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+    }
+
+    // Which text colour survives on a given face: whichever of the two wins the
+    // contrast, not whichever side of a brightness threshold the face falls on.
+    // A threshold is wrong in the middle of the range -- #7aa2f7 sits just below
+    // one at 0.4 and so would take the light foreground, for 2.1:1, when the
+    // dark ink gives 7.4:1 on the same face.
+    function contrast(a: color, b: color): real {
+        const la = root.luminance(a);
+        const lb = root.luminance(b);
+        return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    }
+
+    function readableOn(bg: color): color {
+        return root.contrast(bg, root.ink) >= root.contrast(bg, root.fg)
+               ? root.ink : root.fg;
+    }
+
+    // The same code groups weatherIcon uses, so the icon and the colour cannot
+    // disagree about what the sky is doing. Two things reading one switch is
+    // the only way to keep that true as codes are added.
+    function weatherColor(code: int, day: bool): color {
+        switch (true) {
+        case code === 0:
+            return day ? root.accentAmber : root.accentIndigo;
+        case code === 1 || code === 2:
+            return root.accentSky;
+        case code === 3:
+            return root.accentQuiet;
+        case code === 45 || code === 48:
+            return root.muted;
+        case code >= 51 && code <= 57:
+            return root.accentSky;
+        case code >= 61 && code <= 65:
+            return root.accentIndigo;
+        // Freezing rain is the one ordinary-looking sky that is dangerous to
+        // walk on, so it takes a warning colour rather than another blue.
+        case code === 66 || code === 67:
+            return root.accentOrange;
+        case code >= 71 && code <= 77:
+            return root.fg;
+        case code >= 80 && code <= 82:
+            return root.accentIndigo;
+        case code === 85 || code === 86:
+            return root.fg;
+        case code === 95:
+            return root.accentPurple;
+        case code === 96 || code === 99:
+            return root.accentRed;
+        default:
+            return root.accentQuiet;
+        }
+    }
+
     function weatherIcon(code: int, day: bool): string {
         switch (true) {
         case code === 0:
