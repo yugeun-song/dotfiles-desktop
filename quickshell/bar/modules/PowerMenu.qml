@@ -33,7 +33,15 @@ Scope {
             label: "Lock",
             icon: Theme.iconLock,
             accent: Theme.accentIndigo,
-            command: ["hyprlock"],
+            // Not hyprlock directly. Every other way of locking this machine
+            // goes loginctl -> hypridle's lock_cmd -> hypr/scripts/lock.sh,
+            // and that script turns the input method off first. hyprlock reads
+            // wl_keyboard and binds no text-input protocol, so with fcitx5 in
+            // Hangul the keys are composed somewhere it never sees: the field
+            // stays empty, three Enters look like three wrong passwords, and
+            // pam_faillock locks the account. Calling hyprlock from here
+            // skipped that and made this button the one way to hit it.
+            command: ["loginctl", "lock-session"],
             probe: "hyprlock"
         },
         {
@@ -41,7 +49,11 @@ Scope {
             label: "Sign out",
             icon: Theme.iconLogout,
             accent: Theme.accentSky,
-            command: ["hyprctl", "dispatch", "exit"],
+            // In Lua syntax. hyprctl wraps whatever follows "dispatch" as
+            // hl.dispatch(<that>), so a bare "exit" is a valid Lua expression
+            // that evaluates to nil and is refused. The failure is silent from
+            // here: the menu closes and the session stays.
+            command: ["hyprctl", "dispatch", "hl.dsp.exit()"],
             probe: "hyprctl"
         },
         {
