@@ -20,7 +20,28 @@ Singleton {
     // active on this machine (auto_monitors.sh disables the laptop panel while
     // an external display is attached), so a single global scale is accurate;
     // a multi-head setup would need this per bar instead of in the singleton.
-    property var referenceScreen: null
+    // Deterministic, rather than whichever bar finished loading last. With two
+    // bars alive both wrote this, so the scale depended on load order and the
+    // bar changed height between runs of the same layout: an unscaled 1800-row
+    // panel winning the race took px() from 1.12 to 1.31 and every bar with it.
+    // The output at the left of the layout is the main desktop and does not
+    // move when a second one appears.
+    //
+    // It is still one scale for every bar. Sizing each bar to its own screen
+    // means taking the scale out of this singleton, which px() being global
+    // rules out; the note is here so the limit is known and not rediscovered.
+    readonly property var referenceScreen: {
+        const list = Quickshell.screens;
+        if (!list || list.length === 0)
+            return null;
+        let best = list[0];
+        for (let i = 1; i < list.length; i++) {
+            const s = list[i];
+            if (s.x < best.x || (s.x === best.x && s.y < best.y))
+                best = s;
+        }
+        return best;
+    }
 
     readonly property real baseScale: 1.12
     readonly property int referenceHeight: 1440

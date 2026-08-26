@@ -43,17 +43,13 @@ PanelWindow {
 
     Component.onCompleted: {
         Theme.barAtBottom = root.atBottom;
-        Theme.referenceScreen = root.modelData;
     }
 
-    // Docking builds a bar for the laptop panel and tears it down again a
-    // moment later, and the reference used to stay pointed at that panel for
-    // as long as the shell ran. A bar that still owns the reference on the way
-    // out hands it to a screen that is actually there.
-    Component.onDestruction: {
-        if (Theme.referenceScreen === root.modelData)
-            Theme.referenceScreen = Quickshell.screens.find(s => s !== root.modelData) ?? null;
-    }
+    // The reference screen used to be handed over here, and on the way out in
+    // Component.onDestruction, because docking builds a bar for the laptop
+    // panel and tears it down a moment later. Theme picks it from the screen
+    // list itself now, so both the handover and the hazard of two bars racing
+    // to set it are gone.
 
     Rectangle {
         anchors.fill: parent

@@ -78,7 +78,7 @@ Scope {
                 top: Theme.px(8)
             }
 
-            implicitWidth: Theme.px(400)
+            implicitWidth: Theme.px(440)
             implicitHeight: Math.max(1, stack.implicitHeight)
 
             Column {
@@ -202,7 +202,7 @@ Scope {
                                 anchors.left: icon.right
                                 anchors.leftMargin: Theme.px(10)
                                 anchors.right: parent.right
-                                anchors.rightMargin: Theme.px(40)
+                                anchors.rightMargin: Theme.px(46)
                                 anchors.top: parent.top
                                 anchors.topMargin: Theme.px(11)
                                 spacing: Theme.px(2)
@@ -211,7 +211,7 @@ Scope {
                                     width: parent.width
                                     text: slot.modelData.summary
                                     font.family: Theme.uiFont
-                                    font.pixelSize: Theme.px(14)
+                                    font.pixelSize: Theme.px(16)
                                     font.weight: Font.DemiBold
                                     color: Theme.fg
                                     elide: Text.ElideRight
@@ -222,7 +222,7 @@ Scope {
                                     visible: slot.modelData.body !== ""
                                     text: slot.modelData.body
                                     font.family: Theme.uiFont
-                                    font.pixelSize: Theme.px(12)
+                                    font.pixelSize: Theme.px(14)
                                     color: Theme.accentQuiet
                                     wrapMode: Text.Wrap
                                     maximumLineCount: 3
@@ -237,7 +237,7 @@ Scope {
                                     width: parent.width
                                     text: slot.modelData.appName
                                     font.family: Theme.uiFont
-                                    font.pixelSize: Theme.px(11)
+                                    font.pixelSize: Theme.px(12)
                                     color: Theme.muted
                                     elide: Text.ElideRight
                                     topPadding: Theme.px(3)
@@ -291,7 +291,7 @@ Scope {
                                 anchors.topMargin: Theme.px(11)
                                 text: Theme.iconClose
                                 font.family: Theme.iconFont
-                                font.pixelSize: Theme.px(19)
+                                font.pixelSize: Theme.px(25)
                                 color: closer.containsMouse ? Theme.fg : Theme.accentQuiet
 
                                 MouseArea {

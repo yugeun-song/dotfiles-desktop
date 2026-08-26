@@ -54,6 +54,12 @@ SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f "$0")")" && pwd)"
 PRESET_FILE="${HYPR_MONITOR_PRESET:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr/monitors.preset}"
 LOCAL_FILE="${HYPR_LOCAL_MONITORS:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr/local.monitors}"
 
+# Both screens at once, on request. Switching the internal panel off whenever
+# an external is attached is right for a docked laptop and wrong for the times
+# the built-in screen is wanted as a second desktop. Touching this file says so
+# without editing the policy, and removing it puts the policy back.
+KEEP_INTERNAL_FILE="${HYPR_KEEP_INTERNAL:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr/keep-internal}"
+
 # make|model|scale. Make and model contain spaces, so only the ends of a line
 # are trimmed; squeezing all whitespace out would make every entry unmatchable.
 SCALES=()
@@ -237,6 +243,44 @@ if (( ${#external[@]} > 0 )); then
             place "${row%%|*}" "0x0" || true
         done
         exit 1
+    fi
+
+    if [[ -e "$KEEP_INTERNAL_FILE" ]]; then
+        # A panel that is off cannot be switched back on in place: disabled=false
+        # does nothing under the Lua config and only a reload re-evaluates the
+        # catch-all that creates the output.
+        reloaded=0
+        for row in "${internal[@]}"; do
+            if [[ "${row#*|}" == "true" ]]; then
+                hyprctl reload >/dev/null || \
+                    echo "auto_monitors: hyprctl reload failed, the panel may stay off" >&2
+                reloaded=1
+                break
+            fi
+        done
+
+        # A reload re-evaluates the catch-all for every output, not only the one
+        # being brought back, so it undoes what was placed above -- including the
+        # external's refresh rate, which drops to whatever "preferred" means.
+        # Everything goes down again after it.
+        if (( reloaded )); then
+            first=1
+            for row in "${external[@]}"; do
+                name="${row%%|*}"
+                if (( first )); then
+                    place "$name" "0x0" || true
+                    first=0
+                else
+                    place "$name" "auto" || true
+                fi
+            done
+        fi
+
+        # `auto` lands it to the right of the externals already placed.
+        for row in "${internal[@]}"; do
+            place "${row%%|*}" "auto" || true
+        done
+        exit 0
     fi
 
     for row in "${internal[@]}"; do

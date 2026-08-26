@@ -102,7 +102,7 @@ Scope {
                     anchors.right: parent.right
                     anchors.topMargin: Theme.barHeight + Theme.px(8)
                     anchors.rightMargin: Theme.edgeMarginRight
-                    width: Theme.px(470)
+                    width: Theme.px(510)
                     height: Math.min(parent.height - Theme.barHeight - Theme.px(28),
                                      header.height + list.contentHeight + Theme.px(28))
                     radius: Theme.px(14)
@@ -137,7 +137,7 @@ Scope {
                             anchors.verticalCenter: parent.verticalCenter
                             text: "Notifications"
                             font.family: Theme.uiFont
-                            font.pixelSize: Theme.px(14)
+                            font.pixelSize: Theme.px(16)
                             font.weight: Font.DemiBold
                             color: Theme.fg
                         }
@@ -152,7 +152,7 @@ Scope {
                                 text: Notifications.history.length === 0
                                       ? "" : Notifications.history.length + " kept"
                                 font.family: Theme.uiFont
-                                font.pixelSize: Theme.px(11)
+                                font.pixelSize: Theme.px(12)
                                 color: Theme.muted
                             }
 
@@ -161,7 +161,7 @@ Scope {
                                 visible: Notifications.history.length > 0
                                 text: Theme.iconClearAll
                                 font.family: Theme.iconFont
-                                font.pixelSize: Theme.px(17)
+                                font.pixelSize: Theme.px(23)
                                 color: sweep.containsMouse ? Theme.accentRed : Theme.muted
 
                                 MouseArea {
@@ -298,7 +298,7 @@ Scope {
                                     anchors.right: parent.right
                                     anchors.top: parent.top
                                     anchors.leftMargin: Theme.px(11)
-                                    anchors.rightMargin: Theme.px(42)
+                                    anchors.rightMargin: Theme.px(48)
                                     anchors.topMargin: Theme.px(10)
                                     spacing: Theme.px(4)
 
@@ -309,14 +309,14 @@ Scope {
                                         Text {
                                             text: slot.modelData.appName
                                             font.family: Theme.uiFont
-                                            font.pixelSize: Theme.px(11)
+                                            font.pixelSize: Theme.px(12)
                                             color: Theme.accentTeal
                                         }
 
                                         Text {
                                             text: root.stamp(slot.modelData.at)
                                             font.family: Theme.uiFont
-                                            font.pixelSize: Theme.px(11)
+                                            font.pixelSize: Theme.px(12)
                                             color: Theme.muted
                                         }
                                     }
@@ -325,7 +325,7 @@ Scope {
                                         width: parent.width
                                         text: slot.modelData.summary
                                         font.family: Theme.uiFont
-                                        font.pixelSize: Theme.px(14)
+                                        font.pixelSize: Theme.px(16)
                                         font.weight: Font.DemiBold
                                         color: Theme.fg
                                         wrapMode: Text.Wrap
@@ -338,7 +338,7 @@ Scope {
                                         visible: slot.modelData.body !== ""
                                         text: slot.modelData.body
                                         font.family: Theme.uiFont
-                                        font.pixelSize: Theme.px(12)
+                                        font.pixelSize: Theme.px(14)
                                         color: Theme.accentQuiet
                                         wrapMode: Text.Wrap
                                         textFormat: Text.StyledText
@@ -374,7 +374,7 @@ Scope {
                                                     anchors.centerIn: parent
                                                     text: action.modelData.text
                                                     font.family: Theme.uiFont
-                                                    font.pixelSize: Theme.px(12)
+                                                    font.pixelSize: Theme.px(13)
                                                     color: press.containsMouse ? Theme.ink : Theme.fg
                                                 }
 
@@ -403,7 +403,7 @@ Scope {
                                     anchors.topMargin: Theme.px(9)
                                     text: Theme.iconClose
                                     font.family: Theme.iconFont
-                                    font.pixelSize: Theme.px(19)
+                                    font.pixelSize: Theme.px(25)
                                     color: kill.containsMouse ? Theme.accentRed : Theme.accentQuiet
 
                                     MouseArea {
