@@ -13,7 +13,10 @@ Item {
     property string text: ""
     property bool modifier: false
 
-    readonly property color face: root.modifier ? Theme.surface : Theme.beige
+    // bgAlt, not surface. theme/DESIGN.md proposes surface as the role name for
+    // this colour but nothing implements it yet, and a name that does not exist
+    // binds to undefined rather than failing, so the cap draws with no face.
+    readonly property color face: root.modifier ? Theme.bgAlt : Theme.beige
     readonly property color side: root.modifier ? Theme.bg : Theme.accentQuiet
     readonly property color ink: Theme.readableOn(root.face)
 
