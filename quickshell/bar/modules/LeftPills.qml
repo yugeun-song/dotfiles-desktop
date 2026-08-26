@@ -36,12 +36,14 @@ Row {
         return "UTC" + sign + h + (m === 0 ? "" : ":" + (m < 10 ? "0" : "") + m);
     }
 
-    // Deliberately not accentSky: that belongs to the weather, and the two sit
-    // side by side. Two neighbouring pills in one colour read as one wide pill.
+    // Beige, and fixed. The clock is the one readout here that never changes
+    // meaning, so it is the one that should never change colour: anything the
+    // weather does beside it then reads as the weather having changed.
     Pill {
         icon: Theme.iconClock
         label: `${Qt.formatDateTime(clock.date, "MM-dd  HH:mm")}  ${root.zoneLabel(clock.date)}`
-        fill: Theme.accentTeal
+        fill: Theme.beige
+        textColor: Theme.readableOn(fill)
         tooltip: `${Qt.formatDateTime(clock.date, "dddd, d MMMM yyyy")}
 Time      ${Qt.formatDateTime(clock.date, "HH:mm")}
 Week      ${Qt.formatDateTime(clock.date, "'W'ww")}

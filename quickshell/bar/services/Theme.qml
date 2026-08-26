@@ -230,6 +230,11 @@ Singleton {
     // The same code groups weatherIcon uses, so the icon and the colour cannot
     // disagree about what the sky is doing. Two things reading one switch is
     // the only way to keep that true as codes are added.
+    //
+    // accentSky is the resting state, for the sky most days actually have. A
+    // strong colour on an ordinary afternoon spends the one signal the pill has;
+    // kept for weather worth looking up at, the colour means something when it
+    // appears. Beige is not used here: the clock beside it holds that, fixed.
     function weatherColor(code: int, day: bool): color {
         switch (true) {
         case code === 0:
