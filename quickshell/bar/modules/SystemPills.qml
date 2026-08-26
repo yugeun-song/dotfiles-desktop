@@ -81,37 +81,6 @@ Row {
         }
     }
 
-    // The reading carries no observation time and Weather.data is never
-    // cleared, so a feed that stopped arriving would keep reading as the
-    // current sky. The pill leaves when nothing new has come in for an hour.
-    Timer {
-        id: weatherFresh
-
-        interval: 3600000
-        running: true
-    }
-
-    Connections {
-        target: Weather
-
-        function onDataChanged() {
-            weatherFresh.restart();
-        }
-    }
-
-    Pill {
-        visible: Weather.ready && weatherFresh.running
-        icon: Theme.weatherIcon(Weather.code, Weather.day)
-        label: Weather.place !== "" ? `${Weather.place}, ${Weather.temp}°` : `${Weather.temp}°`
-        fill: Theme.accentSky
-        tooltip: `Sky       ${Theme.weatherText(Weather.code)}
-Now       ${Weather.temp}°C, feels ${Weather.feels}°C
-Today     ${Weather.todayMin}° to ${Weather.todayMax}°C
-Humidity  ${Weather.humidity}%
-Wind      ${Weather.wind} km/h
-Location  ${Weather.place}`
-    }
-
     // Networking.wifiEnabled is false both when the radio is off and when
     // NetworkManager is not there to report on it, so an empty device list
     // means unknown rather than off. Saying "off" over a working link is the

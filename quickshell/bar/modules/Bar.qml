@@ -67,6 +67,10 @@ PanelWindow {
                 anchors.verticalCenter: parent.verticalCenter
             }
 
+            LeftPills {
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
             Workspaces {
                 anchors.verticalCenter: parent.verticalCenter
             }
