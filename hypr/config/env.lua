@@ -66,7 +66,11 @@ hl.env("XDG_SESSION_DESKTOP", "Hyprland")
 -- which is the same set of images the other clients are using. Leaving it unset
 -- would have Hyprland pick its own default instead, and the pointer would
 -- differ between the compositor's own surfaces and everything else.
-local cursor_theme = "Oxygen_White"
+-- Built by theme/cursor/tint-cursors.py from Oxygen_White in the bar's sky
+-- blue, into ~/.local/share/icons. If that build ever fails the name resolves
+-- to nothing and every client falls back to its own default, which is visible
+-- immediately rather than silently wrong.
+local cursor_theme = "Spaceduck-Sky"
 local cursor_size = "32"
 
 hl.env("XCURSOR_THEME", cursor_theme)

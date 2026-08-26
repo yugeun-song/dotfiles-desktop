@@ -163,6 +163,31 @@ seed "$SRC/hypr/hyprlock.conf"     "$CONFIG/hypr/hyprlock.conf"
 seed "$SRC/hypr/hyprpaper.conf"    "$CONFIG/hypr/hyprpaper.conf"
 mirror "$SRC/bin/bar"               "$HOME/.local/bin/bar"
 mirror "$SRC/bin/unlock"            "$HOME/.local/bin/unlock"
+
+# The pointer, built rather than shipped.
+#
+# XCursor themes are bitmaps with the colour baked in, so a themed pointer is
+# not something a setting can ask for. theme/cursor/tint-cursors.py recolours a
+# packaged theme by luminance, which keeps every hotspot, size and alias the
+# source had. The tint is read out of Theme.qml so the palette stays the only
+# place the colour is written; hard-coding it here would be a second copy that
+# drifts the first time the bar's blue changes.
+#
+# Failure is not fatal. A machine that cannot build it keeps whatever pointer it
+# had, which is a worse-looking desktop and not a broken one.
+cursor_tint=$(sed -n 's/.*accentSky:  *"\(#[0-9a-fA-F]\{6\}\)".*/\1/p' \
+              "$SRC/quickshell/bar/services/Theme.qml" | head -1)
+if [[ -n "$cursor_tint" ]]; then
+    if "$SRC/theme/cursor/tint-cursors.py" --from Oxygen_White \
+           --name Spaceduck-Sky --tint "$cursor_tint" \
+           --comment "Oxygen_White in the bar's sky blue"; then
+        :
+    else
+        echo "install: could not build the cursor theme; the pointer is unchanged" >&2
+    fi
+else
+    echo "install: no accentSky in Theme.qml; the cursor theme was not built" >&2
+fi
 seed "$SRC/fcitx5/config"          "$CONFIG/fcitx5/config"
 seed "$SRC/fcitx5/profile"         "$CONFIG/fcitx5/profile"
 seed "$SRC/fcitx5/conf"            "$CONFIG/fcitx5/conf"

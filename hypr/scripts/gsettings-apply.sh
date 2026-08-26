@@ -48,7 +48,7 @@ set_key "$I" icon-theme     "breeze-dark"
 # values hypr/config/env.lua exported are already present. A second copy of the
 # number is how the pointer ends up a different size in GTK windows than
 # everywhere else. The fallbacks cover being run by hand from a plain shell.
-set_key "$I" cursor-theme   "${XCURSOR_THEME:-Oxygen_White}"
+set_key "$I" cursor-theme   "${XCURSOR_THEME:-Spaceduck-Sky}"
 set_key "$I" cursor-size    "${XCURSOR_SIZE:-32}"
 set_key "$I" font-name      "Inter 11"
 set_key "$I" monospace-font-name "CaskaydiaCove Nerd Font Mono 11"
