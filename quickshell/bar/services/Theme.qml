@@ -165,11 +165,13 @@ Singleton {
     readonly property string iconAlarm:     String.fromCodePoint(0xF0020)
     readonly property string iconAlarmRing: String.fromCodePoint(0xF0E47)
 
-    // Every codepoint here was checked against the installed Nerd Font before
-    // being used; a missing glyph renders as a blank box and looks like a
-    // layout bug rather than a font one.
+    // Every codepoint here was rendered and looked at, not just checked for
+    // presence in the font. F0A21 is in the font and is not a bell: it is a
+    // window grid. Membership in the cmap says a glyph exists, never which
+    // glyph it is.
     readonly property string iconBell:      String.fromCodePoint(0xF009A)
-    readonly property string iconBellBadge: String.fromCodePoint(0xF0A21)
+    readonly property string iconBellRing:  String.fromCodePoint(0xF009E)
+    readonly property string iconBellAlert: String.fromCodePoint(0xF0D59)
     readonly property string iconBellOff:   String.fromCodePoint(0xF009B)
     readonly property string iconClose:     String.fromCodePoint(0xF0159)
     readonly property string iconClearAll:  String.fromCodePoint(0xF0A79)

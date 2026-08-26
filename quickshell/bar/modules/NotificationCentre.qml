@@ -15,6 +15,11 @@ import qs.services
 Scope {
     id: root
 
+    // How far a row has to be dragged before letting go deletes it rather than
+    // springing it back, as a fraction of its width. The same figure the toasts
+    // use, because the two are the same gesture on the same notification.
+    readonly property real swipeCommit: 0.28
+
     function toggle() {
         Notifications.toggleCentre();
     }
@@ -97,13 +102,20 @@ Scope {
                     anchors.right: parent.right
                     anchors.topMargin: Theme.barHeight + Theme.px(8)
                     anchors.rightMargin: Theme.edgeMarginRight
-                    width: Theme.px(420)
+                    width: Theme.px(470)
                     height: Math.min(parent.height - Theme.barHeight - Theme.px(28),
                                      header.height + list.contentHeight + Theme.px(28))
                     radius: Theme.px(14)
                     color: Theme.bgAlt
                     border.width: 1
                     border.color: Theme.accentQuiet
+
+                    Behavior on height {
+                        NumberAnimation {
+                            duration: 160
+                            easing.type: Easing.OutCubic
+                        }
+                    }
 
                     // Clicks inside must not reach the dismisser behind it, or
                     // reading the list would close it.
@@ -156,9 +168,9 @@ Scope {
                                     id: sweep
 
                                     anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
                                     anchors.margins: -Theme.px(5)
                                     hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
 
                                     onClicked: Notifications.clear()
                                 }
@@ -188,154 +200,226 @@ Scope {
                         anchors.bottomMargin: Theme.px(12)
 
                         clip: true
-                        spacing: Theme.px(7)
+                        spacing: Theme.px(9)
                         boundsBehavior: Flickable.StopAtBounds
                         model: Notifications.history
 
-                        delegate: Rectangle {
-                            id: row
+                        // The rows below the one that left slide up rather than
+                        // snapping into the gap.
+                        displaced: Transition {
+                            NumberAnimation {
+                                properties: "y"
+                                duration: 160
+                                easing.type: Easing.OutCubic
+                            }
+                        }
+
+                        // Same split as the toasts: the slot holds the row's
+                        // place in the list and collapses, the row is what
+                        // travels. One item doing both leaves its gap behind.
+                        delegate: Item {
+                            id: slot
 
                             required property var modelData
 
                             width: ListView.view.width
-                            height: body.implicitHeight + Theme.px(18)
-                            radius: Theme.px(9)
-                            color: hover.containsMouse ? Theme.bg : "transparent"
-                            border.width: 1
-                            border.color: row.modelData.critical ? Theme.accentRed : Theme.bg
+                            height: row.implicitHeight
+                            clip: true
 
-                            MouseArea {
-                                id: hover
+                            SequentialAnimation {
+                                id: leaving
 
-                                anchors.fill: parent
-                                hoverEnabled: true
+                                NumberAnimation {
+                                    target: row
+                                    property: "x"
+                                    to: row.width + Theme.px(40)
+                                    duration: 200
+                                    easing.type: Easing.InCubic
+                                }
+                                NumberAnimation {
+                                    target: slot
+                                    property: "height"
+                                    to: 0
+                                    duration: 140
+                                    easing.type: Easing.OutCubic
+                                }
+                                ScriptAction {
+                                    script: Notifications.dismiss(slot.modelData.id)
+                                }
                             }
 
-                            Column {
-                                id: body
+                            Rectangle {
+                                id: row
 
-                                anchors.left: parent.left
-                                anchors.right: parent.right
-                                anchors.top: parent.top
-                                anchors.leftMargin: Theme.px(11)
-                                anchors.rightMargin: Theme.px(30)
-                                anchors.topMargin: Theme.px(9)
-                                spacing: Theme.px(3)
+                                width: parent.width
+                                implicitHeight: body.implicitHeight + Theme.px(20)
+                                height: implicitHeight
+                                radius: Theme.px(9)
+                                color: hover.containsMouse ? Qt.lighter(Theme.bg, 1.5) : Theme.bg
+                                border.width: 1
+                                border.color: slot.modelData.critical ? Theme.accentRed : Theme.muted
 
-                                Row {
-                                    width: parent.width
-                                    spacing: Theme.px(6)
+                                opacity: Math.max(0, 1 - row.x / (row.width * 0.7))
 
-                                    Text {
-                                        text: row.modelData.appName
-                                        font.family: Theme.uiFont
-                                        font.pixelSize: Theme.px(10)
-                                        color: Theme.accentTeal
-                                    }
+                                Behavior on x {
+                                    enabled: !hover.drag.active && !leaving.running
 
-                                    Text {
-                                        text: root.stamp(row.modelData.at)
-                                        font.family: Theme.uiFont
-                                        font.pixelSize: Theme.px(10)
-                                        color: Theme.muted
+                                    NumberAnimation {
+                                        duration: 170
+                                        easing.type: Easing.OutCubic
                                     }
                                 }
 
-                                Text {
-                                    width: parent.width
-                                    text: row.modelData.summary
-                                    font.family: Theme.uiFont
-                                    font.pixelSize: Theme.textSize
-                                    font.weight: Font.DemiBold
-                                    color: Theme.fg
-                                    wrapMode: Text.Wrap
-                                    maximumLineCount: 2
-                                    elide: Text.ElideRight
+                                // Hover highlight and swipe are the same area, so
+                                // a drag that starts anywhere on the row works
+                                // rather than only on a dedicated handle.
+                                MouseArea {
+                                    id: hover
+
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    drag.target: row
+                                    drag.axis: Drag.XAxis
+                                    drag.minimumX: 0
+                                    drag.maximumX: row.width
+
+                                    onReleased: {
+                                        if (row.x > row.width * root.swipeCommit)
+                                            leaving.start();
+                                        else
+                                            row.x = 0;
+                                    }
                                 }
 
-                                Text {
-                                    width: parent.width
-                                    visible: row.modelData.body !== ""
-                                    text: row.modelData.body
-                                    font.family: Theme.uiFont
-                                    font.pixelSize: Theme.px(11)
-                                    color: Theme.accentQuiet
-                                    wrapMode: Text.Wrap
-                                    textFormat: Text.StyledText
-                                }
+                                Column {
+                                    id: body
 
-                                // The buttons the sending application offered.
-                                // Notifications.invoke warns and returns false if
-                                // that application has since exited, which is the
-                                // only way an action can fail here.
-                                Row {
-                                    visible: row.modelData.actions.length > 0
-                                    spacing: Theme.px(6)
-                                    topPadding: Theme.px(4)
+                                    anchors.left: parent.left
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.leftMargin: Theme.px(11)
+                                    anchors.rightMargin: Theme.px(42)
+                                    anchors.topMargin: Theme.px(10)
+                                    spacing: Theme.px(4)
 
-                                    Repeater {
-                                        model: row.modelData.actions
+                                    Row {
+                                        width: parent.width
+                                        spacing: Theme.px(6)
 
-                                        Rectangle {
-                                            id: action
+                                        Text {
+                                            text: slot.modelData.appName
+                                            font.family: Theme.uiFont
+                                            font.pixelSize: Theme.px(11)
+                                            color: Theme.accentTeal
+                                        }
 
-                                            required property var modelData
+                                        Text {
+                                            text: root.stamp(slot.modelData.at)
+                                            font.family: Theme.uiFont
+                                            font.pixelSize: Theme.px(11)
+                                            color: Theme.muted
+                                        }
+                                    }
 
-                                            width: label.implicitWidth + Theme.px(16)
-                                            height: label.implicitHeight + Theme.px(7)
-                                            radius: Theme.px(6)
-                                            color: press.containsMouse ? Theme.accentTeal : Theme.bg
-                                            border.width: 1
-                                            border.color: Theme.accentQuiet
+                                    Text {
+                                        width: parent.width
+                                        text: slot.modelData.summary
+                                        font.family: Theme.uiFont
+                                        font.pixelSize: Theme.px(14)
+                                        font.weight: Font.DemiBold
+                                        color: Theme.fg
+                                        wrapMode: Text.Wrap
+                                        maximumLineCount: 2
+                                        elide: Text.ElideRight
+                                    }
 
-                                            Text {
-                                                id: label
+                                    Text {
+                                        width: parent.width
+                                        visible: slot.modelData.body !== ""
+                                        text: slot.modelData.body
+                                        font.family: Theme.uiFont
+                                        font.pixelSize: Theme.px(12)
+                                        color: Theme.accentQuiet
+                                        wrapMode: Text.Wrap
+                                        textFormat: Text.StyledText
+                                    }
 
-                                                anchors.centerIn: parent
-                                                text: action.modelData.text
-                                                font.family: Theme.uiFont
-                                                font.pixelSize: Theme.px(11)
-                                                color: press.containsMouse ? Theme.ink : Theme.fg
-                                            }
+                                    // The buttons the sending application offered.
+                                    // Notifications.invoke warns and returns false
+                                    // if that application has since exited, which
+                                    // is the only way an action can fail here.
+                                    Row {
+                                        visible: slot.modelData.actions.length > 0
+                                        spacing: Theme.px(6)
+                                        topPadding: Theme.px(4)
 
-                                            MouseArea {
-                                                id: press
+                                        Repeater {
+                                            model: slot.modelData.actions
 
-                                                anchors.fill: parent
-                                                cursorShape: Qt.PointingHandCursor
-                                                hoverEnabled: true
+                                            Rectangle {
+                                                id: action
 
-                                                onClicked: {
-                                                    Notifications.invoke(row.modelData,
-                                                                         action.modelData.identifier);
-                                                    root.close();
+                                                required property var modelData
+
+                                                width: label.implicitWidth + Theme.px(16)
+                                                height: label.implicitHeight + Theme.px(7)
+                                                radius: Theme.px(6)
+                                                color: press.containsMouse ? Theme.accentTeal : Theme.bg
+                                                border.width: 1
+                                                border.color: Theme.accentQuiet
+
+                                                Text {
+                                                    id: label
+
+                                                    anchors.centerIn: parent
+                                                    text: action.modelData.text
+                                                    font.family: Theme.uiFont
+                                                    font.pixelSize: Theme.px(12)
+                                                    color: press.containsMouse ? Theme.ink : Theme.fg
+                                                }
+
+                                                MouseArea {
+                                                    id: press
+
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+
+                                                    onClicked: {
+                                                        Notifications.invoke(slot.modelData,
+                                                                             action.modelData.identifier);
+                                                        root.close();
+                                                    }
                                                 }
                                             }
                                         }
                                     }
                                 }
-                            }
 
-                            Text {
-                                anchors.right: parent.right
-                                anchors.rightMargin: Theme.px(10)
-                                anchors.top: parent.top
-                                anchors.topMargin: Theme.px(9)
-                                visible: hover.containsMouse || kill.containsMouse
-                                text: Theme.iconClose
-                                font.family: Theme.iconFont
-                                font.pixelSize: Theme.px(14)
-                                color: kill.containsMouse ? Theme.accentRed : Theme.muted
+                                Text {
+                                    anchors.right: parent.right
+                                    anchors.rightMargin: Theme.px(10)
+                                    anchors.top: parent.top
+                                    anchors.topMargin: Theme.px(9)
+                                    text: Theme.iconClose
+                                    font.family: Theme.iconFont
+                                    font.pixelSize: Theme.px(19)
+                                    color: kill.containsMouse ? Theme.accentRed : Theme.accentQuiet
 
-                                MouseArea {
-                                    id: kill
+                                    MouseArea {
+                                        id: kill
 
-                                    anchors.fill: parent
-                                    cursorShape: Qt.PointingHandCursor
-                                    anchors.margins: -Theme.px(5)
-                                    hoverEnabled: true
+                                        anchors.fill: parent
+                                        anchors.margins: -Theme.px(10)
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
 
-                                    onClicked: Notifications.dismiss(row.modelData.id)
+                                        // Deliberately the same animation the
+                                        // swipe uses. The button and the gesture
+                                        // do the same thing, so they should not
+                                        // look like different things.
+                                        onClicked: leaving.start()
+                                    }
                                 }
                             }
                         }

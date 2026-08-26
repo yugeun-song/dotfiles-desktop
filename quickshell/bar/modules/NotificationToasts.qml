@@ -22,6 +22,10 @@ Scope {
     // unreadable anyway, so the oldest give way to what just arrived.
     readonly property int maxVisible: 4
 
+    // How far a toast has to be dragged before letting go dismisses it rather
+    // than springing it back, as a fraction of its width.
+    readonly property real swipeCommit: 0.28
+
     property var live: []
 
     function push(entry) {
@@ -48,8 +52,8 @@ Scope {
     }
 
     LazyLoader {
-        // Nothing to say twice. While the history panel is open every toast
-        // it would draw is already on screen behind it, and the two surfaces
+        // Nothing to say twice. While the history panel is open every toast it
+        // would draw is already on screen behind it, and the two surfaces
         // overlap at the same corner.
         active: root.live.length > 0 && !Notifications.centreOpen
 
@@ -86,131 +90,220 @@ Scope {
                 Repeater {
                     model: root.live
 
-                    Rectangle {
-                        id: toast
+                    // Two items, not one: the slot holds the space in the column
+                    // and the card is what moves. Animating a single item's x
+                    // inside a Column leaves its gap behind until the model
+                    // changes, so the stack jumps instead of closing up behind
+                    // what left.
+                    Item {
+                        id: slot
 
                         required property var modelData
 
                         width: parent.width
-                        implicitHeight: text.implicitHeight + Theme.px(22)
-                        height: implicitHeight
-                        radius: Theme.px(12)
-                        color: Theme.bgAlt
-                        border.width: 1
-                        border.color: toast.modelData.critical ? Theme.accentRed : Theme.accentQuiet
+                        height: card.implicitHeight
+                        clip: true
+
+                        // Runs on expiry, on the close button, and on a released
+                        // swipe. One way out, so all three look the same.
+                        SequentialAnimation {
+                            id: leaving
+
+                            NumberAnimation {
+                                target: card
+                                property: "x"
+                                to: card.width + Theme.px(40)
+                                duration: 220
+                                easing.type: Easing.InCubic
+                            }
+                            NumberAnimation {
+                                target: slot
+                                property: "height"
+                                to: 0
+                                duration: 150
+                                easing.type: Easing.OutCubic
+                            }
+                            ScriptAction {
+                                script: root.drop(slot.modelData.id)
+                            }
+                        }
 
                         // A critical notification is the one class the spec says
                         // must not disappear on its own: it is what a dying
                         // battery uses. Everything else times out.
                         Timer {
-                            running: !toast.modelData.critical
+                            running: !slot.modelData.critical
                             interval: root.dwellMs
 
-                            onTriggered: root.drop(toast.modelData.id)
+                            onTriggered: leaving.start()
                         }
 
-                        Text {
-                            id: icon
+                        Rectangle {
+                            id: card
 
-                            anchors.left: parent.left
-                            anchors.leftMargin: Theme.px(13)
-                            anchors.top: parent.top
-                            anchors.topMargin: Theme.px(12)
-                            text: toast.modelData.critical ? Theme.iconBellBadge : Theme.iconBell
-                            font.family: Theme.iconFont
-                            font.pixelSize: Theme.iconSize
-                            color: toast.modelData.critical ? Theme.accentRed : Theme.accentTeal
-                        }
+                            width: parent.width
+                            implicitHeight: text.implicitHeight + Theme.px(24)
+                            height: implicitHeight
+                            radius: Theme.px(12)
+                            color: Theme.bgAlt
+                            border.width: 1
+                            border.color: slot.modelData.critical ? Theme.accentRed : Theme.accentQuiet
 
-                        Column {
-                            id: text
+                            // Arrives from the edge it will later leave by.
+                            // Without this it appears instantly and the exit
+                            // reads as a glitch rather than as a direction.
+                            Component.onCompleted: {
+                                card.x = card.width;
+                                entering.start();
+                            }
 
-                            anchors.left: icon.right
-                            anchors.leftMargin: Theme.px(10)
-                            anchors.right: parent.right
-                            anchors.rightMargin: Theme.px(34)
-                            anchors.top: parent.top
-                            anchors.topMargin: Theme.px(11)
-                            spacing: Theme.px(2)
+                            NumberAnimation {
+                                id: entering
 
-                            Text {
-                                width: parent.width
-                                text: toast.modelData.summary
-                                font.family: Theme.uiFont
-                                font.pixelSize: Theme.textSize
-                                font.weight: Font.DemiBold
-                                color: Theme.fg
-                                elide: Text.ElideRight
+                                target: card
+                                property: "x"
+                                to: 0
+                                duration: 260
+                                easing.type: Easing.OutCubic
+                            }
+
+                            // Fades with the distance travelled, so a swipe shows
+                            // how close it is to committing rather than only
+                            // reporting it after release.
+                            opacity: Math.max(0, 1 - card.x / (card.width * 0.7))
+
+                            // Only for the spring back. The exit and the entrance
+                            // drive x themselves and would fight a Behavior.
+                            Behavior on x {
+                                enabled: !swipe.drag.active && !leaving.running && !entering.running
+
+                                NumberAnimation {
+                                    duration: 180
+                                    easing.type: Easing.OutCubic
+                                }
                             }
 
                             Text {
-                                width: parent.width
-                                visible: toast.modelData.body !== ""
-                                text: toast.modelData.body
-                                font.family: Theme.uiFont
-                                font.pixelSize: Theme.px(11)
-                                color: Theme.accentQuiet
-                                wrapMode: Text.Wrap
-                                maximumLineCount: 3
-                                elide: Text.ElideRight
-                                // Markup is advertised to senders in the service,
-                                // so it has to be honoured here or a body arrives
-                                // full of visible <b> tags.
-                                textFormat: Text.StyledText
+                                id: icon
+
+                                anchors.left: parent.left
+                                anchors.leftMargin: Theme.px(13)
+                                anchors.top: parent.top
+                                anchors.topMargin: Theme.px(12)
+                                text: slot.modelData.critical ? Theme.iconBellAlert : Theme.iconBell
+                                font.family: Theme.iconFont
+                                font.pixelSize: Theme.iconSize
+                                color: slot.modelData.critical ? Theme.accentRed : Theme.accentTeal
                             }
 
-                            Text {
-                                width: parent.width
-                                text: toast.modelData.appName
-                                font.family: Theme.uiFont
-                                font.pixelSize: Theme.px(10)
-                                color: Theme.muted
-                                elide: Text.ElideRight
-                                topPadding: Theme.px(3)
+                            Column {
+                                id: text
+
+                                anchors.left: icon.right
+                                anchors.leftMargin: Theme.px(10)
+                                anchors.right: parent.right
+                                anchors.rightMargin: Theme.px(40)
+                                anchors.top: parent.top
+                                anchors.topMargin: Theme.px(11)
+                                spacing: Theme.px(2)
+
+                                Text {
+                                    width: parent.width
+                                    text: slot.modelData.summary
+                                    font.family: Theme.uiFont
+                                    font.pixelSize: Theme.px(14)
+                                    font.weight: Font.DemiBold
+                                    color: Theme.fg
+                                    elide: Text.ElideRight
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    visible: slot.modelData.body !== ""
+                                    text: slot.modelData.body
+                                    font.family: Theme.uiFont
+                                    font.pixelSize: Theme.px(12)
+                                    color: Theme.accentQuiet
+                                    wrapMode: Text.Wrap
+                                    maximumLineCount: 3
+                                    elide: Text.ElideRight
+                                    // Markup is advertised to senders in the
+                                    // service, so it has to be honoured here or a
+                                    // body arrives full of visible <b> tags.
+                                    textFormat: Text.StyledText
+                                }
+
+                                Text {
+                                    width: parent.width
+                                    text: slot.modelData.appName
+                                    font.family: Theme.uiFont
+                                    font.pixelSize: Theme.px(11)
+                                    color: Theme.muted
+                                    elide: Text.ElideRight
+                                    topPadding: Theme.px(3)
+                                }
                             }
-                        }
 
-                        // Dismisses the toast only. The notification stays in the
-                        // history, which is the whole reason the history exists:
-                        // flicking a toast away should not destroy the record of
-                        // what it said.
-                        Text {
-                            anchors.right: parent.right
-                            anchors.rightMargin: Theme.px(12)
-                            anchors.top: parent.top
-                            anchors.topMargin: Theme.px(11)
-                            text: Theme.iconClose
-                            font.family: Theme.iconFont
-                            font.pixelSize: Theme.px(15)
-                            color: closer.containsMouse ? Theme.fg : Theme.muted
-
+                            // Drags right only. Dragging a notification left
+                            // would suggest it goes somewhere, and there is
+                            // nothing to the left of it but the desktop.
                             MouseArea {
-                                id: closer
+                                id: swipe
 
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                anchors.margins: -Theme.px(6)
-                                hoverEnabled: true
+                                drag.target: card
+                                drag.axis: Drag.XAxis
+                                drag.minimumX: 0
+                                drag.maximumX: card.width
 
-                                onClicked: root.drop(toast.modelData.id)
-                            }
-                        }
-
-                        MouseArea {
-                            anchors.fill: parent
-                            z: -1
-                            cursorShape: Qt.PointingHandCursor
-
-                            // The freedesktop convention is that an action named
-                            // "default" is what a click on the body means.
-                            onClicked: {
-                                for (let i = 0; i < toast.modelData.actions.length; i++) {
-                                    if (toast.modelData.actions[i].identifier === "default") {
-                                        Notifications.invoke(toast.modelData, "default");
-                                        break;
-                                    }
+                                onReleased: {
+                                    if (card.x > card.width * root.swipeCommit)
+                                        leaving.start();
+                                    else
+                                        card.x = 0;
                                 }
-                                root.drop(toast.modelData.id);
+
+                                // A press that never moved is still a click. The
+                                // freedesktop convention is that an action named
+                                // "default" is what a click on the body means.
+                                onClicked: {
+                                    if (card.x !== 0)
+                                        return;
+                                    for (let i = 0; i < slot.modelData.actions.length; i++) {
+                                        if (slot.modelData.actions[i].identifier === "default") {
+                                            Notifications.invoke(slot.modelData, "default");
+                                            break;
+                                        }
+                                    }
+                                    leaving.start();
+                                }
+                            }
+
+                            // Dismisses the toast only. The notification stays in
+                            // the history, which is the whole reason the history
+                            // exists: flicking a toast away should not destroy the
+                            // record of what it said.
+                            Text {
+                                anchors.right: parent.right
+                                anchors.rightMargin: Theme.px(12)
+                                anchors.top: parent.top
+                                anchors.topMargin: Theme.px(11)
+                                text: Theme.iconClose
+                                font.family: Theme.iconFont
+                                font.pixelSize: Theme.px(19)
+                                color: closer.containsMouse ? Theme.fg : Theme.accentQuiet
+
+                                MouseArea {
+                                    id: closer
+
+                                    anchors.fill: parent
+                                    anchors.margins: -Theme.px(10)
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+
+                                    onClicked: leaving.start()
+                                }
                             }
                         }
                     }
