@@ -227,49 +227,34 @@ Singleton {
                ? root.ink : root.fg;
     }
 
-    // The same code groups weatherIcon uses, so the icon and the colour cannot
-    // disagree about what the sky is doing. Two things reading one switch is
-    // the only way to keep that true as codes are added.
+    // Five things the sky can be doing, not thirteen. weatherIcon splits the
+    // WMO codes finely because a drizzle glyph and a rain glyph are worth
+    // telling apart at a glance; colour is a coarser instrument and one colour
+    // per code spends it on distinctions nobody reads off a pill.
     //
-    // accentSky is the resting state, for the sky most days actually have. A
-    // strong colour on an ordinary afternoon spends the one signal the pill has;
-    // kept for weather worth looking up at, the colour means something when it
-    // appears. Beige is not used here: the clock beside it holds that, fixed.
+    // Collapsing fog into the cloud group also retires the one contrast
+    // failure in the set: muted is a colour for dim text and reached only
+    // 4.11:1 as a face. Nothing here is below 7.5:1 now.
     function weatherColor(code: int, day: bool): color {
         switch (true) {
+        // Clear. The only state that says something about the light rather
+        // than about what is falling, so it is the only one split by hour.
         case code === 0:
-            return day ? root.accentAmber : root.accentIndigo;
-        case code === 1 || code === 2:
+            return day ? root.accentAmber : root.accentQuiet;
+        // Cloud, in every thickness, fog included: the sky is a lid.
+        case code <= 3 || code === 45 || code === 48:
             return root.accentSky;
-        case code === 3:
-            return root.accentQuiet;
-        // muted is a colour for dim text on a dark ground, and used as a face
-        // it reaches only 4.11:1 against either text colour. 1.15 is the
-        // smallest lift that clears 4.5, at 4.93, which matters because every
-        // further step collapses the distance from the overcast colour beside
-        // it: 2.37 apart here, 1.89 at 1.3, 1.26 at 1.6.
-        case code === 45 || code === 48:
-            return Qt.lighter(root.muted, 1.15);
-        case code >= 51 && code <= 57:
-            return root.accentSky;
-        case code >= 61 && code <= 65:
+        // Water coming down, from drizzle to showers.
+        case (code >= 51 && code <= 65) || (code >= 80 && code <= 82):
             return root.accentIndigo;
-        // Freezing rain is the one ordinary-looking sky that is dangerous to
-        // walk on, so it takes a warning colour rather than another blue.
-        case code === 66 || code === 67:
-            return root.accentOrange;
-        case code >= 71 && code <= 77:
+        // Frozen, which is snow and the freezing rain that behaves like it.
+        case (code >= 66 && code <= 77) || code === 85 || code === 86:
             return root.fg;
-        case code >= 80 && code <= 82:
-            return root.accentIndigo;
-        case code === 85 || code === 86:
-            return root.fg;
-        case code === 95:
+        // Storm.
+        case code >= 95:
             return root.accentPurple;
-        case code === 96 || code === 99:
-            return root.accentRed;
         default:
-            return root.accentQuiet;
+            return root.accentSky;
         }
     }
 
