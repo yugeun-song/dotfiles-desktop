@@ -9,10 +9,10 @@ Singleton {
 
     property bool active: false
 
-    // A helper that dies takes its pill's value with it, and a stale number
-    // that still looks live is worse than an obviously missing one. So the
-    // service says when it last heard anything, and brings the helper back.
-    property bool stale: true
+    // When `active` was last confirmed, which is not the same as when the
+    // helper was last seen alive: capslock.sh prints only on a transition, so
+    // silence is its normal state and liveness says nothing about the value.
+    property double asOf: 0
     property int restarts: 0
 
     Timer {
@@ -35,22 +35,33 @@ Singleton {
 
         onRunningChanged: {
             if (!poller.running) {
-                // The pill is dropped rather than left lit: the script only
-                // prints on a transition, so the last value it sent says
-                // nothing about the key once the script is gone.
-                root.stale = true;
-                root.active = false;
+                // `active` is kept, not cleared. Clearing it hid the pill,
+                // which tells a user whose Caps Lock is on that it is off --
+                // and that is the one answer the bar cannot be recovered from
+                // by looking at it. Dropping the stamp instead leaves the pill
+                // where it was, saying it no longer knows.
+                root.asOf = 0;
                 supervisor.restart();
-            } else {
-                root.stale = false;
             }
         }
 
         stdout: SplitParser {
             onRead: line => {
                 const value = line.trim();
-                if (value === "0" || value === "1")
+                if (value === "0" || value === "1") {
                     root.active = value === "1";
+                    root.asOf = Date.now();
+                    return;
+                }
+                // The script's third token, documented in its header: no LED
+                // node was readable, which is what a keyboard mid-replug looks
+                // like. Dropping it silently left the last state on screen as
+                // though the script had just confirmed it.
+                if (value === "-") {
+                    root.asOf = 0;
+                    return;
+                }
+                console.warn("[capslock] unexpected line:", value);
             }
         }
     }

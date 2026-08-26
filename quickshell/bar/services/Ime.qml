@@ -42,10 +42,11 @@ Singleton {
         Quickshell.execDetached(["fcitx5-remote", "-r"]);
     }
 
-    // A helper that dies takes its pill's value with it, and a stale number
-    // that still looks live is worse than an obviously missing one. So the
-    // service says when it last heard anything, and brings the helper back.
-    property bool stale: true
+    // When state and method were last confirmed, which is not the same as when
+    // the helper was last seen alive: the script prints only on a transition,
+    // so silence is its normal condition and liveness says nothing about the
+    // value. Zero means nothing has been accepted, and the pill says so.
+    property double asOf: 0
     property int restarts: 0
 
     Timer {
@@ -68,25 +69,33 @@ Singleton {
 
         onRunningChanged: {
             if (!poller.running) {
-                // Clearing the state hides the pill instead of leaving a label
-                // that claims hangul while the user is typing latin. The script
-                // reprints the current state as soon as it comes back.
-                root.stale = true;
-                root.state = "";
-                root.method = "";
+                // state is kept, so present stays true and the pill holds its
+                // place saying it cannot read. Clearing it hid the pill, and a
+                // pill that leaves reads as "there is no input method" -- a
+                // different and equally wrong claim to the stale label this was
+                // about avoiding. Dropping the stamp says neither.
+                root.asOf = 0;
                 supervisor.restart();
-            } else {
-                root.stale = false;
             }
         }
 
         stdout: SplitParser {
             onRead: line => {
-                const parts = line.trim().split("\t");
-                if (parts.length < 2)
+                const raw = line.trim();
+                // The script's no-reading token: fcitx5 did not answer, which
+                // is not the same as it answering that no input method is on.
+                if (raw === "-") {
+                    root.asOf = 0;
                     return;
+                }
+                const parts = raw.split("\t");
+                if (parts.length !== 2 || parts[0] === "" || parts[1] === "") {
+                    console.warn("[ime] unexpected line:", raw);
+                    return;
+                }
                 root.state = parts[0];
                 root.method = parts[1];
+                root.asOf = Date.now();
             }
         }
     }

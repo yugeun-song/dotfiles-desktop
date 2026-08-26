@@ -15,6 +15,12 @@ Singleton {
     property var entries: []
     property var ringing: null
 
+    // When `entries` was last accepted from the file. The list is deliberately
+    // kept across a failed load -- a half-written file must not erase every
+    // alarm -- so its age is the only thing separating "these are the alarms"
+    // from "these were the alarms".
+    property double asOf: 0
+
     // Filtered against nowSeconds rather than a captured Date.now(): a binding
     // only re-runs on its dependencies, so a wall time read here would freeze
     // the list at the last file change and leave a past alarm showing "0m".
@@ -56,10 +62,27 @@ Singleton {
     function reload() {
         try {
             const parsed = JSON.parse(file.text());
-            root.entries = Array.isArray(parsed) ? parsed : [];
+            if (!Array.isArray(parsed))
+                throw new Error("state file is not a list");
+            // Every field the bar prints, checked before it is printed.
+            // SystemPills interpolates at, daily and label straight into the
+            // tooltip, so one entry missing a field put the literal word
+            // "undefined" where a time belongs.
+            const good = parsed.filter(a => a
+                                       && typeof a.epoch === "number" && isFinite(a.epoch)
+                                       && typeof a.at === "string" && a.at !== ""
+                                       && typeof a.label === "string");
+            if (good.length !== parsed.length)
+                console.warn("[alarms] dropped", parsed.length - good.length, "malformed entries");
+            root.entries = good;
+            root.asOf = Date.now();
         } catch (error) {
             // The previous list is kept: a truncated or half-written file would
-            // otherwise erase every alarm from the bar without a word.
+            // otherwise erase every alarm from the bar without a word. What it
+            // stops doing is claiming to be current -- the catch used to assign
+            // nothing at all, so a file that never parsed again left the last
+            // good list on the bar indefinitely.
+            root.asOf = 0;
             console.warn("[alarms] unreadable state:", error);
         }
     }
@@ -79,6 +102,12 @@ Singleton {
 
     function check() {
         const now = Date.now() / 1000;
+
+        // A ring nobody dismissed stops being news. Without this the latch is
+        // permanent: the pill stays red on an alarm from hours ago, and the
+        // early return below means no alarm after it ever rings again.
+        if (root.ringing !== null && now - root.ringing.epoch >= 300)
+            root.dismiss();
 
         // An alarm whose moment passed unobserved, across a suspend or a shell
         // restart, still has to be rolled forward or dropped here, or a daily
@@ -112,8 +141,17 @@ Singleton {
         // A missing file only means alarm.sh has never run. Anything else means
         // the list on screen cannot be trusted, so say so.
         onLoadFailed: error => {
-            if (error !== FileViewError.FileNotFound)
-                console.warn("[alarms] load failed:", error);
+            if (error === FileViewError.FileNotFound) {
+                // An answer, not a failure, so the stamp is set: an empty list
+                // read off a machine with no alarms is a reading like any other.
+                root.entries = [];
+                root.asOf = Date.now();
+                return;
+            }
+            // Deleted after a good load, or chmod 000. The list stops being
+            // current here rather than surviving as though it were.
+            root.asOf = 0;
+            console.warn("[alarms] load failed:", error);
         }
     }
 

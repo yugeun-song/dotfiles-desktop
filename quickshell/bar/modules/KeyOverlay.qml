@@ -135,26 +135,11 @@ Scope {
                             }
                         }
 
-                        // Fires at the moment the service booked for this
-                        // chord, not a flat dwell from when the delegate was
-                        // built. A burst is booked in sequence, so it leaves in
-                        // sequence rather than all at once.
                         Timer {
                             running: true
-                            interval: Math.max(60, slot.modelData.leaveAt - Date.now())
+                            interval: KeyFeed.dwellMs
 
-                            onTriggered: if (!leaving.running) leaving.start()
-                        }
-
-                        // Pushed out by a newer chord rather than aged out. The
-                        // same exit either way: one route out means the stack
-                        // never has two ways of losing something.
-                        readonly property bool pushedOut:
-                            KeyFeed.expiring.indexOf(slot.modelData.id) !== -1
-
-                        onPushedOutChanged: {
-                            if (slot.pushedOut && !leaving.running)
-                                leaving.start();
+                            onTriggered: leaving.start()
                         }
 
                         Row {

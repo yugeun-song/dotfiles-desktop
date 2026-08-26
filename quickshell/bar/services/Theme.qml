@@ -207,6 +207,13 @@ Singleton {
     readonly property string iconBatteryAlert: String.fromCodePoint(0xF0083)
     readonly property string iconPlug:         String.fromCodePoint(0xF06A5)
 
+    // The one glyph here that is not a subject: it says the pill around it has
+    // no reading. Outline rather than filled, to match the hollow face Pill
+    // draws under it. This is md-help_circle_outline -- the name was read out
+    // of the font's own cmap, per the note above about membership never saying
+    // which glyph a code point is.
+    readonly property string iconUnknown:      String.fromCodePoint(0xF0625)
+
     // WMO weather codes, the same table the weather script prints from.
     // Relative luminance, WCAG 2.1. QML gives r, g and b already normalised.
     function luminance(c: color): real {
@@ -228,6 +235,54 @@ Singleton {
     function readableOn(bg: color): color {
         return root.contrast(bg, root.ink) >= root.contrast(bg, root.fg)
                ? root.ink : root.fg;
+    }
+
+    // ---------------------------------------------------------------------
+    // Freshness.
+    //
+    // A binding written over Date.now() is evaluated once, when it is created,
+    // and never again: nothing it depends on ever changes. So a reading that
+    // was current at startup stays current on screen for the life of the
+    // shell, which is the exact failure this is here to catch. One clock,
+    // shared, gives every such binding something that does change.
+    //
+    // Seconds rather than Minutes: an expiry measured in seconds cannot be
+    // driven by a clock that only moves once a minute.
+    // ---------------------------------------------------------------------
+    SystemClock {
+        id: tick
+
+        precision: SystemClock.Seconds
+    }
+
+    readonly property double now: tick.date.getTime()
+
+    // Empty while the reading is still worth drawing. Otherwise the reason it
+    // is not, phrased to follow "No reading" in a tooltip.
+    //
+    // asOf is the instant the value was *accepted*, never the instant it was
+    // asked for: a helper that is running, a file that still opens and a cache
+    // that still serves all say the source is alive and none of them says the
+    // number is current. Zero means nothing has ever been accepted.
+    //
+    // maxAgeMs of 0 means the source is edge-triggered -- it speaks only when
+    // something changes -- so silence is not evidence and only asOf being
+    // cleared makes the reading unknown.
+    function stale(asOf: double, maxAgeMs: int): string {
+        if (asOf <= 0)
+            return "Nothing has arrived yet";
+        if (maxAgeMs <= 0)
+            return "";
+        const age = root.now - asOf;
+        if (age <= maxAgeMs)
+            return "";
+        const seconds = Math.round(age / 1000);
+        if (seconds < 90)
+            return `Last read ${seconds}s ago`;
+        const minutes = Math.round(seconds / 60);
+        if (minutes < 90)
+            return `Last read ${minutes}m ago`;
+        return `Last read ${Math.round(minutes / 60)}h ago`;
     }
 
     // Five things the sky can be doing, not thirteen. weatherIcon splits the

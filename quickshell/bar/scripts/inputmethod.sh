@@ -1,15 +1,17 @@
 #!/usr/bin/env bash
 #
 # Reports the input method state on stdout, one line per change.
-# Format:  <state>\t<input method name>
+# Format:  <state>\t<input method name>, or `-` when fcitx5 did not answer.
 #
 # fcitx5 keeps two things that both matter here: which input method is
 # selected, and whether it is currently converting. With fcitx5-hangul the
 # name stays "hangul" while the Hangul key toggles conversion on and off, so
 # the name alone cannot tell 한 from EN.
 #
-# The name is only re-read when the state changes, because it almost never
-# moves on its own and querying it every tick would double the work.
+# Both halves are read every pass. Reading the name only on a state change was
+# half the work and wrong: switching engine without changing state, hangul to
+# mozc with both idle, left the old name on the line for as long as the session
+# lasted, and the pill decides latin from that name.
 #
 set -u
 
@@ -24,10 +26,22 @@ command -v fcitx5-remote >/dev/null 2>&1 || {
 
 while :; do
     state=$(fcitx5-remote 2>/dev/null) || state=""
-    if [[ "$state" != "$last" ]]; then
-        name=$(fcitx5-remote -n 2>/dev/null) || name=""
-        printf '%s\t%s\n' "${state:-none}" "${name:-unknown}"
-        last="$state"
+    name=$(fcitx5-remote -n 2>/dev/null) || name=""
+
+    # A line goes out only when both halves are real. Substituting "none" and
+    # "unknown" for a failed query printed a well-formed line describing
+    # nothing, and the literal word "unknown" reached the bar as an engine
+    # name. "-" is the no-reading token, the same one capslock.sh uses.
+    if [[ -z "$state" || -z "$name" ]]; then
+        line="-"
+    else
+        line="${state}"$'\t'"${name}"
+    fi
+
+    # Still deduplicated, so the reader is woken on a change and not on a tick.
+    if [[ "$line" != "$last" ]]; then
+        printf '%s\n' "$line"
+        last="$line"
     fi
     sleep "$interval"
 done

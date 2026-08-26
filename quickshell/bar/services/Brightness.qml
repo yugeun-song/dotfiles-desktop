@@ -142,8 +142,16 @@ Singleton {
                 // ddcutil --brief prints: VCP 10 C <current> <max>
                 const vcp = t.match(/^VCP\s+10\s+\S+\s+(\d+)\s+(\d+)/);
                 if (vcp) {
-                    const max = Number(vcp[2]) || 100;
-                    root.percent = Math.round(Number(vcp[1]) / max * 100);
+                    // `|| 100` treated a real max of 0 as a missing field, and
+                    // this branch had no clamp at all where the brightnessctl
+                    // one below does -- a monitor reporting current above max
+                    // produced percent 200.
+                    const max = Number(vcp[2]);
+                    if (!Number.isFinite(max) || max <= 0) {
+                        console.warn("[brightness] unusable VCP max:", t);
+                        return;
+                    }
+                    root.percent = Math.max(0, Math.min(100, Math.round(Number(vcp[1]) / max * 100)));
                     return;
                 }
                 const plain = Number(t);

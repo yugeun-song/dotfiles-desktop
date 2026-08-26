@@ -14,7 +14,8 @@ Row {
     spacing: Theme.gap
 
     Pill {
-        visible: CapsLock.active && !CapsLock.stale
+        visible: CapsLock.active
+        unknown: Theme.stale(CapsLock.asOf, 0)
         icon: Theme.iconCapsLock
         label: "CAPS LOCK"
         fill: Theme.capsLock
@@ -22,7 +23,8 @@ Row {
     }
 
     Pill {
-        visible: Ime.present && !Ime.stale
+        visible: Ime.present
+        unknown: Theme.stale(Ime.asOf, 0)
         icon: Theme.iconKeyboard
         label: Ime.label
         fill: Ime.hangul ? Theme.accentAmber : Theme.accentQuiet
@@ -55,6 +57,7 @@ Row {
 
     Pill {
         visible: Alarms.hasAlarm
+        unknown: Theme.stale(Alarms.asOf, 0)
         icon: Alarms.ringing ? Theme.iconAlarmRing : Theme.iconAlarm
         label: Alarms.ringing ? Theme.shorten(Alarms.ringing.label, 16) : Alarms.countdown
         fill: Alarms.ringing ? Theme.accentRed : Theme.accentQuiet
@@ -131,6 +134,7 @@ Row {
     }
 
     Pill {
+        unknown: Bt.unknown
         icon: Bt.icon()
         label: {
             if (!Bt.present)
@@ -174,7 +178,13 @@ Row {
     }
 
     Pill {
-        visible: Power.present
+        // Two different absences. No battery at all -- a desktop, or a cell
+        // pulled out -- is a reading, and the pill leaves on it. A battery
+        // upower has not answered for is not, and there the pill holds its
+        // place and says so, because a readout that vanishes instead reads as
+        // a machine that never had a battery.
+        visible: Power.present || Power.unknown !== ""
+        unknown: Power.unknown
         iconComponent: BatteryGauge {
             percent: Power.percent
             charging: Power.charging
@@ -198,7 +208,11 @@ Row {
         }
     }
 
+    // Five consecutive misses of the 1s sample, for both pills below. Long
+    // enough that one late read does not blink them, short enough that a
+    // wedged /proc is on screen while it is still the thing that just happened.
     Pill {
+        unknown: Theme.stale(Resources.cpuAsOf, 5000)
         icon: Theme.iconCpu
         label: `${Resources.cpuPercent}%`
         labelWidth: Theme.percentWidth
@@ -208,6 +222,7 @@ Row {
     }
 
     Pill {
+        unknown: Theme.stale(Resources.memAsOf, 5000)
         icon: Theme.iconMemory
         label: `${Resources.memPercent}%`
         labelWidth: Theme.percentWidth

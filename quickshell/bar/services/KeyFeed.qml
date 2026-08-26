@@ -33,27 +33,6 @@ Singleton {
 
     readonly property int maxVisible: 5
 
-    // A hard ceiling on what is on screen, counting the ones playing their exit.
-    // maxVisible alone bounds only the live ones, and an exit takes about half a
-    // second, so typing faster than that stacked five live chords on top of
-    // however many were still falling and the row grew across the screen.
-    // Past this the oldest is cut rather than asked to leave: at that rate
-    // nobody is reading the animation anyway.
-    readonly property int maxOnScreen: root.maxVisible * 2
-
-    // The shortest gap allowed between two departures. Each chord already has
-    // its own timer started when it arrived, but typing puts five of them
-    // inside a couple of hundred milliseconds, so five timers fire inside a
-    // couple of hundred milliseconds and the stack looks like it emptied at
-    // once. Holding each exit this far behind the one before it lets a burst
-    // unravel in the order it was typed.
-    readonly property int minGapMs: 70
-
-    // When the chord scheduled furthest out is due to leave. A new arrival is
-    // scheduled after it rather than a flat dwell from now, which is what keeps
-    // the departures in arrival order.
-    property real lastLeaveAt: 0
-
     // The symbols every printed keyboard shortcut has used for decades. They
     // are not in the Nerd Font the icons come from, but they are in Inter,
     // which is what the caps already draw their labels with.
@@ -135,45 +114,19 @@ Singleton {
     property int nextId: 0
     property string failure: ""
 
-    // Chords that have been asked to leave but are still on screen playing the
-    // exit. Cutting one out of the model instead would make it disappear where
-    // every other one falls, and the difference is exactly what a viewer reads
-    // as the drawing having glitched.
-    property var expiring: []
-
     readonly property bool running: feed.running
 
     function push(mods, key) {
-        const now = Date.now();
-        let leaveAt = now + root.dwellMs;
-        if (leaveAt < root.lastLeaveAt + root.minGapMs)
-            leaveAt = root.lastLeaveAt + root.minGapMs;
-        root.lastLeaveAt = leaveAt;
-
-        root.chords = root.chords.concat([{
-            mods: mods, key: key, id: root.nextId, leaveAt: leaveAt
-        }]);
+        const next = root.chords.concat([{ mods: mods, key: key, id: root.nextId }]);
         root.nextId = root.nextId + 1;
-
-        // Count only the ones not already on their way out, or a burst of keys
-        // would ask the same chord to leave several times over and the ones
-        // behind it would never be asked at all.
-        const live = [];
-        for (let i = 0; i < root.chords.length; i++)
-            if (root.expiring.indexOf(root.chords[i].id) === -1)
-                live.push(root.chords[i]);
-        if (live.length > root.maxVisible)
-            root.expiring = root.expiring.concat([live[0].id]);
-
-        while (root.chords.length > root.maxOnScreen) {
-            const gone = root.chords[0].id;
-            root.chords = root.chords.slice(1);
-            const still = [];
-            for (let i = 0; i < root.expiring.length; i++)
-                if (root.expiring[i] !== gone)
-                    still.push(root.expiring[i]);
-            root.expiring = still;
-        }
+        // Cut, not asked to leave. Marking the oldest and letting it play an
+        // exit kept its width while it fell, so typing faster than the
+        // animation stacked chords across the screen; scheduling the
+        // departures apart from each other to unstack them was a second queue
+        // on top of the first. A chord shows for its dwell and goes.
+        while (next.length > root.maxVisible)
+            next.shift();
+        root.chords = next;
     }
 
     function drop(id) {
@@ -182,17 +135,10 @@ Singleton {
             if (root.chords[i].id !== id)
                 next.push(root.chords[i]);
         root.chords = next;
-
-        const still = [];
-        for (let i = 0; i < root.expiring.length; i++)
-            if (root.expiring[i] !== id)
-                still.push(root.expiring[i]);
-        root.expiring = still;
     }
 
     function clear() {
         root.chords = [];
-        root.expiring = [];
     }
 
     function toggle() {
