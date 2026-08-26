@@ -181,13 +181,10 @@ if [[ -n "$cursor_tint" ]]; then
     if "$SRC/theme/cursor/tint-cursors.py" --from Oxygen_White \
            --name Spaceduck-Sky --tint "$cursor_tint" \
            --comment "Oxygen_White in the bar's sky blue"; then
-        # Only after the theme exists, and only over its plain arrow. Both
-        # colours come out of Theme.qml, so the pointer is drawn from the same
-        # two the bar behind it uses.
-        cursor_ink=$(sed -n 's/.*bg: *"\(#[0-9a-fA-F]\{6\}\)".*/\1/p' \
-                     "$SRC/quickshell/bar/services/Theme.qml" | head -1)
-        "$SRC/theme/cursor/pointer.py" --theme Spaceduck-Sky \
-            --fill "$cursor_tint" --outline "${cursor_ink:-#0f111b}" \
+        # Only after the theme exists, and only over its plain arrow. The fill
+        # is the same value the tint above used, so the pointer and the bar are
+        # never two shades of nearly the same blue.
+        "$SRC/theme/cursor/pointer.py" --theme Spaceduck-Sky --fill "$cursor_tint" \
             || echo "install: the arrow stayed as the tint left it" >&2
     else
         echo "install: could not build the cursor theme; the pointer is unchanged" >&2

@@ -38,9 +38,9 @@ from PIL import Image
 # it the shape reads as a play button.
 OUTLINE = [(8, 3), (76, 68), (35, 70), (10, 93)]
 
-# Fraction of the shape's height. Heavy on purpose: this is the whole reason for
-# drawing rather than tinting, and a thin edge is what the tinted arrow already
-# had.
+# Fraction of the shape's height, when there is an outline at all. Heavy when
+# used: a thin edge is what the tinted arrow already had, so half an outline
+# would be the worst of both.
 STROKE = 0.072
 
 # The sizes a client is likely to ask for. Anything not here is served by
@@ -60,19 +60,21 @@ def load_encoder():
 
 
 def svg(fill, outline):
-    # The viewBox is the stroked bounds, not the path's, so the shape meets
-    # every edge of what is rendered and no size wastes a margin it then has to
-    # be scaled up to compensate for.
+    # The viewBox is the stroked bounds rather than the path's, so the shape
+    # meets every edge of what is rendered and no size wastes a margin it would
+    # then have to be scaled up to make up for. With no outline the two are the
+    # same thing.
     xs = [p[0] for p in OUTLINE]
     ys = [p[1] for p in OUTLINE]
-    sw = STROKE * (max(ys) - min(ys))
+    sw = 0.0 if outline == "none" else STROKE * (max(ys) - min(ys))
     x0, y0 = min(xs) - sw / 2, min(ys) - sw / 2
     w, h = (max(xs) - min(xs)) + sw, (max(ys) - min(ys)) + sw
     d = "M " + " L ".join(f"{x} {y}" for x, y in OUTLINE) + " Z"
+    edge = "" if sw == 0 else (f'stroke="{outline}" stroke-width="{sw}" '
+                               f'stroke-linejoin="round" stroke-linecap="round"')
     doc = (f'<svg xmlns="http://www.w3.org/2000/svg" '
            f'viewBox="{x0} {y0} {w} {h}">'
-           f'<path d="{d}" fill="{fill}" stroke="{outline}" stroke-width="{sw}" '
-           f'stroke-linejoin="round" stroke-linecap="round"/></svg>')
+           f'<path d="{d}" fill="{fill}" {edge}/></svg>')
     return doc, w / h
 
 
@@ -129,7 +131,8 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--theme", default="Spaceduck-Sky")
     ap.add_argument("--fill", default="#7dcfff")
-    ap.add_argument("--outline", default="#0f111b")
+    ap.add_argument("--outline", default="none",
+                    help='a colour, or "none" for a flat shape with no edge')
     ap.add_argument("--name", default="left_ptr",
                     help="the cursor file to replace; every standard alias for "
                          "the plain arrow already points at it")
@@ -158,7 +161,8 @@ def main():
         return 1
 
     enc.write(target, images)
-    print(f"pointer: {args.theme}/{args.name} drawn in {args.fill} on {args.outline}: "
+    edge = "no outline" if args.outline == "none" else f"outlined in {args.outline}"
+    print(f"pointer: {args.theme}/{args.name} drawn in {args.fill}, {edge}: "
           f"{len(images)} sizes, hotspot at the tip")
     return 0
 
