@@ -94,7 +94,14 @@ mirror() {
             fi
         done < <(cd -- "$to" && find . -mindepth 1 -print0)
     else
-        cp -a -- "$from" "$to"
+        # Written beside the target and moved onto it, so there is never a
+        # moment when the path does not exist. Hyprland watches its config and
+        # reads it the instant it changes: an rm followed by a cp gave it a
+        # window in which the file was gone, and it put "cannot open
+        # hyprland.lua: No such file or directory" on the screen.
+        local tmp="$to.new-$$"
+        cp -a -- "$from" "$tmp"
+        mv -T -- "$tmp" "$to"
     fi
     echo "installed $to"
 }
