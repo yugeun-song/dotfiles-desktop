@@ -29,7 +29,7 @@
 # needs no arithmetic over scale factors.
 #
 # Scale is the one thing this script cannot compute, so it is the only value
-# read from a file. Presets live in ../monitors.preset and are matched against
+# read from a file. Presets live in ~/.config/hypr/monitors.preset and are matched against
 # what a display reports about itself, so a preset written for one machine is
 # inert on any other. An output that matches nothing gets scale 1.
 #
@@ -46,7 +46,12 @@
 set -euo pipefail
 
 SCRIPT_DIR="$(cd -- "$(dirname -- "$(readlink -f "$0")")" && pwd)"
-PRESET_FILE="${HYPR_MONITOR_PRESET:-$SCRIPT_DIR/../monitors.preset}"
+# Beside the installed scripts, not derived from where this file happens to be.
+# The path used to come from $SCRIPT_DIR, which is readlink -f'd, so while
+# ~/.config/hypr/scripts was a symlink it landed in the working tree and found a
+# preset that install.sh never copied anywhere. That worked by accident and
+# stopped being true the moment the scripts became real files.
+PRESET_FILE="${HYPR_MONITOR_PRESET:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr/monitors.preset}"
 LOCAL_FILE="${HYPR_LOCAL_MONITORS:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr/local.monitors}"
 
 # make|model|scale. Make and model contain spaces, so only the ends of a line
@@ -54,7 +59,13 @@ LOCAL_FILE="${HYPR_LOCAL_MONITORS:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr/local.
 SCALES=()
 read_scales() {
     local file="$1" line
-    [[ -r "$file" ]] || return 0
+    # A missing preset is normal: a machine with no entry wants the default of
+    # 1. A preset that exists and cannot be read is not normal, and the only
+    # symptom would be a wrong scale factor, so it says so.
+    if [[ ! -r "$file" ]]; then
+        [[ -e "$file" ]] && printf 'auto_monitors: %s exists but cannot be read; using scale 1\n' "$file" >&2
+        return 0
+    fi
     while IFS= read -r line || [[ -n "$line" ]]; do
         line="${line%%#*}"
         line="${line#"${line%%[![:space:]]*}"}"

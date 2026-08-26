@@ -16,9 +16,6 @@ set -uo pipefail
 
 SELF=$$
 SCRIPTS="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
-# Resolved through the symlink install.sh leaves behind, so bin/ is found
-# from the repository rather than from wherever ~/.config points.
-REPO="$(cd -- "$(dirname -- "$(readlink -f "${BASH_SOURCE[0]}")")/../.." && pwd)"
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
 
 log() { printf 'session-autostart: %s\n' "$*" >&2; }
@@ -89,7 +86,10 @@ start argv "auto_monitors_watcher" "$SCRIPTS/auto_monitors_watcher.sh"
 # Started bare rather than via PATH: this runs from the compositor, not from a
 # login shell, and ~/.local/bin is not reliably there.
 BAR=""
-for candidate in "$HOME/.local/bin/bar" "$REPO/bin/bar"; do
+# One candidate now. The second used to be "$REPO/bin/bar", where REPO was the
+# working tree reached by resolving this script's own symlink; the scripts are
+# real files today, so that path resolved to ~/.config and could never exist.
+for candidate in "$HOME/.local/bin/bar"; do
     [[ -x "$candidate" ]] && { BAR="$candidate"; break; }
 done
 

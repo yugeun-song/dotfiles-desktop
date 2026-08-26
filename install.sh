@@ -52,51 +52,59 @@ trap cleanup EXIT
 
 acquire_sudo
 
-link() {
-    local from="$1" to="$2"
+# Copy, every run, over whatever is there.
+#
+# For what this repository authors and nothing else writes: the Hyprland
+# configuration, the scripts, the quickshell tree, the two commands in bin/.
+# These used to be symlinked, because a link makes an edit live without running
+# anything. What a link also does is make the installed path resolve back into
+# the working tree, so anything that finds a sibling by walking up from its own
+# location finds it in the repository rather than beside itself.
+# hypr/scripts/auto_monitors.sh read ../monitors.preset that way and the preset
+# was never installed at all; nothing reported it, the panel would simply have
+# come up at scale 1.
+#
+# Unlike seed() this overwrites. The repository is the source of truth here, so
+# a difference at the destination is something to lose rather than to keep. The
+# copy goes in place rather than being swapped in, because quickshell watches
+# these files and reloads on a write: a directory replaced underneath it is a
+# crash instead of a reload.
+mirror() {
+    local from="$1" to="$2" rel
     if [[ ! -e "$from" ]]; then
         echo "missing source: $from" >&2
         exit 1
     fi
+    # A link left by an older version of this script. Removing it is the whole
+    # conversion; what replaces it is the same content as a real file.
+    [[ -L "$to" ]] && rm -f "$to"
     mkdir -p "$(dirname "$to")"
-    if [[ -L "$to" && "$(readlink -f "$to")" == "$(readlink -f "$from")" ]]; then
-        echo "already linked $to"
-        return 0
+    if [[ -d "$from" ]]; then
+        [[ -e "$to" && ! -d "$to" ]] && rm -f "$to"
+        mkdir -p "$to"
+        cp -a -- "$from/." "$to/"
+        # A file the repository no longer has is one a stale binding can still
+        # reach, so it goes. Only inside this directory: local.lua and
+        # local.monitors live a level up and are not ours to delete.
+        while IFS= read -r -d '' rel; do
+            rel="${rel#./}"
+            if [[ ! -e "$from/$rel" ]]; then
+                rm -rf -- "${to:?}/$rel"
+                echo "removed stale $to/$rel"
+            fi
+        done < <(cd -- "$to" && find . -mindepth 1 -print0)
+    else
+        cp -a -- "$from" "$to"
     fi
-    # fcitx5 saves its profile by rename()-ing a temp file over the target, and
-    # rename() replaces the link rather than following it. What is left is a
-    # real file holding the newest state, so backing it up and relinking the
-    # repo copy would undo whatever was just changed. Only files are checked:
-    # for a directory the rename happens inside it and the link survives.
-    if [[ -f "$to" && ! -L "$to" && "$to" -nt "$from" ]]; then
-        echo "left $to alone: it is a real file, newer than $from"
-        echo "  something rewrote it in place; copy it into $from to keep it"
-        return 0
-    fi
-    # The new link is created under a temporary name first, so a failure here
-    # leaves the existing config where it is instead of removing it and then
-    # failing to put anything back.
-    local tmp="$to.new-$STAMP"
-    ln -s "$from" "$tmp"
-    if [[ -e "$to" || -L "$to" ]]; then
-        mv "$to" "$to.bak-$STAMP"
-        echo "kept existing config at $to.bak-$STAMP"
-    fi
-    mv -T "$tmp" "$to"
-    echo "linked $to"
+    echo "installed $to"
 }
 
-# What is still linked, and why. These four are written by hand and reloaded
-# in place: hyprctl reload and a bar restart both read them straight off disk,
-# and editing through a copy would mean running this script between every
-# change. Nothing else writes to them, so the link cannot be replaced behind
-# our back. Everything else below is seeded.
-link "$SRC/quickshell/bar"         "$CONFIG/quickshell/bar"
+mirror "$SRC/quickshell/bar"         "$CONFIG/quickshell/bar"
 # Copy, once, and then leave it alone.
 #
-# The rule this file follows: link what is authored here, seed what a program
-# owns. Everything under hypr/ and quickshell/ is written by hand and reloaded
-# in place, so a link is exactly right. The files below are not.
+# The rule this file follows: mirror what is authored here, seed what a program
+# owns. Everything under hypr/ and quickshell/ is written by hand, so the
+# repository wins on every run. The files below are not.
 #
 # fcitx5 and KDE both save by writing a temp file beside the target and
 # rename()-ing it over, and rename() replaces a symlink rather than following
@@ -139,14 +147,15 @@ seed() {
     echo "seeded $to"
 }
 
-link "$SRC/hypr/hyprland.lua"      "$CONFIG/hypr/hyprland.lua"
-link "$SRC/hypr/config"            "$CONFIG/hypr/config"
-link "$SRC/hypr/scripts"           "$CONFIG/hypr/scripts"
+mirror "$SRC/hypr/hyprland.lua"      "$CONFIG/hypr/hyprland.lua"
+mirror "$SRC/hypr/config"            "$CONFIG/hypr/config"
+mirror "$SRC/hypr/scripts"           "$CONFIG/hypr/scripts"
+mirror "$SRC/hypr/monitors.preset"  "$CONFIG/hypr/monitors.preset"
 seed "$SRC/hypr/hypridle.conf"     "$CONFIG/hypr/hypridle.conf"
 seed "$SRC/hypr/hyprlock.conf"     "$CONFIG/hypr/hyprlock.conf"
 seed "$SRC/hypr/hyprpaper.conf"    "$CONFIG/hypr/hyprpaper.conf"
-link "$SRC/bin/bar"               "$HOME/.local/bin/bar"
-link "$SRC/bin/unlock"            "$HOME/.local/bin/unlock"
+mirror "$SRC/bin/bar"               "$HOME/.local/bin/bar"
+mirror "$SRC/bin/unlock"            "$HOME/.local/bin/unlock"
 seed "$SRC/fcitx5/config"          "$CONFIG/fcitx5/config"
 seed "$SRC/fcitx5/profile"         "$CONFIG/fcitx5/profile"
 seed "$SRC/fcitx5/conf"            "$CONFIG/fcitx5/conf"
@@ -215,8 +224,13 @@ make_executable() {
     fi
 }
 
-make_executable "$SRC/quickshell/bar/scripts" "the caps lock, input method, weather and alarm pills"
-make_executable "$SRC/hypr/scripts" "the monitor, terminal and capture bindings"
+# The installed copies, not the repository. While these were symlinks the two
+# were one inode and chmod-ing either worked; they are separate files now, and
+# cp -a carries whatever mode the checkout had. A tree unpacked from an archive,
+# or cloned with core.fileMode false, arrives at 644, and then the key bindings
+# do nothing and the pills never fill while this script still reports success.
+make_executable "$CONFIG/quickshell/bar/scripts" "the caps lock, input method, weather and alarm pills"
+make_executable "$CONFIG/hypr/scripts" "the monitor, terminal and capture bindings"
 
 echo
 if [[ -f "$FONTCONF" ]] && cmp -s "$SRC/fontconfig/local.conf" "$FONTCONF"; then

@@ -29,6 +29,11 @@ trap 'rm -rf -- "$work"' EXIT
 # back to the repository. Without it $work/config is a link to the real
 # tree, and emptying $work/config/execs.lua below writes straight through
 # it and destroys the committed file.
+# -L follows a link instead of copying it. That mattered while ~/.config/hypr
+# held symlinks into the working tree: without it the copy was a link too, and
+# emptying execs.lua below would have followed it and truncated the real file.
+# The tree is real files now, so -L is a no-op here and is kept because the
+# argument for it comes back the moment anything is linked again.
 cp -aL -- "$SRC/hyprland.lua" "$work/"
 cp -aL -- "$SRC/config" "$work/"
 
