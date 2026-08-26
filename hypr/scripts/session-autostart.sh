@@ -125,8 +125,25 @@ fi
 # and this only runs when there is none to replace.
 start comm "fcitx5" fcitx5 -d
 
-# Idle and lock.
-start comm "hypridle" hypridle
+# hypridle runs under the unit its own package ships, not from here.
+#
+# Every way of locking this machine is `loginctl lock-session`, which asks
+# logind to emit a signal and returns. The only thing that answers that signal
+# is hypridle's lock_cmd. Started from this script it had nothing watching it,
+# so if it ever died the lock key, the power menu's Lock and the pre-suspend
+# lock would all go on returning success while the screen stayed unlocked.
+#
+# The packaged unit has Restart=on-failure and WantedBy=graphical-session.target,
+# which is the supervision and the ordering both. Enabled once:
+#   systemctl --user enable hypridle.service
+if systemctl --user is-enabled hypridle.service >/dev/null 2>&1; then
+    systemctl --user start hypridle.service 2>/dev/null \
+        || log "could not start hypridle.service; the screen will not lock"
+else
+    log "hypridle.service is not enabled; run: systemctl --user enable --now hypridle.service"
+    log "  until then nothing answers loginctl lock-session and the screen will not lock"
+fi
+
 
 # Clipboard history, kept out of the shell so it survives a shell restart.
 start argv "wl-paste --type text"  wl-paste --type text  --watch cliphist store
