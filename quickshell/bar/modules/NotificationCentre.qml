@@ -30,15 +30,27 @@ Scope {
 
     // Absolute time, not "3 minutes ago". A relative label has to be recomputed
     // to stay true, and one that silently stops updating is worse than a clock.
+    //
+    // Written out whole: date, seconds, and the offset. This list is read to
+    // answer "when exactly", and the short form could not. It hid the date
+    // whenever the notification had arrived today, which is most of them and
+    // exactly the ones where the answer sounds obvious and is not; and a bare
+    // clock reading never says which clock it was read from.
+    //
+    // The offset is a number rather than an abbreviation, for the reason
+    // LeftPills gives: an abbreviation has to be recognised before it says
+    // anything, and several are ambiguous across regions. Minutes appear only
+    // when they are not zero, so Seoul reads UTC+9 and Kathmandu UTC+5:45.
     function stamp(ms) {
         const d = new Date(ms);
         const p = n => (n < 10 ? "0" : "") + n;
-        const now = new Date();
-        const sameDay = d.getFullYear() === now.getFullYear()
-                     && d.getMonth() === now.getMonth()
-                     && d.getDate() === now.getDate();
-        const clock = p(d.getHours()) + ":" + p(d.getMinutes());
-        return sameDay ? clock : `${p(d.getMonth() + 1)}-${p(d.getDate())} ${clock}`;
+        const mins = -d.getTimezoneOffset();
+        const sign = mins < 0 ? "-" : "+";
+        const oh = Math.floor(Math.abs(mins) / 60);
+        const om = Math.abs(mins) % 60;
+        const zone = "UTC" + sign + oh + (om === 0 ? "" : ":" + p(om));
+        return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} `
+             + `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())} ${zone}`;
     }
 
     GlobalShortcut {
@@ -103,8 +115,57 @@ Scope {
                     anchors.topMargin: Theme.barHeight + Theme.px(8)
                     anchors.rightMargin: Theme.edgeMarginRight
                     width: Theme.px(510)
-                    height: Math.min(parent.height - Theme.barHeight - Theme.px(28),
-                                     header.height + list.contentHeight + Theme.px(28))
+
+                    // Everything inside the card that is not the list: the
+                    // header's own top margin, the header, the gap under it and
+                    // the card's bottom margin.
+                    //
+                    // This used to be the literal px(28), which is px(8) short
+                    // of what those four actually come to, and px(8) is what
+                    // was being cut off the bottom row. A number that has to
+                    // agree with four anchors elsewhere in the file will stop
+                    // agreeing with them; adding them up cannot.
+                    readonly property int chrome: Theme.px(14) + header.height
+                                                + Theme.px(10) + Theme.px(12)
+
+                    // How much of the screen this may take. It is a panel over
+                    // work in progress, not a page, so it gets a share of what
+                    // the bar leaves rather than all of it. 45% is high enough
+                    // to hold six or seven notifications on this screen and low
+                    // enough that the window behind it is still the thing being
+                    // used.
+                    readonly property int limit:
+                        Math.round((parent.height - Theme.barHeight) * 0.45)
+
+                    // One row plus the gap under it, averaged over the list.
+                    //
+                    // Rows are not all the same height, so this is an average
+                    // and the alignment it buys is approximate. It is worth
+                    // having anyway: these notifications mostly arrive from two
+                    // or three senders in the same shape, so in practice the
+                    // average is the height, and the limit lands on a boundary
+                    // between rows instead of through the middle of one.
+                    readonly property real rowUnit: {
+                        const n = Notifications.history.length;
+                        return n > 0 ? (list.contentHeight + list.spacing) / n : 0;
+                    }
+
+                    height: {
+                        const n = Notifications.history.length;
+                        if (n === 0)
+                            return card.chrome + Theme.px(30);
+                        const full = card.chrome + list.contentHeight;
+                        if (full <= card.limit)
+                            return full;
+                        if (card.rowUnit <= 0)
+                            return card.limit;
+                        // Whole rows only. Anything left over would be a strip
+                        // of a row, which reads as a rendering fault rather
+                        // than as "there is more below".
+                        const rows = Math.max(1, Math.floor(
+                            (card.limit - card.chrome + list.spacing) / card.rowUnit));
+                        return Math.round(card.chrome + rows * card.rowUnit - list.spacing);
+                    }
                     radius: Theme.px(14)
                     color: Theme.bgAlt
                     border.width: 1
@@ -132,48 +193,43 @@ Scope {
                         anchors.margins: Theme.px(14)
                         height: Theme.px(22)
 
+                        // The count leads the word. It was on the far right as
+                        // "18 kept", which put the only part of this line that
+                        // ever changes as far as possible from the part that
+                        // never does, and made a label out of a panel that
+                        // already announces itself by being open.
                         Text {
                             anchors.left: parent.left
                             anchors.verticalCenter: parent.verticalCenter
-                            text: "Notifications"
+                            text: Notifications.history.length + " Notification"
+                                  + (Notifications.history.length === 1 ? "" : "s")
                             font.family: Theme.uiFont
                             font.pixelSize: Theme.px(16)
                             font.weight: Font.DemiBold
                             color: Theme.fg
                         }
 
-                        Row {
+                        // The only control left on this panel, so it is drawn at
+                        // a size that says so. It was the smaller of two icons
+                        // while every row also carried a close button.
+                        Text {
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
-                            spacing: Theme.px(10)
+                            visible: Notifications.history.length > 0
+                            text: Theme.iconClearAll
+                            font.family: Theme.iconFont
+                            font.pixelSize: Theme.px(30)
+                            color: sweep.containsMouse ? Theme.accentRed : Theme.muted
 
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                text: Notifications.history.length === 0
-                                      ? "" : Notifications.history.length + " kept"
-                                font.family: Theme.uiFont
-                                font.pixelSize: Theme.px(12)
-                                color: Theme.muted
-                            }
+                            MouseArea {
+                                id: sweep
 
-                            Text {
-                                anchors.verticalCenter: parent.verticalCenter
-                                visible: Notifications.history.length > 0
-                                text: Theme.iconClearAll
-                                font.family: Theme.iconFont
-                                font.pixelSize: Theme.px(23)
-                                color: sweep.containsMouse ? Theme.accentRed : Theme.muted
+                                anchors.fill: parent
+                                anchors.margins: -Theme.px(8)
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
 
-                                MouseArea {
-                                    id: sweep
-
-                                    anchors.fill: parent
-                                    anchors.margins: -Theme.px(5)
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-
-                                    onClicked: Notifications.clear()
-                                }
+                                onClicked: Notifications.clear()
                             }
                         }
                     }
@@ -304,7 +360,9 @@ Scope {
                                     anchors.right: parent.right
                                     anchors.top: parent.top
                                     anchors.leftMargin: Theme.px(11)
-                                    anchors.rightMargin: Theme.px(48)
+                                    // Was 48, holding a gap for a close button
+                                    // that is no longer drawn.
+                                    anchors.rightMargin: Theme.px(12)
                                     anchors.topMargin: Theme.px(10)
                                     spacing: Theme.px(4)
 
@@ -403,31 +461,6 @@ Scope {
                                     }
                                 }
 
-                                Text {
-                                    anchors.right: parent.right
-                                    anchors.rightMargin: Theme.px(10)
-                                    anchors.top: parent.top
-                                    anchors.topMargin: Theme.px(9)
-                                    text: Theme.iconClose
-                                    font.family: Theme.iconFont
-                                    font.pixelSize: Theme.px(25)
-                                    color: kill.containsMouse ? Theme.accentRed : Theme.accentQuiet
-
-                                    MouseArea {
-                                        id: kill
-
-                                        anchors.fill: parent
-                                        anchors.margins: -Theme.px(10)
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-
-                                        // Deliberately the same animation the
-                                        // swipe uses. The button and the gesture
-                                        // do the same thing, so they should not
-                                        // look like different things.
-                                        onClicked: leaving.start()
-                                    }
-                                }
                             }
                         }
                     }
