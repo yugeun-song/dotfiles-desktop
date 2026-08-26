@@ -86,22 +86,74 @@ link() {
     echo "linked $to"
 }
 
+# What is still linked, and why. These four are written by hand and reloaded
+# in place: hyprctl reload and a bar restart both read them straight off disk,
+# and editing through a copy would mean running this script between every
+# change. Nothing else writes to them, so the link cannot be replaced behind
+# our back. Everything else below is seeded.
 link "$SRC/quickshell/bar"         "$CONFIG/quickshell/bar"
+# Copy, once, and then leave it alone.
+#
+# The rule this file follows: link what is authored here, seed what a program
+# owns. Everything under hypr/ and quickshell/ is written by hand and reloaded
+# in place, so a link is exactly right. The files below are not.
+#
+# fcitx5 and KDE both save by writing a temp file beside the target and
+# rename()-ing it over, and rename() replaces a symlink rather than following
+# it. The first change made in either settings window turns the link into a
+# real file, and the repository quietly stops being what the machine reads.
+# GTK's tooling does the same to settings.ini.
+#
+# Linking those pretends to a relationship that does not survive first contact.
+# Seeding says what is true: this is where the settings start, and the program
+# owns them from then on. To take a change back, copy the file into the
+# repository; to push one out, delete the file and run this again.
+seed() {
+    local from="$1" to="$2"
+    if [[ ! -e "$from" ]]; then
+        echo "missing source: $from" >&2
+        exit 1
+    fi
+    # A link left by an older version of this script. The content matches by
+    # definition, so the only thing to do is turn it into the real file it
+    # should have been, which is what makes the next in-place rewrite land
+    # somewhere harmless.
+    if [[ -L "$to" ]]; then
+        rm -f "$to"
+        mkdir -p "$(dirname "$to")"
+        cp -a "$from" "$to"
+        echo "unlinked and seeded $to"
+        return 0
+    fi
+    if [[ -e "$to" ]]; then
+        if diff -rq "$from" "$to" >/dev/null 2>&1; then
+            echo "already seeded $to"
+        else
+            echo "left $to alone: it exists and differs from $from"
+            echo "  fcitx5 owns it now; copy it back into $from to keep the change"
+        fi
+        return 0
+    fi
+    mkdir -p "$(dirname "$to")"
+    cp -a "$from" "$to"
+    echo "seeded $to"
+}
+
 link "$SRC/hypr/hyprland.lua"      "$CONFIG/hypr/hyprland.lua"
 link "$SRC/hypr/config"            "$CONFIG/hypr/config"
 link "$SRC/hypr/scripts"           "$CONFIG/hypr/scripts"
-link "$SRC/hypr/hypridle.conf"     "$CONFIG/hypr/hypridle.conf"
-link "$SRC/hypr/hyprlock.conf"     "$CONFIG/hypr/hyprlock.conf"
-link "$SRC/hypr/hyprpaper.conf"    "$CONFIG/hypr/hyprpaper.conf"
+seed "$SRC/hypr/hypridle.conf"     "$CONFIG/hypr/hypridle.conf"
+seed "$SRC/hypr/hyprlock.conf"     "$CONFIG/hypr/hyprlock.conf"
+seed "$SRC/hypr/hyprpaper.conf"    "$CONFIG/hypr/hyprpaper.conf"
 link "$SRC/bin/bar"               "$HOME/.local/bin/bar"
 link "$SRC/bin/unlock"            "$HOME/.local/bin/unlock"
-link "$SRC/fcitx5/config"          "$CONFIG/fcitx5/config"
-link "$SRC/fcitx5/profile"         "$CONFIG/fcitx5/profile"
-link "$SRC/fcitx5/conf"            "$CONFIG/fcitx5/conf"
-link "$SRC/gtk/gtk-3.0-settings.ini" "$CONFIG/gtk-3.0/settings.ini"
-link "$SRC/gtk/gtk-4.0-settings.ini" "$CONFIG/gtk-4.0/settings.ini"
-link "$SRC/kde/kdeglobals"        "$CONFIG/kdeglobals"
-link "$SRC/kde/SpaceduckDark.colors" "$HOME/.local/share/color-schemes/SpaceduckDark.colors"
+seed "$SRC/fcitx5/config"          "$CONFIG/fcitx5/config"
+seed "$SRC/fcitx5/profile"         "$CONFIG/fcitx5/profile"
+seed "$SRC/fcitx5/conf"            "$CONFIG/fcitx5/conf"
+seed "$SRC/gtk/gtk-3.0-settings.ini" "$CONFIG/gtk-3.0/settings.ini"
+seed "$SRC/gtk/gtk-4.0-settings.ini" "$CONFIG/gtk-4.0/settings.ini"
+seed "$SRC/kde/kdeglobals"        "$CONFIG/kdeglobals"
+seed "$SRC/kde/SpaceduckDark.colors" "$HOME/.local/share/color-schemes/SpaceduckDark.colors"
 
 # hypr/config/execs.lua starts hyprland-session.target when the compositor
 # comes up, and that target is the only thing that pulls graphical-session.target
