@@ -49,6 +49,10 @@ Scope {
     property var columns: []
     property int total: 0
 
+    // Only the symbols this machine's bindings actually use. A legend that
+    // lists glyphs which are not on the page is a second thing to keep true.
+    property var legend: []
+
     // Hyprland reports the modifiers as a bitmask. The mask is a sum, so 69 is
     // SUPER+CTRL+SHIFT.
     readonly property var modNames: [
@@ -69,14 +73,25 @@ Scope {
         return bits * 1000 + mask;
     }
 
-    // The whole chord, in the order the fingers take it.
+    // The whole chord, written the way the caps in the key overlay write it:
+    // the modifiers as their printed symbols, run together because they are one
+    // hand shape, then the key.
+    //
+    // "Super + Ctrl + Alt + Shift + Delete" is thirty-four characters of mostly
+    // the same four words repeated down the column, and a reader scanning for
+    // one binding has to read all of it to rule each row out. The symbols are
+    // four glyphs, and the shape of them is recognised without being read.
+    //
+    // The cost is that a symbol has to be learned once, which is what the
+    // legend along the bottom is for.
     function chordLabel(mask, key) {
-        const parts = [];
+        let mods = "";
         for (let i = 0; i < root.modNames.length; i++)
             if (mask & root.modNames[i].bit)
-                parts.push(root.modNames[i].name);
-        parts.push(root.keyLabel(key));
-        return parts.join(" + ");
+                mods += Theme.modSymbol[root.modNames[i].name];
+        const k = root.keyLabel(key);
+        const sym = Theme.keySymbol[k];
+        return mods + (mods ? "  " : "") + (sym !== undefined ? sym : k);
     }
 
     // A key name as it is typed, not as X11 spells it.
@@ -159,6 +174,25 @@ Scope {
                 for (let c = 0; c < root.columnCount; c++)
                     cols.push(rows.slice(c * per, (c + 1) * per));
 
+                // Everything the chords ended up drawing, in the order the
+                // legend should read: modifiers first, then keys.
+                const seen = {};
+                for (let i = 0; i < rows.length; i++) {
+                    const c = rows[i].chord;
+                    for (let j = 0; j < c.length; j++)
+                        if (Theme.symbolName[c[j]] !== undefined)
+                            seen[c[j]] = Theme.symbolName[c[j]];
+                }
+                const order = Object.keys(Theme.modSymbol)
+                                    .map(n => Theme.modSymbol[n])
+                                    .concat(Object.keys(Theme.keySymbol)
+                                                  .map(n => Theme.keySymbol[n]));
+                const key = [];
+                for (let i = 0; i < order.length; i++)
+                    if (seen[order[i]] !== undefined)
+                        key.push({ sym: order[i], name: seen[order[i]] });
+
+                root.legend = key;
                 root.total = rows.length;
                 root.columns = cols;
             }
@@ -265,7 +299,7 @@ Scope {
                         anchors.right: parent.right
                         anchors.rightMargin: card.gutter
                         text: "Esc to close"
-                        font.family: Theme.monoFont
+                        font.family: Theme.uiFont
                         font.pixelSize: Theme.px(14)
                         color: Theme.muted
                     }
@@ -301,7 +335,7 @@ Scope {
                                         anchors.bottom: parent.bottom
                                         anchors.bottomMargin: Theme.px(6)
                                         text: "KEYS"
-                                        font.family: Theme.monoFont
+                                        font.family: Theme.uiFont
                                         font.pixelSize: Theme.px(13)
                                         font.letterSpacing: Theme.px(2)
                                         color: Theme.accentTeal
@@ -313,7 +347,7 @@ Scope {
                                         anchors.bottom: parent.bottom
                                         anchors.bottomMargin: Theme.px(6)
                                         text: "ACTION"
-                                        font.family: Theme.monoFont
+                                        font.family: Theme.uiFont
                                         font.pixelSize: Theme.px(13)
                                         font.letterSpacing: Theme.px(2)
                                         color: Theme.accentTeal
@@ -336,11 +370,12 @@ Scope {
                     // table is that the second column starts in the same place
                     // on every line whether or not the first one filled it.
                     //
-                    // Sized against the longest chord this machine has rather
-                    // than guessed. "Super + Ctrl + Alt + Shift + Delete" is 34
-                    // characters, and the mono face at this size gives a little
-                    // over nine pixels each.
-                    readonly property int chordWidth: Theme.px(320)
+                    // Narrower than it was, because the chords are symbols now.
+                    // What sets it is no longer the modifiers but the handful of
+                    // keys that keep their words: "Brightness Down" and
+                    // "Super (right)" are the longest, and they sit under four
+                    // modifier glyphs at worst.
+                    readonly property int chordWidth: Theme.px(215)
 
                     Flickable {
                         id: body
@@ -404,7 +439,7 @@ Scope {
                                                 anchors.verticalCenter: parent.verticalCenter
                                                 width: card.chordWidth
                                                 text: row.modelData.chord
-                                                font.family: Theme.monoFont
+                                                font.family: Theme.uiFont
                                                 font.pixelSize: Theme.px(15)
                                                 color: Theme.beige
                                                 elide: Text.ElideRight
@@ -440,9 +475,7 @@ Scope {
                         }
                     }
 
-                    // The footer says how much there is and how far down it we
-                    // are, which is the one thing a table that scrolls cannot
-                    // show by itself.
+                    // The legend, which is the only thing under the table.
                     Item {
                         id: foot
 
@@ -452,7 +485,7 @@ Scope {
                         anchors.leftMargin: card.gutter
                         anchors.rightMargin: card.gutter
                         anchors.bottomMargin: Theme.px(16)
-                        height: Theme.px(28)
+                        height: Theme.px(30)
 
                         Rectangle {
                             anchors.top: parent.top
@@ -462,27 +495,38 @@ Scope {
                             opacity: 0.5
                         }
 
-                        Text {
+                        // What each glyph in the chords stands for. This is the
+                        // whole price of writing them as symbols, and it is paid
+                        // once, here, where the eye lands after the table.
+                        Flow {
                             anchors.left: parent.left
-                            anchors.bottom: parent.bottom
-                            text: root.total + " bindings"
-                            font.family: Theme.monoFont
-                            font.pixelSize: Theme.px(14)
-                            color: Theme.muted
-                        }
-
-                        Text {
                             anchors.right: parent.right
                             anchors.bottom: parent.bottom
-                            visible: body.contentHeight > body.height
-                            text: {
-                                const span = body.contentHeight - body.height;
-                                const at = span > 0 ? Math.round(body.contentY / span * 100) : 100;
-                                return Math.max(0, Math.min(100, at)) + "% down";
+                            spacing: Theme.px(20)
+
+                            Repeater {
+                                model: root.legend
+
+                                Row {
+                                    required property var modelData
+
+                                    spacing: Theme.px(6)
+
+                                    Text {
+                                        text: parent.modelData.sym
+                                        font.family: Theme.uiFont
+                                        font.pixelSize: Theme.px(15)
+                                        color: Theme.beige
+                                    }
+
+                                    Text {
+                                        text: parent.modelData.name
+                                        font.family: Theme.uiFont
+                                        font.pixelSize: Theme.px(14)
+                                        color: Theme.muted
+                                    }
+                                }
                             }
-                            font.family: Theme.monoFont
-                            font.pixelSize: Theme.px(14)
-                            color: Theme.muted
                         }
                     }
                 }

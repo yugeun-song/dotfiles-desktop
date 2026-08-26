@@ -40,32 +40,8 @@ Singleton {
     // Super takes the diamond rather than the command glyph: this is Linux, and
     // U+2318 means Command on a Mac. Borrowing it would be saying the wrong
     // thing in a symbol chosen for being unambiguous.
-    readonly property var modSymbol: ({
-        "Ctrl":  "\u2303",
-        "Alt":   "\u2325",
-        "Shift": "\u21E7",
-        "Super": "\u2756"
-    })
-
-    // The keys that have had a printed symbol longer than they have had a name.
-    // Every codepoint here was checked against Inter, which is what the caps
-    // draw with; the ones Inter does not carry, Home and End among them, keep
-    // their words rather than becoming a box.
-    readonly property var keySymbol: ({
-        "Enter":     "\u23CE",
-        "Tab":       "\u21E5",
-        "Backspace": "\u232B",
-        "Del":       "\u2326",
-        "Esc":       "\u238B",
-        "Space":     "\u2423",
-        "Caps":      "\u21EA",
-        "PgUp":      "\u21DE",
-        "PgDn":      "\u21DF",
-        "Up":        "\u2191",
-        "Down":      "\u2193",
-        "Left":      "\u2190",
-        "Right":     "\u2192"
-    })
+    // The tables moved to Theme, which is where both drawers of them can
+    // reach without reaching this file's device reader as well.
 
     // The keys Inter has no symbol for. These come from the icon font instead,
     // and every one is a codepoint Theme already draws somewhere in the bar, so
@@ -89,7 +65,7 @@ Singleton {
     })
 
     function keyLabel(name) {
-        return root.keyIcon[name] ?? root.keySymbol[name] ?? name;
+        return root.keyIcon[name] ?? Theme.keySymbol[name] ?? name;
     }
 
     // Which family draws it. A glyph from the icon font rendered in Inter is a
@@ -107,7 +83,7 @@ Singleton {
         let out = "";
         for (let i = 0; i < order.length; i++)
             if (mods.indexOf(order[i]) !== -1)
-                out += root.modSymbol[order[i]];
+                out += Theme.modSymbol[order[i]];
         return out;
     }
 

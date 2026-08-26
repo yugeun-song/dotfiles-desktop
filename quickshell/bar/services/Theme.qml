@@ -152,6 +152,52 @@ Singleton {
     // and a reader of either should not have to know they are the same file.
     readonly property string monoFont: "CaskaydiaCove Nerd Font Mono"
 
+    // The printed symbols for the keys that have one, and the modifiers.
+    //
+    // They live here rather than in KeyFeed because two things draw them now:
+    // the key overlay and the cheatsheet. KeyFeed reads a device and would drag
+    // that along with it, and a table of glyphs is not a thing that reads a
+    // device.
+    //
+    // Super takes the diamond rather than the command glyph: this is Linux, and
+    // U+2318 means Command on a Mac. Borrowing it would be saying the wrong
+    // thing in a symbol chosen for being unambiguous.
+    readonly property var modSymbol: ({
+        "Ctrl":  "\u2303",
+        "Alt":   "\u2325",
+        "Shift": "\u21E7",
+        "Super": "\u2756"
+    })
+
+    // Every codepoint here was checked against Inter, which is what draws them.
+    // The ones Inter does not carry, Home and End among them, keep their words
+    // rather than becoming a box.
+    readonly property var keySymbol: ({
+        "Enter":     "\u23CE",
+        "Tab":       "\u21E5",
+        "Backspace": "\u232B",
+        "Del":       "\u2326",
+        "Esc":       "\u238B",
+        "Space":     "\u2423",
+        "Caps":      "\u21EA",
+        "PgUp":      "\u21DE",
+        "PgDn":      "\u21DF",
+        "Up":        "\u2191",
+        "Down":      "\u2193",
+        "Left":      "\u2190",
+        "Right":     "\u2192"
+    })
+
+    // What each of those means, for the legend the cheatsheet prints. A symbol
+    // that has to be guessed at is worse than the word it replaced.
+    readonly property var symbolName: ({
+        "\u2303": "Ctrl", "\u2325": "Alt", "\u21E7": "Shift", "\u2756": "Super",
+        "\u23CE": "Enter", "\u21E5": "Tab", "\u232B": "Backspace",
+        "\u2326": "Delete", "\u238B": "Esc", "\u2423": "Space",
+        "\u21EA": "Caps Lock", "\u21DE": "Page Up", "\u21DF": "Page Down",
+        "\u2191": "Up", "\u2193": "Down", "\u2190": "Left", "\u2192": "Right"
+    })
+
     readonly property int workspaceCount: 10
 
     // Nerd Font glyphs are written as code points, not literals: the astral
