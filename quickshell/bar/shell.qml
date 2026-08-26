@@ -20,6 +20,14 @@ ShellRoot {
 
     Cheatsheet {}
 
+    // These two are what start the notification daemon. A QML singleton is
+    // created on first reference, so with nothing instantiating them the
+    // NotificationServer inside Notifications never runs and the bus name stays
+    // unowned -- which is exactly the state this machine was in.
+    NotificationToasts {}
+
+    NotificationCentre {}
+
     Osd {
         id: osd
     }

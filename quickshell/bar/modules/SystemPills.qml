@@ -244,4 +244,19 @@ Location  ${Weather.place}`
         command: root.terminal.concat([root.hyprScripts + "/launch.sh", "btop", "htop", "top"])
         tooltip: `Memory    ${Resources.memUsedGb.toFixed(1)} of ${Resources.memTotalGb.toFixed(1)} GB\nIn use    ${Resources.memPercent}%\nSource    MemAvailable in /proc/meminfo\nClick to open btop`
     }
+    // Deliberately last, so it sits at the outer right edge of the bar.
+    Pill {
+        icon: Notifications.unread > 0 ? Theme.iconBellBadge
+            : Notifications.history.length > 0 ? Theme.iconBell
+            : Theme.iconBellOff
+        label: Notifications.unread > 0 ? `${Notifications.unread}` : ""
+        labelWidth: Notifications.unread > 0 ? Theme.percentWidth : 0
+        fill: Notifications.unread > 0 ? Theme.accentAmber : Theme.muted
+        tooltip: Notifications.history.length === 0
+                 ? "No notifications yet\nClick to open the history"
+                 : `Unread    ${Notifications.unread}\nKept      ${Notifications.history.length}\nClick to open the history`
+
+        onActivated: Notifications.toggleCentre()
+    }
+
 }
