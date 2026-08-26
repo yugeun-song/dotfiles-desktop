@@ -1,28 +1,32 @@
 import QtQuick
 import qs.services
 
-// One key, drawn as a cap rather than as a label.
+// One key press, drawn as a cap.
 //
-// The shape is two rectangles, not one with a shadow: the lower one is the
-// side of the key and the upper one its face, offset up by a couple of pixels.
-// Qt Quick has no cheap drop shadow without pulling in the effects module, and
-// this reads as a physical key in a way a flat chip does not.
+// Modifiers do not get caps of their own. Shift and D pressed together are one
+// event, not two, and two caps side by side say the opposite: that something
+// happened twice. The modifiers are drawn as their symbols, in front of the key
+// and inside the same cap, which is the convention every keyboard shortcut in
+// print has used for decades.
+//
+// The shape is two rectangles rather than one with a shadow. The lower one is
+// the side of the key and the upper one its face, offset up by a few pixels.
+// Qt Quick has no cheap drop shadow without the effects module, and this reads
+// as a physical key in a way a flat chip does not.
 Item {
     id: root
 
+    // The modifier symbols, already assembled: "" or "⌃⇧".
+    property string mods: ""
     property string text: ""
-    property bool modifier: false
 
-    // bgAlt, not surface. theme/DESIGN.md proposes surface as the role name for
-    // this colour but nothing implements it yet, and a name that does not exist
-    // binds to undefined rather than failing, so the cap draws with no face.
-    readonly property color face: root.modifier ? Theme.bgAlt : Theme.beige
-    readonly property color side: root.modifier ? Theme.bg : Theme.accentQuiet
+    readonly property color face: Theme.beige
+    readonly property color side: Theme.accentQuiet
     readonly property color ink: Theme.readableOn(root.face)
 
     readonly property int lift: Theme.px(3)
 
-    implicitWidth: Math.max(label.implicitWidth + Theme.px(18), Theme.px(38))
+    implicitWidth: Math.max(label.implicitWidth + Theme.px(20), Theme.px(42))
     implicitHeight: label.implicitHeight + Theme.px(16) + root.lift
 
     Rectangle {
@@ -42,17 +46,37 @@ Item {
         radius: Theme.px(8)
         color: root.face
         border.width: 1
-        border.color: root.modifier ? Theme.accentQuiet : Theme.bg
+        border.color: Theme.bg
 
-        Text {
+        Row {
             id: label
 
             anchors.centerIn: parent
-            text: root.text
-            font.family: Theme.uiFont
-            font.pixelSize: root.modifier ? Theme.px(13) : Theme.px(16)
-            font.weight: Font.DemiBold
-            color: root.ink
+            spacing: Theme.px(2)
+
+            // Dimmer than the key it modifies, because it is the qualifier and
+            // not the thing that happened. Same family, same size and the same
+            // weight: opacity alone carries that difference, and letting the
+            // weight carry it too made the symbol read as a different typeface
+            // sitting next to the letter.
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.mods !== ""
+                text: root.mods
+                font.family: Theme.uiFont
+                font.pixelSize: Theme.px(17)
+                font.weight: Font.DemiBold
+                color: Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.55)
+            }
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                text: root.text
+                font.family: Theme.uiFont
+                font.pixelSize: Theme.px(17)
+                font.weight: Font.DemiBold
+                color: root.ink
+            }
         }
     }
 }

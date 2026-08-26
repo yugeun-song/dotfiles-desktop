@@ -29,9 +29,59 @@ Singleton {
 
     // Long enough to read a chord that went past quickly, short enough that the
     // overlay is gone before it becomes furniture.
-    readonly property int dwellMs: 1600
+    readonly property int dwellMs: 2600
 
     readonly property int maxVisible: 5
+
+    // The symbols every printed keyboard shortcut has used for decades. They
+    // are not in the Nerd Font the icons come from, but they are in Inter,
+    // which is what the caps already draw their labels with.
+    //
+    // Super takes the diamond rather than the command glyph: this is Linux, and
+    // U+2318 means Command on a Mac. Borrowing it would be saying the wrong
+    // thing in a symbol chosen for being unambiguous.
+    readonly property var modSymbol: ({
+        "Ctrl":  "\u2303",
+        "Alt":   "\u2325",
+        "Shift": "\u21E7",
+        "Super": "\u2756"
+    })
+
+    // The keys that have had a printed symbol longer than they have had a name.
+    // Every codepoint here was checked against Inter, which is what the caps
+    // draw with; the ones Inter does not carry, Home and End among them, keep
+    // their words rather than becoming a box.
+    readonly property var keySymbol: ({
+        "Enter":     "\u23CE",
+        "Tab":       "\u21E5",
+        "Backspace": "\u232B",
+        "Del":       "\u2326",
+        "Esc":       "\u238B",
+        "Space":     "\u2423",
+        "Caps":      "\u21EA",
+        "PgUp":      "\u21DE",
+        "PgDn":      "\u21DF",
+        "Up":        "\u2191",
+        "Down":      "\u2193",
+        "Left":      "\u2190",
+        "Right":     "\u2192"
+    })
+
+    function keyLabel(name) {
+        return root.keySymbol[name] ?? name;
+    }
+
+    // Ctrl, Alt, Shift, Super, which is the order they are printed in and so
+    // the order they are read in. The feed sends names; assembling them is the
+    // shell's job, so that replacing the reader leaves this table alone.
+    function symbolsFor(mods) {
+        const order = ["Ctrl", "Alt", "Shift", "Super"];
+        let out = "";
+        for (let i = 0; i < order.length; i++)
+            if (mods.indexOf(order[i]) !== -1)
+                out += root.modSymbol[order[i]];
+        return out;
+    }
 
     property int nextId: 0
     property string failure: ""

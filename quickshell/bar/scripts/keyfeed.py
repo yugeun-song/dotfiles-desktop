@@ -12,6 +12,10 @@ that prints the same lines will do.
 Physical keys are reported, not composed characters. That is what a key
 visualiser is for, and it is also the only honest answer here: Hangul syllables
 are assembled by fcitx5 from several keystrokes and never appear as one.
+
+Names, not symbols. Whether Escape is drawn as a word or as U+238B is a question
+about the overlay, and keeping it there means a reader that prints these same
+lines can be swapped in without carrying a table of glyphs with it.
 """
 
 import json
@@ -50,7 +54,7 @@ PRETTY = {
     "KEY_BACKSPACE": "Backspace", "KEY_TAB": "Tab", "KEY_CAPSLOCK": "Caps",
     "KEY_DELETE": "Del", "KEY_INSERT": "Ins", "KEY_HOME": "Home",
     "KEY_END": "End", "KEY_PAGEUP": "PgUp", "KEY_PAGEDOWN": "PgDn",
-    "KEY_UP": "↑", "KEY_DOWN": "↓", "KEY_LEFT": "←", "KEY_RIGHT": "→",
+    "KEY_UP": "Up", "KEY_DOWN": "Down", "KEY_LEFT": "Left", "KEY_RIGHT": "Right",
     "KEY_MINUS": "-", "KEY_EQUAL": "=", "KEY_LEFTBRACE": "[",
     "KEY_RIGHTBRACE": "]", "KEY_BACKSLASH": "\\", "KEY_SEMICOLON": ";",
     "KEY_APOSTROPHE": "'", "KEY_GRAVE": "`", "KEY_COMMA": ",",

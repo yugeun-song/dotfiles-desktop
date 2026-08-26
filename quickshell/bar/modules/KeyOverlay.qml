@@ -46,7 +46,10 @@ Scope {
                 bottom: Theme.px(56)
             }
 
-            implicitHeight: Math.max(1, row.implicitHeight + Theme.px(8))
+            // Room below the row for a cap to travel into on its way out. The
+            // window does not paint, so the space costs nothing and a card that
+            // slid to the window edge would be cut off instead of leaving.
+            implicitHeight: Math.max(1, row.implicitHeight + Theme.px(46))
 
             // Nothing to show yet, and nothing to say about it: an empty strip
             // at the foot of the screen reads as a rendering fault.
@@ -63,7 +66,8 @@ Scope {
                 id: row
 
                 anchors.horizontalCenter: parent.horizontalCenter
-                anchors.verticalCenter: parent.verticalCenter
+                anchors.top: parent.top
+                anchors.topMargin: Theme.px(4)
                 spacing: Theme.px(10)
 
                 Repeater {
@@ -85,19 +89,31 @@ Scope {
                         SequentialAnimation {
                             id: leaving
 
+                            // Falls out of the strip rather than dissolving in
+                            // place. A key that fades reads as the drawing
+                            // failing; one that drops reads as the press being
+                            // over, and it leaves in the direction the eye is
+                            // already prepared for by the entrance.
                             ParallelAnimation {
+                                NumberAnimation {
+                                    target: chord
+                                    property: "y"
+                                    to: Theme.px(38)
+                                    duration: 260
+                                    easing.type: Easing.InCubic
+                                }
                                 NumberAnimation {
                                     target: chord
                                     property: "opacity"
                                     to: 0
-                                    duration: 180
+                                    duration: 260
                                     easing.type: Easing.InQuad
                                 }
                                 NumberAnimation {
                                     target: chord
                                     property: "scale"
-                                    to: 0.82
-                                    duration: 180
+                                    to: 0.9
+                                    duration: 260
                                     easing.type: Easing.InQuad
                                 }
                             }
@@ -160,20 +176,9 @@ Scope {
                                 }
                             }
 
-                            Repeater {
-                                model: slot.modelData.mods
-
-                                KeyCap {
-                                    required property var modelData
-
-                                    text: modelData
-                                    modifier: true
-                                }
-                            }
-
                             KeyCap {
-                                text: slot.modelData.key
-                                modifier: false
+                                mods: KeyFeed.symbolsFor(slot.modelData.mods)
+                                text: KeyFeed.keyLabel(slot.modelData.key)
                             }
                         }
                     }
