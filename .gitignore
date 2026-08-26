@@ -2,3 +2,8 @@
 *.jsc
 .qmlls.ini
 .DS_Store
+
+# fcitx5 saves by writing a temp beside the target and rename()-ing it over.
+# An interrupted save leaves the temp behind, and one was committed once.
+fcitx5/conf/*_??????
+fcitx5/*_??????
