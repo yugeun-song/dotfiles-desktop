@@ -168,30 +168,40 @@ mirror "$SRC/bin/unlock"            "$HOME/.local/bin/unlock"
 #
 # XCursor themes are bitmaps with the colour baked in, so a themed pointer is
 # not something a setting can ask for. theme/cursor/tint-cursors.py recolours a
-# packaged theme by luminance, which keeps every hotspot, size and alias the
-# source had. That tint is read out of Theme.qml rather than written here, so it
-# cannot drift the first time the bar's blue changes. The plain arrow is the one
-# exception and carries its own two colours; see the note further down.
+# packaged theme by luminance, keeping every hotspot, size and alias the source
+# had, and theme/cursor/pointer.py then redraws the plain arrow over the result.
+#
+# One colour feeds both, and it is pointer.py's rather than Theme.qml's.
+#
+# The arrow was asked for in the colours of a particular drawing, and for a
+# while it alone carried them while the rest of the theme still followed the
+# bar. That is visible in the only way that matters: the pointer changed colour
+# on its way onto a link and changed back on the way off. A cursor theme is one
+# object to whoever is looking at it, so it gets one colour, and the drawn arrow
+# is where that colour is written down.
 #
 # Failure is not fatal. A machine that cannot build it keeps whatever pointer it
 # had, which is a worse-looking desktop and not a broken one.
-cursor_tint=$(sed -n 's/.*accentSky:  *"\(#[0-9a-fA-F]\{6\}\)".*/\1/p' \
-              "$SRC/quickshell/bar/services/Theme.qml" | head -1)
+cursor_tint=$(sed -n 's/^FILL = "\(#[0-9a-fA-F]\{6\}\)".*/\1/p' \
+              "$SRC/theme/cursor/pointer.py" | head -1)
 if [[ -n "$cursor_tint" ]]; then
     if "$SRC/theme/cursor/tint-cursors.py" --from Oxygen_White \
            --name Spaceduck-Sky --tint "$cursor_tint" \
-           --comment "Oxygen_White in the bar's sky blue"; then
+           --comment "Oxygen_White recoloured to the drawn pointer's blue"; then
         # Only after the theme exists, and only over its plain arrow. No colours
-        # passed: the pointer's two were measured off the drawing it was asked to
-        # match and live in pointer.py, which is the only part of this theme that
-        # does not follow the bar's palette.
+        # passed: they are pointer.py's own, and the tint above already came
+        # from there.
         "$SRC/theme/cursor/pointer.py" --theme Spaceduck-Sky \
             || echo "install: the arrow stayed as the tint left it" >&2
+        # And the drag shapes, which lose the contest against a busy window at
+        # the size the rest of the theme is drawn at. Reasoning in the script.
+        "$SRC/theme/cursor/emphasise.py" --theme Spaceduck-Sky \
+            || echo "install: the drag cursors were left at theme size" >&2
     else
         echo "install: could not build the cursor theme; the pointer is unchanged" >&2
     fi
 else
-    echo "install: no accentSky in Theme.qml; the cursor theme was not built" >&2
+    echo "install: no FILL in pointer.py; the cursor theme was not built" >&2
 fi
 seed "$SRC/fcitx5/config"          "$CONFIG/fcitx5/config"
 seed "$SRC/fcitx5/profile"         "$CONFIG/fcitx5/profile"

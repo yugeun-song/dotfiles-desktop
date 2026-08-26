@@ -50,7 +50,20 @@ from PIL import Image
 # tries can come out wider than the thing it copies. That costs about a point of
 # overlap against letting it float, 94.5% rather than 95.6%, and buys a shape
 # that is the right shape.
-OUTLINE = [(10.00, 3.00), (78.07, 66.50), (44.21, 72.65), (10.35, 93.00)]
+OUTLINE = [(10.00, 3.00), (78.07, 66.50), (39.08, 62.20), (10.35, 93.00)]
+
+# The notch is the one number here that is not the drawing's. The drawing barely
+# cuts into the back, which reads as a triangle with a corner clipped off, so
+# this one is pulled 15% of the way from where the drawing puts it towards the
+# tip: enough that the back is hollowed and the shape reads as an arrow rather
+# than a wedge.
+#
+# It is a narrow band to work in. Below this the notch stops registering at 24
+# pixels; much above it the shape turns into a barbed arrowhead, which is more
+# than a pointer should be saying. Depth also costs fill, and the fill is what
+# carries the colour: blue area falls 113, 79, 61 and 44 pixels across depths of
+# 0, 20, 30 and 40 percent, so past a third of the way the lower barb at 24
+# pixels is an outline with nothing inside it.
 
 # Outline width as a fraction of the rendered cursor, measured off the drawing:
 # a 15 pixel band down a shape 290 tall.

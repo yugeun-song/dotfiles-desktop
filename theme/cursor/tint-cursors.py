@@ -94,22 +94,61 @@ def parse(path):
     return out
 
 
-def tint(px, rgb):
+def luminance_of(px, i, a):
+    """Un-premultiplied luminance of one BGRA pixel.
+
+    Un-premultiplying before measuring matters: a half-transparent white pixel
+    is stored as mid-grey, and treating that as grey would tint the antialiased
+    edge darker than the body it belongs to.
+    """
+    b = min(255, px[i] * 255 // a)
+    g = min(255, px[i + 1] * 255 // a)
+    r = min(255, px[i + 2] * 255 // a)
+    return (r * 299 + g * 587 + b * 114) // 1000
+
+
+def body_level(images, floor=150):
+    """The luminance of a cursor's body, as the commonest bright level in it.
+
+    Oxygen's cursors are not one white. The arrow's body is #efefef, the move
+    cursor's is #e6e6e6, the resize handles' is #e8e8e8, and mapping luminance
+    straight onto a tint carries those apart into three visibly different blues:
+    the pointer changed colour on its way onto a link. Measuring each cursor's
+    own body and treating that as full brightness puts them all on the same one.
+
+    Only pixels above the floor are counted, so the black outline every Oxygen
+    cursor carries is not mistaken for the body. The hand is mostly outline and
+    would otherwise measure as almost black.
+    """
+    counts = {}
+    for im in images:
+        px = im["px"]
+        for i in range(0, len(px), 4):
+            a = px[i + 3]
+            if a < 250:
+                continue
+            lum = luminance_of(px, i, a)
+            if lum >= floor:
+                counts[lum] = counts.get(lum, 0) + 1
+    if not counts:
+        return 255
+    return max(counts.items(), key=lambda kv: (kv[1], kv[0]))[0]
+
+
+def tint(px, rgb, full=255):
     """Recolour in place. Pixels are BGRA, premultiplied by alpha.
 
-    Un-premultiplying before measuring luminance matters: a half-transparent
-    white pixel is stored as mid-grey, and treating that as grey would tint the
-    antialiased edge darker than the body it belongs to.
+    `full` is the luminance that becomes the tint exactly; anything above it
+    clamps. It is the cursor's own body level rather than 255, which is what
+    keeps every cursor in the theme the same colour.
     """
     r_t, g_t, b_t = rgb
+    full = max(1, full)
     for i in range(0, len(px), 4):
         a = px[i + 3]
         if a == 0:
             continue
-        b = min(255, px[i] * 255 // a)
-        g = min(255, px[i + 1] * 255 // a)
-        r = min(255, px[i + 2] * 255 // a)
-        lum = (r * 299 + g * 587 + b * 114) // 1000
+        lum = min(255, luminance_of(px, i, a) * 255 // full)
         px[i] = (b_t * lum // 255) * a // 255
         px[i + 1] = (g_t * lum // 255) * a // 255
         px[i + 2] = (r_t * lum // 255) * a // 255
@@ -183,8 +222,11 @@ def main():
         if images is None:
             skipped += 1
             continue
+        # Measured across every size of this cursor before any of them is
+        # changed, so one file is one colour.
+        full = body_level(images)
         for im in images:
-            tint(im["px"], rgb)
+            tint(im["px"], rgb, full)
         write(os.path.join(dst, name), images)
         made += 1
 
