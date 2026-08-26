@@ -208,7 +208,12 @@ Scope {
                                 anchors.left: icon.right
                                 anchors.leftMargin: Theme.px(10)
                                 anchors.right: parent.right
-                                anchors.rightMargin: card.pad + Theme.px(30)
+                                // Was pad + 30, keeping a gap clear for a close
+                                // button. Three ways out of a toast was two too
+                                // many: it leaves on its own, and a swipe takes
+                                // it early. The history keeps the record either
+                                // way, which is what the button was protecting.
+                                anchors.rightMargin: card.pad
                                 anchors.top: parent.top
                                 anchors.topMargin: card.pad
                                 spacing: Theme.px(2)
@@ -295,31 +300,6 @@ Scope {
                                 }
                             }
 
-                            // Dismisses the toast only. The notification stays in
-                            // the history, which is the whole reason the history
-                            // exists: flicking a toast away should not destroy the
-                            // record of what it said.
-                            Text {
-                                anchors.right: parent.right
-                                anchors.rightMargin: card.pad
-                                anchors.top: parent.top
-                                anchors.topMargin: card.pad
-                                text: Theme.iconClose
-                                font.family: Theme.iconFont
-                                font.pixelSize: Theme.px(25)
-                                color: closer.containsMouse ? Theme.fg : Theme.accentQuiet
-
-                                MouseArea {
-                                    id: closer
-
-                                    anchors.fill: parent
-                                    anchors.margins: -Theme.px(10)
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-
-                                    onClicked: leaving.start()
-                                }
-                            }
                         }
                     }
                 }

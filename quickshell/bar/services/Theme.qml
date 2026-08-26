@@ -242,7 +242,6 @@ Singleton {
     // "there are none".
     readonly property string iconBell:      String.fromCodePoint(0xF009A)
     readonly property string iconClock:     String.fromCodePoint(0xF0150)
-    readonly property string iconClose:     String.fromCodePoint(0xF0159)
     readonly property string iconClearAll:  String.fromCodePoint(0xF0A79)
     readonly property string iconBatteryAlert: String.fromCodePoint(0xF0083)
     readonly property string iconPlug:         String.fromCodePoint(0xF06A5)
