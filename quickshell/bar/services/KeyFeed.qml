@@ -29,7 +29,7 @@ Singleton {
 
     // Long enough to read a chord that went past quickly, short enough that the
     // overlay is gone before it becomes furniture.
-    readonly property int dwellMs: 2000
+    readonly property int dwellMs: 500
 
     readonly property int maxVisible: 5
 
@@ -47,7 +47,7 @@ Singleton {
     // couple of hundred milliseconds and the stack looks like it emptied at
     // once. Holding each exit this far behind the one before it lets a burst
     // unravel in the order it was typed.
-    readonly property int minGapMs: 130
+    readonly property int minGapMs: 70
 
     // When the chord scheduled furthest out is due to leave. A new arrival is
     // scheduled after it rather than a flat dwell from now, which is what keeps
