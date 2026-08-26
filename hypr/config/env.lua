@@ -7,6 +7,17 @@
 -- Toolkits need to be told to use Wayland; several still default to X11 and
 -- then run through XWayland with worse input and scaling.
 hl.env("QT_QPA_PLATFORM", "wayland;xcb")
+
+-- Moved here from /etc/environment, which was dropped because it set
+-- QT_QPA_PLATFORM and LIBVA_DRIVER_NAME a second time and two sources for one
+-- variable disagree the first time either changes.
+--
+-- Worth knowing rather than assuming: quickshell is a Qt Quick application, so
+-- this decides how the bar itself is drawn, on a machine whose principal fault
+-- is xe driver graphics hangs. Whether Vulkan makes that better or worse has
+-- never been measured either way. If the hangs are being chased again, this is
+-- one line to try removing.
+hl.env("QT_QUICK_BACKEND", "vulkan")
 hl.env("GDK_BACKEND", "wayland,x11")
 hl.env("SDL_VIDEODRIVER", "wayland")
 hl.env("CLUTTER_BACKEND", "wayland")

@@ -243,8 +243,13 @@ Singleton {
             return root.accentSky;
         case code === 3:
             return root.accentQuiet;
+        // muted is a colour for dim text on a dark ground, and used as a face
+        // it reaches only 4.11:1 against either text colour. 1.15 is the
+        // smallest lift that clears 4.5, at 4.93, which matters because every
+        // further step collapses the distance from the overcast colour beside
+        // it: 2.37 apart here, 1.89 at 1.3, 1.26 at 1.6.
         case code === 45 || code === 48:
-            return root.muted;
+            return Qt.lighter(root.muted, 1.15);
         case code >= 51 && code <= 57:
             return root.accentSky;
         case code >= 61 && code <= 65:
