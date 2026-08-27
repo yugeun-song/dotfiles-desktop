@@ -57,6 +57,44 @@ require() {
         log "no shell.qml under $CONFIG_DIR"; return 1; }
 }
 
+# Do not launch quickshell before the compositor can answer.
+#
+# quickshell is a Qt program: with no wayland socket it gets no platform plugin
+# and Qt ends it with qFatal rather than an error it could recover from. That
+# happened four times in a row on one login -- "Failed to create wl_display (No
+# such file or directory)" -- and the supervisor then correctly refused to keep
+# restarting a thing that dies inside ten seconds, so the session had no bar at
+# all until it was started again by hand.
+#
+# The signature is corrected here too. If the compositor restarted while this
+# supervisor kept running, its children inherit a signature nobody is listening
+# on: the bar draws, because the wayland socket keeps its name, and every
+# hyprland request fails, so the workspaces stop and the battery keeps working.
+wait_for_compositor() {
+    local rt="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    local wl="${WAYLAND_DISPLAY:-wayland-1}"
+    local i d live
+
+    for ((i = 0; i < 100; i++)); do
+        live=""
+        for d in "$rt"/hypr/*/; do
+            [[ -e "$d/hyprland.lock" ]] || continue
+            live="$(basename "$d")"
+            break
+        done
+
+        if [[ -n "$live" && -S "$rt/$wl" ]]; then
+            [[ "$live" != "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] \
+                && export HYPRLAND_INSTANCE_SIGNATURE="$live"
+            hyprctl version >/dev/null 2>&1 && return 0
+        fi
+        sleep 0.2
+    done
+
+    log "the compositor did not answer in 20s; not launching a bar that would only abort"
+    return 1
+}
+
 runner() {
     if command -v qs >/dev/null 2>&1; then echo qs; else echo quickshell; fi
 }
@@ -158,11 +196,13 @@ case "${1:-}" in
         ;;
     --once)
         require || exit 1
+        wait_for_compositor || exit 1
         exec "$(runner)" -n -p "$CONFIG_DIR"
         ;;
 esac
 
 require || exit 1
+wait_for_compositor || exit 1
 
 exec {lockfd}>>"$STATE_DIR/supervisor.pid"
 if ! flock -n "$lockfd"; then

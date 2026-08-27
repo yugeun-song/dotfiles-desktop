@@ -121,6 +121,49 @@ start() {
 # The portal's idea of the theme, which is what GTK applications ask. Not a
 # program to supervise, so it runs to completion here rather than going
 # through start().
+# Wait until the compositor can answer, and correct the signature if it points at
+# an instance that has ended.
+#
+# Both halves were missing and both cost a session. The bar was launched before
+# the wayland socket existed and Qt ended it with "Failed to create wl_display
+# (No such file or directory)" four times, then the supervisor gave up on a
+# crash loop. And when the compositor restarted, everything the previous one had
+# started kept the old signature: quickshell drew fine, because the wayland
+# socket keeps its name, while every hyprland request came back
+# ServerNotFoundError, so the workspace and window pills were dead and the
+# battery and memory ones were not.
+#
+# The socket alone is not enough to wait on -- it exists before hyprctl answers
+# -- so both are checked.
+wait_for_compositor() {
+    local rt="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+    local wl="${WAYLAND_DISPLAY:-wayland-1}"
+    local i d live
+
+    for ((i = 0; i < 100; i++)); do
+        live=""
+        for d in "$rt"/hypr/*/; do
+            [[ -e "$d/hyprland.lock" ]] || continue
+            live="$(basename "$d")"
+            break
+        done
+
+        if [[ -n "$live" && -S "$rt/$wl" ]]; then
+            if [[ "$live" != "$THIS_SESSION" ]]; then
+                log "the signature in the environment is not the running compositor; using the running one"
+                THIS_SESSION="$live"
+                export HYPRLAND_INSTANCE_SIGNATURE="$live"
+            fi
+            hyprctl version >/dev/null 2>&1 && return 0
+        fi
+        sleep 0.2
+    done
+
+    log "the compositor did not answer in 20s; starting anyway, expect the hyprland pills to be empty"
+    return 1
+}
+wait_for_compositor
+
 # Anything left over from a session that has ended.
 #
 # The guards below now refuse to count a foreign process as "already running",
