@@ -41,33 +41,43 @@ and `battery` all arrive as 0.0 to 1.0 despite their names, so every one of
 them is multiplied by 100 at the point of use. Reading one raw pins a full
 battery at 1%.
 
-## Links and copies
+## Mirrors and seeds
 
 Two ways in, and which one a file gets is not a style choice.
 
-A **link** is for what is written here and reloaded in place: the Hyprland
-configuration, the quickshell tree, the scripts. `hyprctl reload` and a bar
-restart read those straight off disk, so editing through a copy would mean
-running the installer between every change. Nothing else writes to them, so
-the link cannot be replaced behind anyone's back.
+A **mirror** is for what is written here: the Hyprland configuration, the
+quickshell tree, the scripts, the two commands in `bin/`. Every run copies the
+repository over the installed path and deletes anything under it the repository
+no longer has.
 
-A **copy** is for everything a program owns. fcitx5, KDE and GTK save by
-writing a temp file beside the target and rename()-ing it over, and rename()
-replaces a symlink rather than following it: the first change made in one of
-their settings windows turns the link into a real file, and this repository
-quietly stops being what the machine reads. `p10k configure` is worse, writing
-through the link and editing the repository without saying so.
+These were links once, because a link makes an edit live without running
+anything. What a link also does is make the installed path resolve back into the
+working tree: `auto_monitors.sh` walked up from its own location and read the
+repository's `monitors.preset` rather than the installed one, and a directory
+replaced under a watcher is a crash rather than a reload.
 
-So those are seeded: copied once, and left alone afterwards. The installer
-says what it did, and refuses to overwrite a seeded file that has diverged.
+**Nothing edited here runs until `./install.sh` is run again**, and a supervisor
+already running keeps the old code until it is restarted. A fix that was
+committed, pushed and never installed cost a login once. `./install.sh --check`
+names every path that is behind and exits 1.
+
+A **seed** is for everything a program owns. fcitx5, KDE and GTK save by writing
+a temp file beside the target and rename()-ing it over, and rename() replaces a
+symlink rather than following it: the first change made in one of their settings
+windows turns the link into a real file, and this repository quietly stops being
+what the machine reads. `p10k configure` is worse, writing through the link and
+editing the repository without saying so.
+
+Seeded files are copied once and left alone afterwards. The installer says what
+it did, and refuses to overwrite one that has diverged.
 
     seeded ~/.config/fcitx5/config
     left ~/.config/kdeglobals alone: it exists and differs
       copy it back into <repo> to keep the change
 
-**After editing a seeded file here, run `./install.sh` again** — a copy does
-not update itself. To keep a change made through a program's own interface,
-copy the file back into this repository.
+To keep a change made through a program's own interface, copy the file back into
+this repository. To push one out, delete the installed file and run the
+installer again.
 
 ## Install
 
@@ -75,7 +85,10 @@ copy the file back into this repository.
 ./install.sh
 ```
 
-Existing configuration is moved aside with a timestamp, never replaced.
+Mirrored paths are overwritten on every run, and anything under them the
+repository no longer has is deleted. Seeded paths are left alone once they
+exist, and are not backed up either. The only file kept with a timestamp is
+`/etc/fonts/local.conf`.
 
 The shell, terminal emulator and prompt are not here. They live in
 [dotfiles-terminal](https://github.com/yugeun-song/dotfiles-terminal), which

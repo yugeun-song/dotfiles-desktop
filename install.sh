@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 #
-# Links the desktop configuration into place.
+# Installs the desktop configuration into place.
+#
+# Files are copied, not linked, so nothing here runs until this is re-run.
+# `install.sh --check` names what is behind and exits 1.
 #
 # One file needs privileges: the font chain, which lives under /etc because it
 # belongs to the system rather than to a user. It used to be printed as two
@@ -26,6 +29,14 @@ FONTCONF=/etc/fonts/local.conf
 SUDO_OK=0
 SUDO_KEEPALIVE=
 
+CHECK=0
+DRIFT=0
+case "${1:-}" in
+    --check) CHECK=1 ;;
+    "")      ;;
+    *)       echo "usage: ${0##*/} [--check]" >&2; exit 2 ;;
+esac
+
 acquire_sudo() {
     if [[ -f "$FONTCONF" ]] && cmp -s "$SRC/fontconfig/local.conf" "$FONTCONF"; then
         echo "font chain already installed at $FONTCONF"
@@ -50,7 +61,7 @@ cleanup() {
 }
 trap cleanup EXIT
 
-acquire_sudo
+(( CHECK )) || acquire_sudo
 
 # Copy, every run, over whatever is there.
 #
@@ -75,9 +86,28 @@ mirror() {
         echo "missing source: $from" >&2
         exit 1
     fi
+
+    if (( CHECK )); then
+        if [[ -L "$to" ]]; then
+            echo "DRIFT   $to is still a link"; DRIFT=1
+        elif [[ ! -e "$to" ]]; then
+            echo "DRIFT   $to is missing"; DRIFT=1
+        elif ! diff -rq "$from" "$to" >/dev/null 2>&1; then
+            echo "DRIFT   $to is behind $from"; DRIFT=1
+        fi
+        return 0
+    fi
+
     # A link left by an older version of this script. Removing it is the whole
     # conversion; what replaces it is the same content as a real file.
     [[ -L "$to" ]] && rm -f "$to"
+    # Reporting a no-op is the point: a fix committed but never installed is
+    # what cost a session, and silence is what hid it. Checked after the link
+    # is gone, because diff follows one.
+    if [[ -e "$to" ]] && diff -rq "$from" "$to" >/dev/null 2>&1; then
+        echo "unchanged $to"
+        return 0
+    fi
     mkdir -p "$(dirname "$to")"
     if [[ -d "$from" ]]; then
         [[ -e "$to" && ! -d "$to" ]] && rm -f "$to"
@@ -129,6 +159,15 @@ seed() {
         echo "missing source: $from" >&2
         exit 1
     fi
+
+    if (( CHECK )); then
+        if [[ ! -e "$to" ]]; then
+            echo "absent  $to would be seeded"
+        elif ! diff -rq "$from" "$to" >/dev/null 2>&1; then
+            echo "owned   $to differs; the program owns it, so $from is not what runs"
+        fi
+        return 0
+    fi
     # A link left by an older version of this script. The content matches by
     # definition, so the only thing to do is turn it into the real file it
     # should have been, which is what makes the next in-place rewrite land
@@ -163,6 +202,12 @@ seed "$SRC/hypr/hyprlock.conf"     "$CONFIG/hypr/hyprlock.conf"
 seed "$SRC/hypr/hyprpaper.conf"    "$CONFIG/hypr/hyprpaper.conf"
 mirror "$SRC/bin/bar"               "$HOME/.local/bin/bar"
 mirror "$SRC/bin/unlock"            "$HOME/.local/bin/unlock"
+
+if (( CHECK )); then
+    (( DRIFT )) && { echo; echo "run ./install.sh to apply"; exit 1; }
+    echo "everything installed is current"
+    exit 0
+fi
 
 # The pointer, built rather than shipped.
 #
