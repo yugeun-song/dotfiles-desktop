@@ -15,6 +15,15 @@
 set -uo pipefail
 
 SELF=$$
+
+# The instance every check below is measured against.
+#
+# When it is empty this script is not running under a compositor -- a bare
+# console, a --verify-config run -- and there is nothing to compare against. The
+# guards then fall back to matching on the name alone, which is what they always
+# did; starting a second copy of something is a smaller fault than refusing to
+# start the first.
+THIS_SESSION="${HYPRLAND_INSTANCE_SIGNATURE:-}"
 SCRIPTS="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)"
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
 
@@ -22,11 +31,49 @@ log() { printf 'session-autostart: %s\n' "$*" >&2; }
 
 # /proc/PID/comm is capped at 15 characters, so the needle is capped too.
 # Comparing the full argv instead would match this script's own command line.
+# Whether a process belongs to the session running now.
+#
+# This is the question the two checks below used to skip, and skipping it is
+# what breaks a machine that has logged out and back in without rebooting.
+# Anything that survives a logout is reparented to `systemd --user` and keeps
+# running with the dead session's WAYLAND_DISPLAY. At the next login the guards
+# saw a process of the right name, reported "already running", and started
+# nothing -- so the input method was bound to a compositor that no longer
+# existed and the monitor watcher was listening to a socket nobody was writing
+# to. Observed on 2026-08-28: fcitx5 with no signature at all, and
+# auto_monitors_watcher still carrying a pid from the first boot of the day,
+# which is why the external panel stayed at 60 Hz and the internal one never
+# took its 1.5 scale.
+#
+# Every process this script starts inherits HYPRLAND_INSTANCE_SIGNATURE, so a
+# mismatch or an absence means it is not ours.
+same_session() {
+    local pid="$1" sig
+    [[ -n "$THIS_SESSION" ]] || return 0
+
+    # Unreadable counts as ours, and the opposite choice is made in
+    # reap_previous_session on purpose.
+    #
+    # /proc/<pid>/environ is not always readable even for a process of your own
+    # -- the polkit agent is one. Called from the guards, an unreadable answer
+    # meaning "not ours" makes this script start a second copy of something that
+    # is already there, and it did: one run left two authentication agents. Read
+    # the other way it might skip a start that was needed, which the next
+    # Ctrl+Super+R fixes. A duplicate does not fix itself.
+    [[ -r "/proc/$pid/environ" ]] || return 0
+
+    sig=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null \
+            | sed -n 's/^HYPRLAND_INSTANCE_SIGNATURE=//p')
+    [[ -n "$sig" && "$sig" == "$THIS_SESSION" ]]
+}
+
 comm_running() {
-    local want="${1:0:15}" f
+    local want="${1:0:15}" f pid
     for f in /proc/[0-9]*/comm; do
         [[ -r "$f" ]] || continue
-        [[ "$(< "$f")" == "$want" ]] && return 0
+        [[ "$(< "$f")" == "$want" ]] || continue
+        pid="${f#/proc/}"; pid="${pid%/comm}"
+        same_session "$pid" && return 0
     done
     return 1
 }
@@ -40,7 +87,8 @@ argv_running() {
         [[ "$pid" == "$SELF" ]] && continue
         [[ -r "/proc/$pid/cmdline" ]] || continue
         cl="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)" || continue
-        [[ "$cl" == *"$needle"* ]] && return 0
+        [[ "$cl" == *"$needle"* ]] || continue
+        same_session "$pid" && return 0
     done
     return 1
 }
@@ -73,6 +121,111 @@ start() {
 # The portal's idea of the theme, which is what GTK applications ask. Not a
 # program to supervise, so it runs to completion here rather than going
 # through start().
+# Anything left over from a session that has ended.
+#
+# The guards below now refuse to count a foreign process as "already running",
+# which stops this script from skipping a start it should have made. It does not
+# stop the leftover from existing, and a leftover is not harmless: a second
+# fcitx5 still holds a copy of the input method's D-Bus name, a second
+# auto_monitors_watcher still reacts to events, and a second bar still draws
+# nowhere while eating memory.
+#
+# So they are ended rather than tolerated. Bound to a session and outliving it,
+# there is nothing a leftover can do that is wanted.
+#
+# By pid, never by pattern: `pkill -f fcitx5` would match this script's own
+# command line, which contains the word. And only where the signature proves
+# ownership -- a process carrying a DIFFERENT instance is from a session that is
+# gone, and one carrying NONE was started before this compositor existed, which
+# is how fcitx5 ended up bound to a dead session on 2026-08-28.
+reap_previous_session() {
+    [[ -n "$THIS_SESSION" ]] || return 0
+    local pid comm sig want gone=()
+
+    for pid in /proc/[0-9]*; do
+        pid="${pid#/proc/}"
+        [[ "$pid" == "$SELF" ]] || [[ "$pid" =~ ^[0-9]+$ ]] || continue
+        [[ "$pid" == "$SELF" ]] && continue
+        # A process can exit between the glob and this read.
+        comm="$(< "/proc/$pid/comm" 2>/dev/null)" || continue
+        [[ -n "$comm" ]] || continue
+
+        # Ours to end, or nobody's business.
+        #
+        # A dry run of this loop before it was ever armed matched polkitd, pid
+        # 600, running as root: the system's privilege broker, which this script
+        # has no business touching and which the `*polkit*` pattern caught by
+        # accident. Ownership is checked first now, and the pattern names the
+        # agents rather than anything with the word in it.
+        [[ -O "/proc/$pid" ]] || continue
+
+        want=0
+        case "$comm" in
+            fcitx5|hyprpaper|hypridle|hyprsunset|wl-paste|qs|quickshell) want=1 ;;
+            polkit-kde-au*|hyprpolkitagen*|polkit-gnome-au*|lxqt-policykit*) want=1 ;;
+        esac
+        if [[ $want -eq 0 ]]; then
+            case "$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)" in
+                *auto_monitors_watcher*|*quickshell/bar*) want=1 ;;
+            esac
+        fi
+        [[ $want -eq 1 ]] || continue
+
+        # Unreadable is not foreign.
+        #
+        # The same dry run marked the polkit agent of the session running right
+        # then, because /proc/<pid>/environ came back Permission denied and the
+        # empty answer read as "no signature, therefore old". A process whose
+        # environment cannot be read has said nothing about which session it
+        # belongs to, and the safe reading of nothing is to leave it alone.
+        [[ -r "/proc/$pid/environ" ]] || continue
+
+        sig=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null \
+                | sed -n 's/^HYPRLAND_INSTANCE_SIGNATURE=//p')
+        [[ "$sig" == "$THIS_SESSION" ]] && continue
+
+        gone+=("$pid")
+        log "ending $comm ($pid) from a session that has finished"
+        kill -TERM "$pid" 2>/dev/null
+    done
+
+    [[ ${#gone[@]} -eq 0 ]] && return 0
+
+    # Give them a moment, then insist. A leftover that ignores TERM is exactly
+    # the one that would go on holding the name its replacement needs.
+    local i left
+    for i in 1 2 3 4 5; do
+        left=0
+        for pid in "${gone[@]}"; do [[ -d "/proc/$pid" ]] && left=1; done
+        [[ $left -eq 0 ]] && break
+        sleep 1
+    done
+    for pid in "${gone[@]}"; do
+        [[ -d "/proc/$pid" ]] || continue
+        log "$pid did not stop on TERM, killing it"
+        kill -KILL "$pid" 2>/dev/null
+    done
+}
+
+reap_previous_session
+
+# Runtime directories of sessions that have ended.
+#
+# Hyprland removes hyprland.lock when it exits and leaves the directory and its
+# log. Nothing else ever clears them, so they accumulate one per logout, and
+# anything that picks an instance by listing that directory picks wrong -- see
+# the comment in bin/unlock, which did exactly that. The log of the session that
+# just ended is the one worth keeping, so the newest leftover stays.
+if [[ -n "$THIS_SESSION" ]]; then
+    _keep=1
+    for _d in $(ls -1dt "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/hypr/*/ 2>/dev/null); do
+        [[ -e "$_d/hyprland.lock" ]] && continue
+        if [[ $_keep -eq 1 ]]; then _keep=0; continue; fi
+        rm -rf -- "$_d" && log "removed the runtime directory of an ended session: $(basename "$_d")"
+    done
+    unset _keep _d
+fi
+
 "$SCRIPTS/gsettings-apply.sh" || log "gsettings-apply failed"
 
 # Outputs first, so the first frame lands on the right screen.

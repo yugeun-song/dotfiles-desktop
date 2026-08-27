@@ -22,7 +22,20 @@ set -uo pipefail
 # The signature is in the graphical session's environment, not in a console
 # login's, so it is read from the runtime directory instead.
 if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-    sig=$(ls -1 "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hypr" 2>/dev/null | head -1)
+    # The one with a lock file, not the first one alphabetically.
+    #
+    # Hyprland leaves its directory behind when a session ends -- only the log
+    # stays, the hyprland.lock is removed -- so a machine that has logged out
+    # and back in has two of them. `ls | head -1` picked whichever sorted first,
+    # and since the name carries a rising timestamp that is always the OLDEST:
+    # the escape hatch from a dead lock screen talked to a compositor that had
+    # already exited, which is exactly the moment it is needed.
+    sig=""
+    for d in "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/hypr/*/; do
+        [[ -e "$d/hyprland.lock" ]] || continue
+        sig="$(basename "$d")"
+        break
+    done
     [[ -n "$sig" ]] || { echo "unlock: no running Hyprland instance found" >&2; exit 1; }
     export HYPRLAND_INSTANCE_SIGNATURE="$sig"
 fi
