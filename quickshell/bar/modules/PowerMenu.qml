@@ -61,7 +61,15 @@ Scope {
             label: "Sleep",
             icon: Theme.iconSleep,
             accent: Theme.accentTeal,
-            command: ["systemctl", "suspend"],
+            // Locks here rather than trusting hypridle's before_sleep_cmd to do
+            // it. That command is the only thing standing between Sleep and a
+            // machine that wakes unlocked, and hypridle died twice in one boot.
+            // lock.sh holds hyprlock in the foreground, so it is detached and
+            // waited on; if the lock never appears the session is not suspended.
+            command: ["sh", "-c",
+                "pidof hyprlock >/dev/null 2>&1 || setsid -f \"$HOME/.config/hypr/scripts/lock.sh\" >/dev/null 2>&1; " +
+                "for _ in $(seq 50); do pidof hyprlock >/dev/null 2>&1 && exec systemctl suspend; sleep 0.1; done; " +
+                "notify-send -u critical 'Sleep cancelled' 'The screen did not lock, so the session was not suspended.'"],
             probe: "systemctl"
         },
         {
