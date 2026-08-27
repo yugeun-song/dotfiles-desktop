@@ -31,6 +31,7 @@ set -uo pipefail
 CONFIG_DIR="${BAR_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar}"
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/bar"
 LOG="$STATE_DIR/bar.log"
+RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 
 BUDGET="${BAR_RESTART_BUDGET:-5}"     # crashes allowed inside the window
 WINDOW="${BAR_RESTART_WINDOW:-120}"   # seconds
@@ -57,42 +58,69 @@ require() {
         log "no shell.qml under $CONFIG_DIR"; return 1; }
 }
 
-# Do not launch quickshell before the compositor can answer.
-#
-# quickshell is a Qt program: with no wayland socket it gets no platform plugin
-# and Qt ends it with qFatal rather than an error it could recover from. That
-# happened four times in a row on one login -- "Failed to create wl_display (No
-# such file or directory)" -- and the supervisor then correctly refused to keep
-# restarting a thing that dies inside ten seconds, so the session had no bar at
-# all until it was started again by hand.
-#
-# The signature is corrected here too. If the compositor restarted while this
-# supervisor kept running, its children inherit a signature nobody is listening
-# on: the bar draws, because the wayland socket keeps its name, and every
-# hyprland request fails, so the workspaces stop and the battery keeps working.
+# An ended instance removes its lock file but leaves .socket2.sock behind, so a
+# socket test would call a dead session live. The inherited signature wins while
+# it lives, so a second seat cannot pull a healthy supervisor away.
+live_signature() {
+    local d s="${HYPRLAND_INSTANCE_SIGNATURE:-}"
+    [[ -n "$s" && -e "$RUNTIME_DIR/hypr/$s/hyprland.lock" ]] && { printf '%s\n' "$s"; return 0; }
+    for d in "$RUNTIME_DIR"/hypr/*/; do
+        [[ -e "$d/hyprland.lock" ]] || continue
+        basename "$d"
+        return 0
+    done
+    return 1
+}
+
+# The replacement compositor reused the name wayland-1 last time. Not a rule.
+live_wayland_display() {
+    local sock wl="${WAYLAND_DISPLAY:-}" newest=""
+    [[ -n "$wl" && -S "$RUNTIME_DIR/$wl" ]] && { printf '%s\n' "$wl"; return 0; }
+    for sock in "$RUNTIME_DIR"/wayland-[0-9]*; do
+        [[ -S "$sock" ]] || continue
+        [[ -z "$newest" || "$sock" -nt "$newest" ]] && newest="$sock"
+    done
+    [[ -n "$newest" ]] || return 1
+    basename "$newest"
+}
+
+# Two failures, one guard. Launched before the socket exists, quickshell gets no
+# Qt platform plugin and qFatals. Launched with an ended session's signature it
+# draws fine and answers no hyprland request, so the workspaces freeze while the
+# battery keeps working.
 wait_for_compositor() {
-    local rt="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-    local wl="${WAYLAND_DISPLAY:-wayland-1}"
-    local i d live
+    local i live wl
 
     for ((i = 0; i < 100; i++)); do
-        live=""
-        for d in "$rt"/hypr/*/; do
-            [[ -e "$d/hyprland.lock" ]] || continue
-            live="$(basename "$d")"
-            break
-        done
-
-        if [[ -n "$live" && -S "$rt/$wl" ]]; then
-            [[ "$live" != "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]] \
-                && export HYPRLAND_INSTANCE_SIGNATURE="$live"
+        if live=$(live_signature) && wl=$(live_wayland_display); then
+            if [[ "$live" != "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
+                log "compositor is $live, not ${HYPRLAND_INSTANCE_SIGNATURE:-none}; following it"
+                export HYPRLAND_INSTANCE_SIGNATURE="$live"
+            fi
+            if [[ "$wl" != "${WAYLAND_DISPLAY:-}" ]]; then
+                log "wayland display is $wl, not ${WAYLAND_DISPLAY:-none}; following it"
+                export WAYLAND_DISPLAY="$wl"
+            fi
             hyprctl version >/dev/null 2>&1 && return 0
         fi
         sleep 0.2
     done
 
-    log "the compositor did not answer in 20s; not launching a bar that would only abort"
+    log "the compositor did not answer in 20s"
     return 1
+}
+
+# quickshell outlives its compositor -- that is the symptom -- so wait() never
+# returns and a check at the top of the loop is never reached.
+watch_session() {
+    local sig="$1" target="$2"
+    [[ -n "$sig" ]] || return 0
+    while [[ -e "$RUNTIME_DIR/hypr/$sig/hyprland.lock" ]]; do
+        [[ -d "/proc/$target" ]] || return 0
+        sleep 1
+    done
+    log "session $sig has ended; stopping the bar it was drawing for"
+    kill "$target" 2>/dev/null
 }
 
 runner() {
@@ -202,19 +230,67 @@ case "${1:-}" in
 esac
 
 require || exit 1
-wait_for_compositor || exit 1
 
-exec {lockfd}>>"$STATE_DIR/supervisor.pid"
-if ! flock -n "$lockfd"; then
-    log "another supervisor already owns $CONFIG_DIR, leaving it alone"
-    exit 0
-fi
+# Nothing signals a supervisor at logout, so one outlives its session and keeps
+# the lock. Deferring to it handed the next login a bar that drew and answered
+# nothing. Qualify the holder instead, and reopen the fd after a takeover: the
+# holder's EXIT trap unlinks the pidfile, and supervisor_alive() tests by path.
+claim_lock() {
+    local attempt holder sig
+    for ((attempt = 0; attempt < 3; attempt++)); do
+        exec {lockfd}>>"$STATE_DIR/supervisor.pid"
+        flock -n "$lockfd" && return 0
+
+        holder=""
+        [[ -s "$STATE_DIR/supervisor.pid" ]] && read -r holder < "$STATE_DIR/supervisor.pid"
+
+        # Nothing to qualify, so wait rather than assume.
+        if [[ -z "$holder" || ! -d "/proc/$holder" ]]; then
+            exec {lockfd}>&-
+            sleep 0.5
+            continue
+        fi
+
+        # An unreadable environment has said nothing about its session.
+        if [[ ! -r "/proc/$holder/environ" ]]; then
+            log "supervisor $holder owns $CONFIG_DIR and its session cannot be read, leaving it alone"
+            return 1
+        fi
+
+        sig=$(tr '\0' '\n' < "/proc/$holder/environ" 2>/dev/null \
+              | sed -n 's/^HYPRLAND_INSTANCE_SIGNATURE=//p')
+        if [[ -n "$sig" && -e "$RUNTIME_DIR/hypr/$sig/hyprland.lock" ]]; then
+            log "supervisor $holder owns $CONFIG_DIR for the live session, leaving it alone"
+            return 1
+        fi
+
+        log "supervisor $holder owns $CONFIG_DIR for a session that has ended; taking over"
+        kill "$holder" 2>/dev/null
+        for _ in {1..40}; do
+            [[ -d "/proc/$holder" ]] || break
+            sleep 0.25
+        done
+        [[ -d "/proc/$holder" ]] && kill -9 "$holder" 2>/dev/null
+        exec {lockfd}>&-
+        sleep 0.25
+    done
+    log "could not take the lock on $CONFIG_DIR"
+    return 1
+}
+
+claim_lock || exit 0
 printf '%s\n' "$$" > "$STATE_DIR/supervisor.pid"
 
 child=
+watcher=
 cleanup() {
     [[ -n "$child" ]] && kill "$child" 2>/dev/null
-    rm -f "$STATE_DIR/supervisor.pid"
+    [[ -n "$watcher" ]] && kill "$watcher" 2>/dev/null
+    # A supervisor that was taken over must not delete its successor's pidfile.
+    local owner=""
+    [[ -s "$STATE_DIR/supervisor.pid" ]] && read -r owner < "$STATE_DIR/supervisor.pid"
+    [[ "$owner" == "$$" ]] && rm -f "$STATE_DIR/supervisor.pid"
+    return 0
 }
 trap cleanup EXIT
 trap 'exit 143' INT TERM
@@ -245,15 +321,32 @@ crashes=0
 backoff=1
 
 while :; do
+    # Every pass: find the compositor that replaced ours, or release the lock.
+    if ! wait_for_compositor; then
+        log "no compositor left; releasing $CONFIG_DIR"
+        exit 0
+    fi
+
     # The child's own output is the only record of why a QML load failed, so
     # it goes to the file the give-up message points at. It must not inherit
     # the lock fd, or an orphan would keep the lock after this exits.
     "$(runner)" -n -p "$CONFIG_DIR" >>"$LOG" 2>&1 {lockfd}>&- &
     child=$!
+    watch_session "${HYPRLAND_INSTANCE_SIGNATURE:-}" "$child" {lockfd}>&- &
+    watcher=$!
     wait "$child"
     rc=$?
     child=
+    kill "$watcher" 2>/dev/null
+    watcher=
     reap_orphan_scripts
+
+    # Not a crash. Scoped tightly: exempting every TERM would let anything that
+    # keeps killing the bar respawn it forever at a backoff that never grows.
+    if (( rc == 143 )) && [[ ! -e "$RUNTIME_DIR/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-}/hyprland.lock" ]]; then
+        log "the compositor this bar drew on has gone; not counting it as a crash"
+        continue
+    fi
 
     # -n returns non-zero when another instance already holds this config.
     # That is a correct outcome, not a crash: something else is drawing the

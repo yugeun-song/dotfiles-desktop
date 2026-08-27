@@ -183,7 +183,7 @@ wait_for_compositor
 # is how fcitx5 ended up bound to a dead session on 2026-08-28.
 reap_previous_session() {
     [[ -n "$THIS_SESSION" ]] || return 0
-    local pid comm sig want gone=()
+    local pid comm sig want args gone=()
 
     for pid in /proc/[0-9]*; do
         pid="${pid#/proc/}"
@@ -208,8 +208,10 @@ reap_previous_session() {
             polkit-kde-au*|hyprpolkitagen*|polkit-gnome-au*|lxqt-policykit*) want=1 ;;
         esac
         if [[ $want -eq 0 ]]; then
-            case "$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)" in
-                *auto_monitors_watcher*|*quickshell/bar*) want=1 ;;
+            # Anchored: */bin/bar* would also catch `bar --stop`.
+            args="$(tr '\0' ' ' < "/proc/$pid/cmdline" 2>/dev/null)"
+            case "${args% }" in
+                *auto_monitors_watcher*|*quickshell/bar*|*/bin/bar) want=1 ;;
             esac
         fi
         [[ $want -eq 1 ]] || continue
@@ -250,6 +252,36 @@ reap_previous_session() {
     done
 }
 
+# The bar's supervisor is a bash script, so its comm is "bash" and the scan
+# above never sees it. It outlives the session holding the lock, and the next
+# login's own bar then defers to it -- a bar that draws and answers no hyprland
+# request. Ended by pidfile, and before the scan so the parent goes first.
+reap_previous_bar() {
+    [[ -n "$THIS_SESSION" ]] || return 0
+    local pidfile="${XDG_STATE_HOME:-$HOME/.local/state}/bar/supervisor.pid"
+    local sup sig i
+    [[ -s "$pidfile" ]] || return 0
+    read -r sup < "$pidfile" 2>/dev/null || return 0
+    [[ "$sup" =~ ^[0-9]+$ ]] || return 0
+    [[ -d "/proc/$sup" && -O "/proc/$sup" ]] || return 0
+    # Unreadable is not foreign.
+    [[ -r "/proc/$sup/environ" ]] || return 0
+
+    sig=$(tr '\0' '\n' < "/proc/$sup/environ" 2>/dev/null \
+            | sed -n 's/^HYPRLAND_INSTANCE_SIGNATURE=//p')
+    [[ "$sig" == "$THIS_SESSION" ]] && return 0
+
+    log "ending the bar supervisor ($sup) from a session that has finished"
+    kill -TERM "$sup" 2>/dev/null
+    for i in 1 2 3 4 5; do
+        [[ -d "/proc/$sup" ]] || return 0
+        sleep 1
+    done
+    log "$sup did not stop on TERM, killing it"
+    kill -KILL "$sup" 2>/dev/null
+}
+
+reap_previous_bar
 reap_previous_session
 
 # Runtime directories of sessions that have ended.
