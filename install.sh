@@ -221,6 +221,34 @@ seed "$SRC/kde/baloofilerc"      "$CONFIG/baloofilerc"
 if command -v systemctl >/dev/null 2>&1; then
     systemctl --user disable kde-baloo.service >/dev/null 2>&1 || true
 fi
+
+# KDE's crash reporter, which on this desktop crashes on every crash it is told
+# about, including its own.
+#
+# It is a Qt GUI program started from a systemd user unit, so it has no wayland
+# display and Qt ends it with qFatal. That abort is itself a coredump, which
+# starts it again. One quickshell crash produced a hundred and thirty of its
+# cores and 1.1 GB under /var/lib/systemd/coredump before anyone noticed, and the
+# only thing in the notification area was "has encountered a fatal error".
+#
+# The socket is what launches it, so the socket is what has to go; disabling the
+# service alone leaves the socket to start it. Nothing here reads its reports:
+# they go to a Plasma dialog and to KDE's Sentry, and the machine keeps the cores
+# themselves, which coredumpctl reads without any of this.
+#
+# All of it is a no-op where drkonqi was never installed, which is the case a
+# fresh machine from packages/install-target.txt is in.
+if command -v systemctl >/dev/null 2>&1; then
+    for _u in drkonqi-coredump-launcher.socket \
+              drkonqi-coredump-pickup.service \
+              drkonqi-coredump-cleanup.timer \
+              drkonqi-sentry-postman.path \
+              drkonqi-sentry-postman.timer; do
+        systemctl --user disable --now "$_u" >/dev/null 2>&1 || true
+        systemctl --user mask "$_u" >/dev/null 2>&1 || true
+    done
+    unset _u
+fi
 seed "$SRC/kde/SpaceduckDark.colors" "$HOME/.local/share/color-schemes/SpaceduckDark.colors"
 
 # hypr/config/execs.lua starts hyprland-session.target when the compositor
