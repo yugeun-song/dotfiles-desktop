@@ -74,7 +74,17 @@ Scope {
                 spacing: Theme.px(10)
 
                 Repeater {
-                    model: KeyFeed.chords
+                    // Same reason as NotificationToasts: push() assigns a whole
+                    // new array, and a Repeater over a plain array rebuilds every
+                    // delegate when that happens. Each cap still on screen
+                    // replayed its three-stage entrance and restarted its dwell,
+                    // so during sustained typing nothing aged out on schedule.
+                    // ScriptModel diffs the list and touches only the row that
+                    // changed.
+                    model: ScriptModel {
+                        values: KeyFeed.chords
+                        objectProp: "id"
+                    }
 
                     Item {
                         id: slot

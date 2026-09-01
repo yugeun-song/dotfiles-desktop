@@ -13,6 +13,11 @@
 #
 set -u
 
+# The loop wakes five times a second, and an external sleep would fork
+# /bin/sleep every one of them. bash ships sleep as a loadable builtin;
+# with it the whole loop costs no process at all.
+enable -f /usr/lib/bash/sleep sleep 2>/dev/null || true
+
 interval="${CAPSLOCK_POLL_INTERVAL:-0.2}"
 last=""
 

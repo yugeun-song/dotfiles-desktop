@@ -15,9 +15,15 @@
 #
 set -u
 
+# Same reason as capslock.sh: without the loadable, every pass forks
+# /bin/sleep on top of the queries below.
+enable -f /usr/lib/bash/sleep sleep 2>/dev/null || true
 
 interval="${INPUTMETHOD_POLL_INTERVAL:-0.3}"
 last=""
+last_state=""
+name=""
+n=0
 
 command -v fcitx5-remote >/dev/null 2>&1 || {
     echo "inputmethod.sh: fcitx5-remote not found on PATH; IME indicator disabled" >&2
@@ -26,7 +32,16 @@ command -v fcitx5-remote >/dev/null 2>&1 || {
 
 while :; do
     state=$(fcitx5-remote 2>/dev/null) || state=""
-    name=$(fcitx5-remote -n 2>/dev/null) || name=""
+
+    # The name is the expensive half and the half that rarely moves.
+    # It is re-read when the state changes, which is where an engine
+    # switch shows up, and once every ten passes so that a switch made
+    # with both engines idle is still noticed within three seconds.
+    if [[ "$state" != "$last_state" || $(( n % 10 )) -eq 0 ]]; then
+        name=$(fcitx5-remote -n 2>/dev/null) || name=""
+    fi
+    last_state="$state"
+    n=$(( n + 1 ))
 
     # A line goes out only when both halves are real. Substituting "none" and
     # "unknown" for a failed query printed a well-formed line describing

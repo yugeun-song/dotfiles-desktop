@@ -40,12 +40,12 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 opacity: 0.65 + bar.level * 0.35
 
-                Behavior on height {
-                    NumberAnimation {
-                        duration: 70
-                        easing.type: Easing.OutQuad
-                    }
-                }
+                // No Behavior on height. cava delivers 30 frames a second and a
+                // 70 ms animation between them is never finished before the next
+                // one starts, so every bar stays permanently in transit and the
+                // whole bar repaints at the monitor's rate instead of the feed's.
+                // The glide it was providing comes from cava's own smoothing now,
+                // which costs no extra frames: noise_reduction in cava.conf.
             }
         }
     }
