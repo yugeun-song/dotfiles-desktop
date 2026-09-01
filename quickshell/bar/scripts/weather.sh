@@ -50,8 +50,15 @@ PARAMS+="&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_da
 PARAMS+="&daily=weather_code,temperature_2m_max,temperature_2m_min"
 PARAMS+="&timezone=${WEATHER_TZ}&forecast_days=3"
 
+# --proto and --proto-redir pin both the first hop and any redirect to https.
+# Without them -L will follow a redirect down to plaintext http, and the request
+# carries the coordinates in its query string, so a downgrade published by a
+# poisoned DNS answer or a middlebox would put a location on the wire in the
+# clear. Open-Meteo does not redirect at all today, which is exactly why this
+# costs nothing and why it is worth having before it ever does.
 fetch() {
-    curl -fsSL --max-time 10 "${API}?${PARAMS}"
+    curl -fsSL --proto '=https' --proto-redir '=https' --max-redirs 3 \
+        --max-time 10 "${API}?${PARAMS}"
 }
 
 cache_mtime() {

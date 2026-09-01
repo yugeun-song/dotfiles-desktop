@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.services
 
 Singleton {
     id: root
@@ -61,19 +62,48 @@ Singleton {
     // until the next 15-minute tick.
     property int failures: 0
 
+    // The age past which a served reading is not a live one. weather.sh caches
+    // for ten minutes, so a cache hit lands under this and is still a success;
+    // anything older came from the stale fallback.
+    readonly property int liveWithin: 660000
+
+    // A fetch that fails and falls back to an older cache still exits 0 and
+    // still prints a payload -- that is what keeps the last known value on the
+    // bar while the network is down. So the exit code says the script ran, not
+    // that the sky was read; only the payload's own timestamp says that. Judged
+    // on the code alone, the ladder below never armed in the one case it was
+    // written for, because a cache from the previous session is almost always
+    // there to fall back on, and the pill sat at "?" until the next 15-minute
+    // tick however early the network came back.
+    function settle(): void {
+        if (root.ready && Date.now() - root.asOf < root.liveWithin) {
+            root.failures = 0;
+            return;
+        }
+        root.failures = Math.min(root.failures + 1, 5);
+        retry.restart();
+    }
+
+    // NetworkManager finishing after the bar is the ordinary shape of a login,
+    // so the link coming up is the signal to try again rather than the next
+    // tick. Net picks its backend once, at startup, and reads None when
+    // NetworkManager was not running then; nothing here fires in that case and
+    // the ladder is the only way back, which is why it is still a ladder.
+    readonly property bool online: Net.wifiConnected || Net.wiredConnected
+
+    onOnlineChanged: {
+        if (root.online)
+            fetch.running = true;
+    }
+
     Process {
         id: fetch
 
         command: [Quickshell.shellPath("scripts/weather.sh"), "--bar"]
 
-        onExited: code => {
-            if (code === 0) {
-                root.failures = 0;
-                return;
-            }
-            root.failures = Math.min(root.failures + 1, 5);
-            retry.restart();
-        }
+        // Deferred, so the run is judged against the payload this run printed
+        // rather than the one before it.
+        onExited: Qt.callLater(root.settle)
 
         stdout: SplitParser {
             onRead: line => {
