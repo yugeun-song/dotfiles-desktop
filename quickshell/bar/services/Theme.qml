@@ -106,6 +106,22 @@ Singleton {
     readonly property int windowTitleWidth:   root.px(260)
     readonly property int windowNameWidth:    root.px(130)
 
+    readonly property int notifWidth:       root.px(392)
+    readonly property int notifRadius:      root.px(15)
+    readonly property int notifPad:         root.px(14)
+    readonly property int notifStackGap:    root.px(8)
+    readonly property int notifTitleSize:   root.px(19)
+    readonly property int notifBodySize:    root.px(14)
+    readonly property int notifLabelSize:   root.px(11)
+    readonly property real notifTracking:   root.scale * 1.25
+
+    readonly property int centreWidth:      root.px(452)
+    readonly property int centreRadius:     root.px(16)
+    readonly property int centrePad:        root.px(13)
+    readonly property int notifRowRadius:   root.px(12)
+    readonly property int notifRowPad:      root.px(12)
+    readonly property int notifBorder:      Math.max(2, root.px(2))
+
     // ---------------------------------------------------------------------
     // spaceduck palette, matching the kitty theme
     // ---------------------------------------------------------------------
@@ -138,6 +154,28 @@ Singleton {
     readonly property color accentIndigo: "#7aa2f7"
     readonly property color accentPurple: "#bb9af7"
     readonly property color accentQuiet:  "#c0caf5"
+
+    // A second set for the status pills on the right. The accents above all sit
+    // between 61% and 86% lightness, so eight of them in a row read as one
+    // pastel family however far apart their hues are. These reach down to 55%,
+    // which is the axis that was missing: the group varies in tone as well as
+    // in hue.
+    //
+    // Saturation is deliberately not maxed. At full chroma the same hues were
+    // garish against a dark desktop; pulled back to 55-72% they keep the tonal
+    // spread without the glare.
+    readonly property color accentSaffron: "#e4bf58"
+    readonly property color accentJade:    "#4dcbaa"
+    readonly property color accentAzure:   "#6a9ae7"
+    readonly property color accentViolet:  "#a076db"
+    readonly property color accentRose:    "#d5729d"
+
+    // One colour for "this reading has left its normal range", shared by the
+    // battery, the CPU load and the memory load so that the meaning is read
+    // from the colour rather than from which pill is wearing it. Deeper than
+    // the accents beside it on purpose: at 58% lightness it is the darkest
+    // face in the group and does not read as one more hue in the sequence.
+    readonly property color accentAlert:   "#ef3963"
 
     readonly property color beige: "#ecf0c1"
     readonly property color ink:   "#0f111b"
@@ -202,10 +240,14 @@ Singleton {
     readonly property string iconBt:        String.fromCodePoint(0xF00AF)
     readonly property string iconBtOff:     String.fromCodePoint(0xF00B2)
     readonly property string iconBtLinked:  String.fromCodePoint(0xF00B1)
-    // Chosen for silhouette, not just meaning: a square chip next to a
-    // stack of cylinders reads apart at 21px, two chip glyphs do not.
+    // Chosen for silhouette, not just meaning. These used to be oct-cpu and
+    // md-chip, which are both a square die with legs down two sides: at 21px
+    // the pair differed only in detail and the memory pill did not read as
+    // memory at all. fa-memory is a DIMM -- a wide board carrying a row of
+    // dies, with pins along the bottom edge -- so the two now differ in
+    // outline. The name in the font is what was checked, not the code point.
     readonly property string iconCpu:       String.fromCodePoint(0xF4BC)
-    readonly property string iconMemory:    String.fromCodePoint(0xF061A)
+    readonly property string iconMemory:    String.fromCodePoint(0xEFC5)
     readonly property string iconPlay:      String.fromCodePoint(0xF04B)
     readonly property string iconPause:     String.fromCodePoint(0xF04C)
     readonly property string iconNext:      String.fromCodePoint(0xF04AD)
@@ -275,6 +317,7 @@ Singleton {
         return root.contrast(bg, root.ink) >= root.contrast(bg, root.fg)
                ? root.ink : root.fg;
     }
+
 
     // ---------------------------------------------------------------------
     // Freshness.
@@ -455,14 +498,10 @@ Singleton {
         return String.fromCodePoint(0xF0079 + step);
     }
 
-    function batteryColor(percent: int, charging: bool): color {
-        if (percent <= 15)
-            return root.accentRed;
-        if (percent <= 30)
-            return root.accentAmber;
-        if (charging)
-            return root.accentGreen;
-        return root.accentTeal;
+    readonly property int batteryLowPercent: 10
+
+    function batteryColor(percent: int): color {
+        return percent <= root.batteryLowPercent ? root.accentAlert : root.accentGreen;
     }
 
     // Window classes do not always match an icon name. Try the class as
@@ -494,15 +533,41 @@ Singleton {
         text: "100%"
     }
 
+    // A plain count, so four digits and no percent sign. Measured rather than
+    // borrowed from percentWidth, which reserves room for a symbol that a
+    // count does not carry.
+    readonly property int countWidth: Math.ceil(countMetrics.width)
+
+    TextMetrics {
+        id: countMetrics
+
+        font.family: root.uiFont
+        font.pixelSize: root.textSize
+        font.weight: Font.Medium
+        text: "9999"
+    }
+
+    // What separates a label's prefix from its reading.
+    //
+    // Not measured from the font. TextMetrics over a string that is only a
+    // space reports zero -- Qt drops trailing whitespace when it lays the run
+    // out -- so deriving this from the space glyph left no gap at all, and at
+    // three digits, where the right-aligned reading fills its box and leaves no
+    // slack, "CPU:" and "100%" touched. Both the colon and a leading 1 carry
+    // almost no side bearing, so the separation has to come from here.
+    readonly property int labelGap: root.px(5)
+
     function shorten(value: string, limit: int): string {
         return value.length > limit ? value.slice(0, limit - 1) + "…" : value;
     }
 
     // Load pills keep their own hue until the value is genuinely worth
     // noticing, so colour means "busy" rather than "this is the CPU one".
+    readonly property real loadHighFraction: 0.90
+
     function loadColor(fraction: real, base: color): color {
-        if (fraction >= 0.85)
-            return root.accentRed;
+        if (fraction >= root.loadHighFraction)
+            return root.accentAlert;
         if (fraction >= 0.65)
             return root.accentOrange;
         return base;

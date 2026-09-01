@@ -59,6 +59,6 @@ Item {
         font.pixelSize: Math.round(Theme.iconSize * 0.62)
         color: root.strokeColor
         style: Text.Outline
-        styleColor: Theme.batteryColor(root.percent, root.charging)
+        styleColor: Theme.batteryColor(root.percent)
     }
 }

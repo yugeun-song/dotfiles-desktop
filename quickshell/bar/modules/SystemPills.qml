@@ -27,7 +27,7 @@ Row {
         unknown: Theme.stale(Ime.asOf, 0)
         icon: Theme.iconKeyboard
         label: Ime.label
-        fill: Ime.hangul ? Theme.accentAmber : Theme.accentQuiet
+        fill: Ime.hangul ? Theme.accentSaffron : Theme.accentQuiet
         tooltip: `Input     ${Ime.hangul ? "Hangul" : "Latin"}\nEngine    ${Ime.method}\nClick for input method actions`
         // No language toggle here on purpose. The menu opens directly under
         // the pointer, so the next click lands on the first entry: clicking
@@ -98,7 +98,7 @@ Row {
                 return "down";
             return Net.ssid !== "" ? Theme.shorten(Net.ssid, 16) : "on";
         }
-        fill: Net.preferWired || Net.wifiConnected ? Theme.accentGreen : Theme.muted
+        fill: Net.preferWired || Net.wifiConnected ? Theme.accentJade : Theme.muted
         command: root.terminal.concat([root.hyprScripts + "/launch.sh", "nmtui"])
         tooltip: {
             const lines = [];
@@ -142,7 +142,7 @@ Row {
                 return "on";
             return Bt.connectedCount === 1 ? Theme.shorten(Bt.firstName, 14) : `${Bt.connectedCount} devices`;
         }
-        fill: Bt.connectedCount > 0 ? Theme.accentIndigo : Theme.muted
+        fill: Bt.connectedCount > 0 ? Theme.accentAzure : Theme.muted
         // Not bluetoothctl directly. It puts the connected device in its
         // prompt and points argument-less commands at it, so it opens scoped
         // to whatever is already paired, which is the wrong place to start
@@ -189,7 +189,7 @@ Row {
         }
         label: `${Power.percent}%`
         labelWidth: Theme.percentWidth
-        fill: Theme.batteryColor(Power.percent, Power.charging)
+        fill: Theme.batteryColor(Power.percent)
         tooltip: {
             const lines = [`Charge    ${Power.percent}%`, `State     ${Power.stateLabel()}`];
             const remaining = Power.charging ? Power.humanTime(Power.secondsToFull) : Power.humanTime(Power.secondsToEmpty);
@@ -211,6 +211,7 @@ Row {
     Pill {
         unknown: Theme.stale(Resources.cpuAsOf, 5000)
         icon: Theme.iconCpu
+        labelPrefix: "CPU:"
         label: `${Resources.cpuPercent}%`
         labelWidth: Theme.percentWidth
         fill: Theme.loadColor(Resources.cpuUsage, Theme.accentOrange)
@@ -221,9 +222,10 @@ Row {
     Pill {
         unknown: Theme.stale(Resources.memAsOf, 5000)
         icon: Theme.iconMemory
+        labelPrefix: "RAM:"
         label: `${Resources.memPercent}%`
         labelWidth: Theme.percentWidth
-        fill: Theme.loadColor(Resources.memUsage, Theme.accentPurple)
+        fill: Theme.loadColor(Resources.memUsage, Theme.accentViolet)
         command: root.terminal.concat([root.hyprScripts + "/launch.sh", "btop", "htop", "top"])
         tooltip: `Memory    ${Resources.memUsedGb.toFixed(1)} of ${Resources.memTotalGb.toFixed(1)} GB\nIn use    ${Resources.memPercent}%\nSource    MemAvailable in /proc/meminfo\nClick to open btop`
     }
@@ -231,8 +233,8 @@ Row {
     Pill {
         icon: Theme.iconBell
         label: Notifications.unread > 0 ? `${Notifications.unread}` : ""
-        labelWidth: Notifications.unread > 0 ? Theme.percentWidth : 0
-        fill: Notifications.unread > 0 ? Theme.accentAmber : Theme.muted
+        labelWidth: Notifications.unread > 0 ? Theme.countWidth : 0
+        fill: Notifications.unread > 0 ? Theme.accentRose : Theme.muted
         tooltip: Notifications.history.length === 0
                  ? "No notifications yet\nClick to open the history"
                  : `Unread    ${Notifications.unread}\nKept      ${Notifications.history.length}\nClick to open the history`
