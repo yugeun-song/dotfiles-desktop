@@ -115,7 +115,26 @@ start() {
     fi
 
     log "starting $*"
-    setsid -f "$@" >/dev/null 2>&1 || log "failed to start $1"
+    setsid -f "$@" >/dev/null 2>&1
+
+    # The `|| log` that used to be on that line never fired. setsid -f forks and
+    # returns before the child has execed, so its exit status reports on setsid
+    # and says nothing about the program: starting a binary that does not exist
+    # still gave rc=0. Every failed autostart was silent. Ask /proc instead.
+    #
+    # Checked before the first sleep, so a program already up costs nothing. The
+    # bar takes about a second to bring its own child up, which is why the
+    # budget is three seconds rather than two.
+    local i
+    for i in $(seq 15); do
+        if [[ "$how" == "comm" ]]; then
+            comm_running "$needle" && return 0
+        else
+            argv_running "$needle" && return 0
+        fi
+        sleep 0.2
+    done
+    log "$1 did not appear after starting it"
 }
 
 # The portal's idea of the theme, which is what GTK applications ask. Not a
