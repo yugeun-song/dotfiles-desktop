@@ -3,9 +3,16 @@
 -- A catch-all so an output nobody has configured still lights up at its best
 -- mode. scripts/auto_monitors.sh refines this at runtime and on every
 -- hotplug; this line only has to make the first frame appear.
+--
+-- highrr, not preferred. A monitor's preferred mode is whatever its EDID puts
+-- in the first detailed timing, and on the Philips here that is 2560x1440@60,
+-- so the session came up at 60 and auto_monitors.sh then modeset it to 144:
+-- the log carries both, back to back, at every start and every reload. A
+-- modeset is the one operation auto_monitors.sh's own header says this GPU is
+-- not trusted with, so the cheapest fix is to not ask for the wrong mode first.
 hl.monitor({
     output = "",
-    mode = "preferred",
+    mode = "highrr",
     position = "auto",
     scale = 1,
 })
@@ -81,7 +88,7 @@ hl.config({
         -- flicker over DisplayPort and HDMI, and it shares the code path that
         -- hangs under xe.
         vrr = 0,
-        focus_on_activate = true,
+        focus_on_activate = false,
         -- Nothing here restores a session lock, and a stale restore leaves
         -- an unlockable screen after a crash.
         allow_session_lock_restore = false,
@@ -117,8 +124,25 @@ hl.config({
     },
 
     binds = {
-        workspace_back_and_forth = true,
-        allow_workspace_cycles = true,
+        -- Off. With this on, an absolute workspace dispatch naming the
+        -- workspace already showing does not do nothing: it jumps to the
+        -- previous one. Three ordinary things then read as a bounce. The same
+        -- SUPER + digit pressed twice. A click on the chip that is already
+        -- lit. And, measured here, a fast wheel flick or a held walk key,
+        -- where two invocations of workspace-walk.sh read the same current
+        -- workspace before either has dispatched, both aim at the same target,
+        -- and the second one names a workspace that has already been reached
+        -- and springs back to where the walk started.
+        --
+        -- That last one is also why the ends felt like they flung you the
+        -- other way. Arriving at an end is exactly the moment the key gets
+        -- pressed once more to check there is nothing further, which is the
+        -- moment two invocations overlap.
+        workspace_back_and_forth = false,
+        -- Only shapes the chain back_and_forth walks, so with that off it
+        -- governs nothing. Set rather than deleted, because the two read as a
+        -- pair and a lone survivor invites putting the other one back.
+        allow_workspace_cycles = false,
         scroll_event_delay = 0,
     },
 
@@ -162,6 +186,7 @@ hl.animation({ leaf = "windowsIn",           enabled = true, speed = 1.0,  bezie
 hl.animation({ leaf = "windowsOut",          enabled = true, speed = 0.65, bezier = "emphasizedDecel", style = "popin 96%" })
 hl.animation({ leaf = "windowsMove",         enabled = true, speed = 1.0,  bezier = "emphasizedDecel", style = "slide" })
 
+hl.animation({ leaf = "fade",                enabled = true, speed = 1.0,  bezier = "emphasizedDecel" })
 hl.animation({ leaf = "fadeIn",              enabled = true, speed = 1.0,  bezier = "emphasizedDecel" })
 hl.animation({ leaf = "fadeOut",             enabled = true, speed = 0.65, bezier = "emphasizedDecel" })
 

@@ -21,7 +21,6 @@ local capture   = scripts .. "/capture.sh"
 local launch    = scripts .. "/launch.sh"
 local clipboard = scripts .. "/clipboard.sh"
 local shellkey  = scripts .. "/shell-global.sh"
-local wswalk    = scripts .. "/workspace-walk.sh"
 local dirwalk   = scripts .. "/focus-walk.sh"
 
 local app = {
@@ -117,8 +116,6 @@ hl.bind("SUPER + mouse:273", hl.dsp.window.resize(), { mouse = true, description
 -- Hyprland fires every binding on a key, so the workspace was switched twice,
 -- and with workspace_back_and_forth on the second switch returns to where it
 -- started. The key then appears to do nothing at all.
-local numpad_code = { 87, 88, 89, 83, 84, 85, 79, 80, 81, 90 }
-
 for i = 1, 10 do
     local n = i % 10
     hl.bind("SUPER + " .. n, hl.dsp.focus({ workspace = i }),
@@ -142,52 +139,120 @@ end
 -- take both sets and would then fire twice on any layout where they coincide,
 -- which is the double-fire this section's comment above warns about.
 
--- Walking the workspaces that actually exist rather than by number. The
--- vertical pair jumps five at a time, which is what makes this usable once
--- there are more workspaces than fingers.
+-- Walking the workspaces by number. The vertical pair jumps five at a time,
+-- which is what makes this usable once there are more workspaces than fingers.
 --
--- Through a script rather than Hyprland's own r+n and r-n, because those wrap:
--- left from the first workspace lands on the last one. That is a jump across
--- the whole set at the exact moment the intent was to find out there is
--- nothing further left. scripts/workspace-walk.sh clamps instead.
-local walk = {
-    { keys = { "H", "Left",  "BracketLeft" },  step = "-1" },
-    { keys = { "L", "Right", "BracketRight" }, step = "+1" },
-    { keys = { "K", "Up" },                    step = "-5" },
-    { keys = { "J", "Down" },                  step = "+5" },
-}
-for _, w in ipairs(walk) do
-    for _, k in ipairs(w.keys) do
-        hl.bind("CTRL + SUPER + " .. k, hl.dsp.exec_cmd(wswalk .. " focus " .. w.step),
-            { description = "Workspace " .. w.step })
-        hl.bind("CTRL + SUPER + SHIFT + " .. k, hl.dsp.exec_cmd(wswalk .. " move " .. w.step),
-            { description = "Send window to workspace " .. w.step })
+-- Not Hyprland's own r+n and r-n, because those wrap: left from the first
+-- workspace lands on the last one. That is a jump across the whole set at the
+-- exact moment the intent was to find out there is nothing further left.
+--
+-- And not through a script either, which is what this used to be.
+-- scripts/workspace-walk.sh had to ask hyprctl where it was and then tell
+-- hyprctl where to go: two round trips with a gap between them, and a wheel
+-- flick or a held key puts a second invocation inside that gap. Both read the
+-- same workspace, both aim at the same target, and the pair moves one step
+-- instead of two. Measured: two concurrent "+1" walks from workspace 2 landed
+-- on 3. While binds:workspace_back_and_forth was still on it was worse than a
+-- lost step, because the second dispatch named a workspace that had already
+-- been reached and sprang back to 2, which is the bounce that general.lua now
+-- describes.
+--
+-- A bind callback runs on the compositor's own thread inside the key handler.
+-- The read and the dispatch cannot be split by another invocation, and there
+-- is no fork per notch either.
+--
+-- Walking by number rather than over the workspaces that happen to exist,
+-- because an empty workspace to the right is somewhere to go: Hyprland creates
+-- it on arrival. Walking only the existing ones would mean the key does
+-- nothing at all until a second workspace has been made some other way.
+local MIN_WORKSPACE = 1
+local MAX_WORKSPACE = 100
+
+local function workspace_walk(mode, step)
+    return function()
+        local active = hl.get_active_workspace()
+        if active == nil then
+            return
+        end
+
+        -- A special workspace has a negative id. Stepping from one would land
+        -- on whatever number happens to be next, which is not a step from
+        -- anywhere the user is.
+        local id = active.id
+        if id < MIN_WORKSPACE then
+            return
+        end
+
+        local target = id + step
+        if target < MIN_WORKSPACE then
+            target = MIN_WORKSPACE
+        elseif target > MAX_WORKSPACE then
+            target = MAX_WORKSPACE
+        end
+        if target == id then
+            return
+        end
+
+        if mode == "focus" then
+            hl.dispatch(hl.dsp.focus({ workspace = target }))
+        else
+            hl.dispatch(hl.dsp.window.move({ workspace = target }))
+        end
     end
 end
 
-hl.bind("SUPER + Page_Up", hl.dsp.exec_cmd(wswalk .. " focus -1"))
-hl.bind("SUPER + Page_Down", hl.dsp.exec_cmd(wswalk .. " focus +1"))
-hl.bind("SUPER + SHIFT + Page_Up", hl.dsp.exec_cmd(wswalk .. " move -1"))
-hl.bind("SUPER + SHIFT + Page_Down", hl.dsp.exec_cmd(wswalk .. " move +1"))
+-- The sheet reads these descriptions back out of the compositor, and a step
+-- reads as a direction there, so the sign is kept even where Lua would drop it.
+local function step_label(step)
+    if step > 0 then
+        return "+" .. step
+    end
+    return tostring(step)
+end
+
+local walk = {
+    { keys = { "H", "Left",  "BracketLeft" },  step = -1 },
+    { keys = { "L", "Right", "BracketRight" }, step = 1 },
+    { keys = { "K", "Up" },                    step = -5 },
+    { keys = { "J", "Down" },                  step = 5 },
+}
+for _, w in ipairs(walk) do
+    for _, k in ipairs(w.keys) do
+        hl.bind("CTRL + SUPER + " .. k, workspace_walk("focus", w.step),
+            { description = "Workspace " .. step_label(w.step) })
+        hl.bind("CTRL + SUPER + SHIFT + " .. k, workspace_walk("move", w.step),
+            { description = "Send window to workspace " .. step_label(w.step) })
+    end
+end
+
+hl.bind("SUPER + Page_Up", workspace_walk("focus", -1))
+hl.bind("SUPER + Page_Down", workspace_walk("focus", 1))
+hl.bind("SUPER + SHIFT + Page_Up", workspace_walk("move", -1))
+hl.bind("SUPER + SHIFT + Page_Down", workspace_walk("move", 1))
 
 -- Scroll up goes to the previous workspace. The opposite of the upstream
 -- default, and the status bar's own scroll handler matches it; a bar that
 -- scrolls the other way from the compositor is worse than neither.
--- Through the same script the keyboard walk uses. "-1" and "+1" are a walk
--- that wraps, so one more notch at the first workspace crosses the whole set
--- and lands on the last, which happens at exactly the moment someone is
--- checking whether they have reached the end. The Ctrl variants below keep
--- "r-1" and "r+1" because cycling the open workspaces is what they are for.
-hl.bind("SUPER + mouse_up", hl.dsp.exec_cmd(wswalk .. " focus -1"),
+--
+-- The same clamped walk the keyboard uses, and for the same reason: a wheel is
+-- where the overlapping invocations came from in the first place, because a
+-- flick delivers notches faster than a round trip to hyprctl completes.
+hl.bind("SUPER + mouse_up", workspace_walk("focus", -1),
     { description = "Previous workspace" })
-hl.bind("SUPER + mouse_down", hl.dsp.exec_cmd(wswalk .. " focus +1"),
+hl.bind("SUPER + mouse_down", workspace_walk("focus", 1),
     { description = "Next workspace" })
+-- The Ctrl pair keeps "r-1" and "r+1". Cycling the open workspaces is what
+-- they are for, so wrapping is the behaviour rather than the bug, and it is
+-- the deliberate way back to the far end now that nothing else wraps.
 hl.bind("CTRL + SUPER + mouse_up", hl.dsp.focus({ workspace = "r-1" }),
     { description = "Previous open workspace" })
 hl.bind("CTRL + SUPER + mouse_down", hl.dsp.focus({ workspace = "r+1" }),
     { description = "Next open workspace" })
-hl.bind("SUPER + SHIFT + mouse_up", hl.dsp.window.move({ workspace = "r-1" }))
-hl.bind("SUPER + SHIFT + mouse_down", hl.dsp.window.move({ workspace = "r+1" }))
+-- Carrying a window, on the other hand, is a step and not a cycle: dragging a
+-- window off the first workspace should stop there rather than fling it to the
+-- last one.
+hl.bind("SUPER + SHIFT + mouse_up", workspace_walk("move", -1))
+hl.bind("SUPER + SHIFT + mouse_down", workspace_walk("move", 1))
 
 --##! Scratchpad
 hl.bind("SUPER + S", hl.dsp.workspace.toggle_special("special"), { description = "Scratchpad" })
@@ -212,8 +277,8 @@ end
 
 hl.bind("SUPER + Minus", function() zoom_by(-0.3) end, { repeating = true, description = "Zoom out" })
 hl.bind("SUPER + Equal", function() zoom_by(0.3) end, { repeating = true, description = "Zoom in" })
-hl.bind("SUPER + code:82", function() zoom_by(-0.3) end, { repeating = true })
-hl.bind("SUPER + code:86", function() zoom_by(0.3) end, { repeating = true })
+hl.bind("SUPER + KP_Subtract", function() zoom_by(-0.3) end, { repeating = true })
+hl.bind("SUPER + KP_Add", function() zoom_by(0.3) end, { repeating = true })
 
 --##! Help
 -- The sheet reads the bindings back out of the compositor rather than keeping
