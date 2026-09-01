@@ -21,6 +21,15 @@ STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/quickshell-bar"
 STATE_FILE="$STATE_DIR/alarms.json"
 
 mkdir -p "$STATE_DIR"
+
+# write() is atomic in its final mv and in nothing before it, and the bar runs
+# reap on a timer while a person may be adding an alarm by hand. Two of those
+# overlapping read the same file and the second mv wins, losing whatever the
+# first wrote. The lock covers the seed below as well, since that is a write
+# too. The timeout is so a stuck holder cannot pin the bar's reap forever.
+exec 9>"$STATE_DIR/.alarms.lock"
+flock -w 5 9 || { echo "alarm.sh: could not lock $STATE_DIR/.alarms.lock" >&2; exit 1; }
+
 [[ -s "$STATE_FILE" ]] || printf '[]\n' > "$STATE_FILE"
 
 write() {
@@ -141,7 +150,7 @@ cmd_reap() {
           | if .epoch <= $now then
                 if .daily then (.epoch |= until(. > $now; . + 86400)) | .fired = false
                 elif $now - .epoch < 300 then empty
-                else . end
+                else .fired = true end
             else . end
         ]
     ' "$STATE_FILE" | write

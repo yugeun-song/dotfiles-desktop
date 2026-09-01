@@ -112,7 +112,7 @@ Singleton {
         // An alarm whose moment passed unobserved, across a suspend or a shell
         // restart, still has to be rolled forward or dropped here, or a daily
         // alarm keeps its stale epoch and never comes due again.
-        if (root.entries.some(a => now - a.epoch >= 300))
+        if (root.entries.some(a => !a.fired && now - a.epoch >= 300))
             root.reap();
 
         if (root.ringing !== null)
