@@ -116,6 +116,22 @@ Singleton {
     // history, so each one is copied into a plain object as it arrives. Holding
     // the Notification itself would mean reading properties off an object the
     // server has already destroyed.
+    // Markup is advertised to senders below, and both the toasts and the
+    // history render a body as StyledText so that a <b> arrives bold instead
+    // of as four visible characters. StyledText also honours <img src=...>,
+    // and it fetches whatever that names. Any program that can reach the
+    // session bus can send a notification, so that is a remote URL any local
+    // program can make this process request, out of a component whose whole
+    // job is to display text it did not write.
+    //
+    // Nothing legitimate puts an image inside a body: the icon travels in
+    // app_icon, which is handled separately. So the tag is dropped here, once,
+    // rather than at each of the two places that render one, and the markup
+    // that senders are actually promised keeps working.
+    function withoutImages(text: string): string {
+        return text.replace(/<\s*img\b[^>]*>?/gi, "");
+    }
+
     function snapshot(n) {
         // Two kinds of action never become a button.
         //
@@ -143,7 +159,7 @@ Singleton {
             appName: root.senderName(n.appName),
             appIcon: n.appIcon || "",
             summary: n.summary || "",
-            body: n.body || "",
+            body: root.withoutImages(n.body || ""),
             // 2 is Critical in the freedesktop spec, which is the only level
             // worth treating differently: it is what "your battery is about to
             // die" uses, and it should not disappear on a timer.
@@ -167,8 +183,11 @@ Singleton {
         entry.read = root.centreOpen;
 
         const next = [entry].concat(root.history);
-        if (next.length > root.historyLimit)
+        if (next.length > root.historyLimit) {
+            for (let i = root.historyLimit; i < next.length; i++)
+                root.release(next[i]);
             next.length = root.historyLimit;
+        }
         root.history = next;
         root.prune();
 
@@ -177,16 +196,31 @@ Singleton {
 
     function dismiss(id) {
         const next = [];
-        for (let i = 0; i < root.history.length; i++)
+        for (let i = 0; i < root.history.length; i++) {
             if (root.history[i].id !== id)
                 next.push(root.history[i]);
+            else
+                root.release(root.history[i]);
+        }
         root.history = next;
         root.prune();
     }
 
     function clear() {
+        for (let i = 0; i < root.history.length; i++)
+            root.release(root.history[i]);
         root.history = [];
         root.prune();
+    }
+
+    // tracked is what keeps a Notification alive past its close, and nothing
+    // was ever clearing it: every notification the session had seen stayed in
+    // the server for as long as the shell ran. The history is the only thing
+    // that needs them alive, so they are let go on the three paths that drop
+    // one -- aged out of the limit, dismissed, cleared.
+    function release(entry) {
+        if (entry && entry.live)
+            entry.live.tracked = false;
     }
 
     // Rebuilt rather than marked in place: unread is a binding over history, and

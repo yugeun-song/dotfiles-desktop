@@ -119,7 +119,7 @@ Scope {
                     anchors.right: parent.right
                     anchors.topMargin: Theme.barHeight + Theme.px(8)
                     anchors.rightMargin: Theme.edgeMarginRight
-                    width: Theme.px(510)
+                    width: Theme.centreWidth
 
                     // Everything inside the card that is not the list: the
                     // header's own top margin, the header, the gap under it and
@@ -130,8 +130,8 @@ Scope {
                     // was being cut off the bottom row. A number that has to
                     // agree with four anchors elsewhere in the file will stop
                     // agreeing with them; adding them up cannot.
-                    readonly property int chrome: Theme.px(14) + header.height
-                                                + Theme.px(10) + Theme.px(12)
+                    readonly property int chrome: Theme.centrePad + header.height
+                                                + Theme.px(10) + Theme.centrePad
 
                     // How much of the screen this may take. It is a panel over
                     // work in progress, not a page, so it gets a share of what
@@ -159,12 +159,12 @@ Scope {
                     // and it is still worth having: the alternative is a strip
                     // of a row along the bottom edge, which reads as a
                     // rendering fault rather than as "there is more below".
-                    readonly property int rowUnit: Theme.px(16)   // sender, time
-                                                 + Theme.px(4)    // gap
+                    readonly property int rowUnit: Theme.px(14)   // sender, time
+                                                 + Theme.px(6)    // gap
                                                  + Theme.px(21)   // summary
-                                                 + Theme.px(4)    // gap
+                                                 + Theme.px(6)    // gap
                                                  + Theme.px(19)   // one body line
-                                                 + Theme.px(20)   // row padding
+                                                 + Theme.notifRowPad * 2
                                                  + list.spacing
 
                     // The tallest this may be: whole rows inside the limit,
@@ -184,9 +184,9 @@ Scope {
                         // enough to fit is a list with nothing left to estimate.
                         return Math.min(card.chrome + list.contentHeight, card.cap);
                     }
-                    radius: Theme.px(14)
+                    radius: Theme.centreRadius
                     color: Theme.bgAlt
-                    border.width: 1
+                    border.width: Theme.notifBorder
                     border.color: Theme.accentQuiet
 
                     Behavior on height {
@@ -208,7 +208,7 @@ Scope {
                         anchors.top: parent.top
                         anchors.left: parent.left
                         anchors.right: parent.right
-                        anchors.margins: Theme.px(14)
+                        anchors.margins: Theme.centrePad
                         height: Theme.px(22)
 
                         // The count leads the word. It was on the far right as
@@ -219,12 +219,13 @@ Scope {
                         Text {
                             anchors.left: parent.left
                             anchors.verticalCenter: parent.verticalCenter
-                            text: Notifications.history.length + " Notification"
-                                  + (Notifications.history.length === 1 ? "" : "s")
+                            text: Notifications.history.length + " NOTIFICATION"
+                                  + (Notifications.history.length === 1 ? "" : "S")
                             font.family: Theme.uiFont
-                            font.pixelSize: Theme.px(16)
+                            font.pixelSize: Theme.notifLabelSize
                             font.weight: Font.DemiBold
-                            color: Theme.fg
+                            font.letterSpacing: Theme.notifTracking
+                            color: Theme.muted
                         }
 
                         // The only control left on this panel, so it is drawn at
@@ -236,7 +237,7 @@ Scope {
                             visible: Notifications.history.length > 0
                             text: Theme.iconClearAll
                             font.family: Theme.iconFont
-                            font.pixelSize: Theme.px(30)
+                            font.pixelSize: Theme.px(28)
                             color: sweep.containsMouse ? Theme.accentRed : Theme.muted
 
                             MouseArea {
@@ -269,9 +270,9 @@ Scope {
                         anchors.left: parent.left
                         anchors.right: parent.right
                         anchors.bottom: parent.bottom
-                        anchors.leftMargin: Theme.px(12)
-                        anchors.rightMargin: Theme.px(12)
-                        anchors.bottomMargin: Theme.px(12)
+                        anchors.leftMargin: Theme.centrePad
+                        anchors.rightMargin: Theme.centrePad
+                        anchors.bottomMargin: Theme.centrePad
 
                         clip: true
                         spacing: Theme.px(9)
@@ -297,7 +298,7 @@ Scope {
                             required property var modelData
 
                             width: ListView.view.width
-                            height: row.implicitHeight
+                            height: Math.ceil(row.implicitHeight)
                             clip: true
 
                             SequentialAnimation {
@@ -326,12 +327,13 @@ Scope {
                                 id: row
 
                                 width: parent.width
-                                implicitHeight: body.implicitHeight + Theme.px(20)
+                                implicitHeight: body.implicitHeight + Theme.notifRowPad * 2
                                 height: implicitHeight
-                                radius: Theme.px(9)
+                                radius: Theme.notifRowRadius
                                 color: hover.containsMouse ? Qt.lighter(Theme.bg, 1.5) : Theme.bg
-                                border.width: 1
-                                border.color: slot.modelData.critical ? Theme.accentRed : Theme.muted
+                                border.width: Theme.notifBorder
+                                border.color: slot.modelData.critical ? Theme.accentRed
+                                                                      : Theme.muted
 
                                 opacity: Math.max(0, 1 - row.x / (row.width * 0.7))
 
@@ -363,6 +365,7 @@ Scope {
                                     drag.minimumX: 0
                                     drag.maximumX: row.width
 
+
                                     onReleased: {
                                         if (row.x > row.width * root.swipeCommit)
                                             leaving.start();
@@ -377,29 +380,33 @@ Scope {
                                     anchors.left: parent.left
                                     anchors.right: parent.right
                                     anchors.top: parent.top
-                                    anchors.leftMargin: Theme.px(11)
-                                    // Was 48, holding a gap for a close button
-                                    // that is no longer drawn.
-                                    anchors.rightMargin: Theme.px(12)
-                                    anchors.topMargin: Theme.px(10)
-                                    spacing: Theme.px(4)
+                                    anchors.leftMargin: Theme.notifRowPad
+                                    anchors.rightMargin: Theme.notifRowPad
+                                    anchors.topMargin: Theme.notifRowPad
+                                    spacing: Theme.px(6)
 
                                     Row {
                                         width: parent.width
-                                        spacing: Theme.px(6)
+                                        spacing: Theme.px(8)
 
                                         Text {
-                                            visible: slot.modelData.appName !== ""
-                                            text: slot.modelData.appName
+                                            visible: slot.modelData.critical
+                                                     || slot.modelData.appName !== ""
+                                            text: slot.modelData.critical
+                                                  ? "URGENT"
+                                                  : slot.modelData.appName.toUpperCase()
                                             font.family: Theme.uiFont
-                                            font.pixelSize: Theme.px(12)
-                                            color: Theme.accentTeal
+                                            font.pixelSize: Theme.notifLabelSize
+                                            font.weight: Font.DemiBold
+                                            font.letterSpacing: Theme.notifTracking
+                                            color: slot.modelData.critical ? Theme.accentRed
+                                                                           : Theme.accentTeal
                                         }
 
                                         Text {
                                             text: root.stamp(slot.modelData.at)
                                             font.family: Theme.uiFont
-                                            font.pixelSize: Theme.px(12)
+                                            font.pixelSize: Theme.notifLabelSize
                                             color: Theme.muted
                                         }
                                     }
@@ -407,10 +414,13 @@ Scope {
                                     Text {
                                         width: parent.width
                                         text: slot.modelData.summary
+                                        // Plain text, per the spec; see the toast for the body's exception.
+                                        textFormat: Text.PlainText
                                         font.family: Theme.uiFont
-                                        font.pixelSize: Theme.px(16)
-                                        font.weight: Font.DemiBold
+                                        font.pixelSize: Theme.notifTitleSize
+                                        font.weight: Font.ExtraBold
                                         color: Theme.fg
+                                        lineHeight: 1.06
                                         wrapMode: Text.Wrap
                                         maximumLineCount: 2
                                         elide: Text.ElideRight
@@ -421,8 +431,9 @@ Scope {
                                         visible: slot.modelData.body !== ""
                                         text: slot.modelData.body
                                         font.family: Theme.uiFont
-                                        font.pixelSize: Theme.px(14)
+                                        font.pixelSize: Theme.notifBodySize
                                         color: Theme.accentQuiet
+                                        lineHeight: 1.28
                                         wrapMode: Text.Wrap
                                         textFormat: Text.StyledText
                                     }
@@ -433,38 +444,39 @@ Scope {
                                     // is the only way an action can fail here.
                                     Row {
                                         visible: slot.modelData.actions.length > 0
-                                        spacing: Theme.px(6)
-                                        topPadding: Theme.px(4)
+                                        spacing: Theme.px(18)
+                                        topPadding: Theme.px(9)
 
                                         Repeater {
                                             model: slot.modelData.actions
 
-                                            Rectangle {
+                                            Text {
                                                 id: action
 
                                                 required property var modelData
 
-                                                width: label.implicitWidth + Theme.px(16)
-                                                height: label.implicitHeight + Theme.px(7)
-                                                radius: Theme.px(6)
-                                                color: press.containsMouse ? Theme.accentTeal : Theme.bg
-                                                border.width: 1
-                                                border.color: Theme.accentQuiet
+                                                text: action.modelData.text.toUpperCase() + "  →"
+                                                // The label came from the sender too.
+                                                textFormat: Text.PlainText
+                                                font.family: Theme.uiFont
+                                                font.pixelSize: Theme.notifLabelSize
+                                                font.weight: Font.DemiBold
+                                                font.letterSpacing: Theme.notifTracking
+                                                color: press.containsMouse ? Theme.fg
+                                                                           : Theme.accentTeal
 
-                                                Text {
-                                                    id: label
-
-                                                    anchors.centerIn: parent
-                                                    text: action.modelData.text
-                                                    font.family: Theme.uiFont
-                                                    font.pixelSize: Theme.px(13)
-                                                    color: press.containsMouse ? Theme.ink : Theme.fg
+                                                Behavior on color {
+                                                    ColorAnimation {
+                                                        duration: 110
+                                                        easing.type: Easing.OutCubic
+                                                    }
                                                 }
 
                                                 MouseArea {
                                                     id: press
 
                                                     anchors.fill: parent
+                                                    anchors.margins: -Theme.px(6)
                                                     hoverEnabled: true
                                                     cursorShape: Qt.PointingHandCursor
 

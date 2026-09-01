@@ -78,17 +78,33 @@ Scope {
                 top: Theme.px(8)
             }
 
-            implicitWidth: Theme.px(440)
-            implicitHeight: Math.max(1, stack.implicitHeight)
+            implicitWidth: Theme.notifWidth
+            // Rounded up, not passed through. A Text reports a fractional
+            // implicitHeight, so the layer surface was a fraction of a pixel
+            // shorter than the card inside it and the bottom border was the
+            // part that fell outside.
+            implicitHeight: Math.max(1, Math.ceil(stack.implicitHeight))
 
             Column {
                 id: stack
 
                 width: parent.width
-                spacing: Theme.px(8)
+                spacing: Theme.notifStackGap
 
                 Repeater {
-                    model: root.live
+                    // Not `model: root.live`. push() and drop() assign a whole
+                    // new array, and a Repeater over a plain array rebuilds
+                    // every delegate when the array is replaced: each toast
+                    // already on screen replayed its slide-in, restarted its
+                    // five second dwell from zero, and one caught mid-dismissal
+                    // came back. ScriptModel diffs the list and emits only the
+                    // row that actually moved, so the survivors are left alone.
+                    // concat() carries the same entry objects across, which is
+                    // what identity on `id` is matching.
+                    model: ScriptModel {
+                        values: root.live
+                        objectProp: "id"
+                    }
 
                     // Two items, not one: the slot holds the space in the column
                     // and the card is what moves. Animating a single item's x
@@ -101,7 +117,7 @@ Scope {
                         required property var modelData
 
                         width: parent.width
-                        height: card.implicitHeight
+                        height: Math.ceil(card.implicitHeight)
                         clip: true
 
                         // Runs on expiry, on the close button, and on a released
@@ -145,15 +161,16 @@ Scope {
                             // the content plus twice this is what keeps the space
                             // under the last line equal to the space above the
                             // first one.
-                            readonly property int pad: Theme.px(13)
+                            readonly property int pad: Theme.notifPad
 
                             width: parent.width
                             implicitHeight: text.implicitHeight + card.pad * 2
                             height: implicitHeight
-                            radius: Theme.px(12)
+                            radius: Theme.notifRadius
                             color: Theme.bgAlt
-                            border.width: 1
-                            border.color: slot.modelData.critical ? Theme.accentRed : Theme.accentQuiet
+                            border.width: Theme.notifBorder
+                            border.color: slot.modelData.critical ? Theme.accentRed
+                                                                  : Theme.accentQuiet
 
                             // Arrives from the edge it will later leave by.
                             // Without this it appears instantly and the exit
@@ -189,42 +206,51 @@ Scope {
                                 }
                             }
 
-                            Text {
-                                id: icon
-
-                                anchors.left: parent.left
-                                anchors.leftMargin: card.pad
-                                anchors.top: parent.top
-                                anchors.topMargin: card.pad
-                                text: Theme.iconBell
-                                font.family: Theme.iconFont
-                                font.pixelSize: Theme.iconSize
-                                color: slot.modelData.critical ? Theme.accentRed : Theme.accentTeal
-                            }
-
                             Column {
                                 id: text
 
-                                anchors.left: icon.right
-                                anchors.leftMargin: Theme.px(10)
+                                anchors.left: parent.left
                                 anchors.right: parent.right
-                                // Was pad + 30, keeping a gap clear for a close
-                                // button. Three ways out of a toast was two too
-                                // many: it leaves on its own, and a swipe takes
-                                // it early. The history keeps the record either
-                                // way, which is what the button was protecting.
-                                anchors.rightMargin: card.pad
                                 anchors.top: parent.top
+                                anchors.leftMargin: card.pad
+                                anchors.rightMargin: card.pad
                                 anchors.topMargin: card.pad
-                                spacing: Theme.px(2)
+                                spacing: Theme.px(6)
+
+                                Text {
+                                    width: parent.width
+                                    // Against the model, not against this Text's
+                                    // own `text`: the enclosing Column is
+                                    // id: text, so the bare name resolves to it
+                                    // and the row would never draw.
+                                    visible: slot.modelData.critical
+                                             || slot.modelData.appName !== ""
+                                    text: slot.modelData.critical
+                                          ? "URGENT"
+                                          : slot.modelData.appName.toUpperCase()
+                                    font.family: Theme.uiFont
+                                    font.pixelSize: Theme.notifLabelSize
+                                    font.weight: Font.DemiBold
+                                    font.letterSpacing: Theme.notifTracking
+                                    color: slot.modelData.critical ? Theme.accentRed
+                                                                   : Theme.muted
+                                    elide: Text.ElideRight
+                                    bottomPadding: Theme.px(1)
+                                }
 
                                 Text {
                                     width: parent.width
                                     text: slot.modelData.summary
+                                    // A summary is a single line of plain text in the freedesktop spec.
+                                    // Only the body below is markup, and only because senders are told so.
+                                    textFormat: Text.PlainText
                                     font.family: Theme.uiFont
-                                    font.pixelSize: Theme.px(16)
-                                    font.weight: Font.DemiBold
+                                    font.pixelSize: Theme.notifTitleSize
+                                    font.weight: Font.ExtraBold
                                     color: Theme.fg
+                                    lineHeight: 1.06
+                                    wrapMode: Text.Wrap
+                                    maximumLineCount: 2
                                     elide: Text.ElideRight
                                 }
 
@@ -233,8 +259,9 @@ Scope {
                                     visible: slot.modelData.body !== ""
                                     text: slot.modelData.body
                                     font.family: Theme.uiFont
-                                    font.pixelSize: Theme.px(14)
+                                    font.pixelSize: Theme.notifBodySize
                                     color: Theme.accentQuiet
+                                    lineHeight: 1.28
                                     wrapMode: Text.Wrap
                                     maximumLineCount: 3
                                     elide: Text.ElideRight
@@ -246,17 +273,14 @@ Scope {
 
                                 Text {
                                     width: parent.width
-                                    // Against the model, not against `text`: the
-                                    // enclosing Column is id: text, so the bare
-                                    // name resolves to it and the comparison is
-                                    // always true.
-                                    visible: slot.modelData.appName !== ""
-                                    text: slot.modelData.appName
+                                    visible: slot.modelData.hasDefault
+                                    text: "OPEN  →"
                                     font.family: Theme.uiFont
-                                    font.pixelSize: Theme.px(12)
+                                    font.pixelSize: Theme.notifLabelSize
+                                    font.weight: Font.DemiBold
+                                    font.letterSpacing: Theme.notifTracking
                                     color: Theme.muted
-                                    elide: Text.ElideRight
-                                    topPadding: Theme.px(3)
+                                    topPadding: Theme.px(7)
                                 }
                             }
 

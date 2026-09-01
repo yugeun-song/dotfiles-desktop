@@ -8,7 +8,7 @@ Rectangle {
     property string icon: ""
     property string label: ""
     property color fill: Theme.muted
-    property color textColor: Theme.ink
+    property color textColor: Theme.readableOn(root.fill)
     property int horizontalPadding: Theme.pillPadding
     property string tooltip: ""
 
@@ -31,6 +31,12 @@ Rectangle {
     readonly property bool unread: root.unknown !== ""
     readonly property color face: root.unread ? Theme.bgAlt : root.fill
     readonly property color faceText: root.unread ? Theme.accentQuiet : root.textColor
+
+    // Drawn to the left of the label and never resized with it. The label keeps
+    // its own fixed width and right-aligns inside it, so a reading that swings
+    // between one and three digits moves nothing: the prefix stays put and the
+    // gap between it and the number takes up the slack.
+    property string labelPrefix: ""
 
     property int iconPixelSize: Theme.iconSize
     // Width to hold open for the label, whatever it currently reads. A
@@ -176,21 +182,44 @@ Rectangle {
             color: root.faceText
         }
 
-        Text {
-            id: labelText
-
+        // The prefix and the reading are their own row so that the gap between
+        // them is one space rather than the glyph gap the outer row uses to
+        // separate an icon from text. Invisible as a whole when there is
+        // neither, so a pill showing only an icon keeps no empty column.
+        Row {
             anchors.verticalCenter: parent.verticalCenter
-            visible: root.unread || root.label !== ""
-            width: root.labelWidth > 0 ? root.labelWidth : implicitWidth
-            horizontalAlignment: root.labelWidth > 0 ? Text.AlignRight : Text.AlignLeft
-            // The em dash keeps labelWidth's reservation, so a pill that loses
-            // its reading does not resize and drag its neighbours along -- the
-            // same reason labelWidth exists at all.
-            text: root.unread ? "—" : root.label
-            font.family: Theme.uiFont
-            font.pixelSize: Theme.textSize
-            font.weight: Font.Medium
-            color: root.faceText
+            visible: root.labelPrefix !== "" || root.unread || root.label !== ""
+            spacing: Theme.labelGap
+
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.labelPrefix !== ""
+                text: root.labelPrefix
+                font.family: Theme.uiFont
+                font.pixelSize: Theme.textSize
+                font.weight: Font.Medium
+                color: root.faceText
+            }
+
+            Text {
+                id: labelText
+
+                anchors.verticalCenter: parent.verticalCenter
+                visible: root.unread || root.label !== ""
+                width: root.labelWidth > 0 ? root.labelWidth : implicitWidth
+                horizontalAlignment: root.labelWidth > 0 ? Text.AlignRight : Text.AlignLeft
+                // The em dash keeps labelWidth's reservation, so a pill that
+                // loses its reading does not resize and drag its neighbours
+                // along -- the same reason labelWidth exists at all.
+                text: root.unread ? "—" : root.label
+                // A pill's label carries names this machine did not choose: an SSID, a
+                // Bluetooth device name. Both are set by whoever is in radio range.
+                textFormat: Text.PlainText
+                font.family: Theme.uiFont
+                font.pixelSize: Theme.textSize
+                font.weight: Font.Medium
+                color: root.faceText
+            }
         }
     }
 }

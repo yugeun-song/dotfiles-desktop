@@ -53,6 +53,12 @@ Rectangle {
             width: root.captionVisible ? Math.min(Math.ceil(captionMetrics.width), root.focused ? Theme.windowTitleWidth : Theme.windowNameWidth) : 0
             elide: Text.ElideRight
             text: root.focused && root.windowTitle !== "" ? root.windowTitle : root.appName
+            // A window title is set by the window, and a browser hands that
+            // control to whatever page is in the tab. Left at Qt's default of
+            // AutoText, a title carrying a tag is promoted to rich text and its
+            // <img src=...> is fetched, which turns any open page into a network
+            // beacon running out of the bar. Nothing here ever wanted markup.
+            textFormat: Text.PlainText
             font.family: Theme.uiFont
             font.pixelSize: Theme.textSize
             font.weight: Font.Medium

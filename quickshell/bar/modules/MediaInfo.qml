@@ -95,6 +95,9 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             width: root.textWidth
             text: root.summary
+            // Title and artist as the player reports them, which for a browser is
+            // whatever the page says.
+            textFormat: Text.PlainText
             elide: Text.ElideRight
             font.family: Theme.uiFont
             font.pixelSize: Theme.textSize

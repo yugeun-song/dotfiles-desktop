@@ -376,6 +376,9 @@ Scope {
 
                                     Text {
                                         text: row.modelData.name ?? ""
+                                        // Read out of a .desktop file, which anything that can write to a
+                                        // data dir controls.
+                                        textFormat: Text.PlainText
                                         font.family: Theme.uiFont
                                         font.pixelSize: Theme.px(13)
                                         font.weight: Font.Medium
@@ -385,6 +388,7 @@ Scope {
                                     Text {
                                         visible: (row.modelData.genericName ?? "") !== ""
                                         text: row.modelData.genericName ?? ""
+                                        textFormat: Text.PlainText
                                         font.family: Theme.uiFont
                                         font.pixelSize: Theme.px(10)
                                         color: row.current ? Theme.ink : Theme.muted
