@@ -1,0 +1,15 @@
+# kded6 loads a gtkconfig module that mirrors the KDE look into GTK: it rewrites
+# ~/.config/gtk-3.0/settings.ini, ~/.config/gtk-4.0/settings.ini and the dconf
+# keys, and it starts an xsettingsd to serve the same values to X clients.
+#
+# What it writes is not what this machine wants. It puts breeze_cursors at 24
+# into both ini files and into dconf, while env.lua exports Spaceduck-Sky at 32
+# and gtk/*-settings.ini deliberately leave the cursor keys out so that the
+# compositor's value is the only one. The result was GTK windows drawing a
+# different pointer from everything else, and the ini files drifting from the
+# repository on their own so install.sh refused to touch them.
+#
+# Turning the module off leaves gtk/*-settings.ini and gsettings-apply.sh as the
+# only writers, which is what env.lua's comment already says the design is.
+[Module-gtkconfig]
+autoload=false

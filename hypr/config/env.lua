@@ -12,12 +12,12 @@ hl.env("QT_QPA_PLATFORM", "wayland;xcb")
 -- QT_QPA_PLATFORM and LIBVA_DRIVER_NAME a second time and two sources for one
 -- variable disagree the first time either changes.
 --
--- Worth knowing rather than assuming: quickshell is a Qt Quick application, so
--- this decides how the bar itself is drawn, on a machine whose principal fault
--- is xe driver graphics hangs. Whether Vulkan makes that better or worse has
--- never been measured either way. If the hangs are being chased again, this is
--- one line to try removing.
-hl.env("QT_QUICK_BACKEND", "vulkan")
+-- QT_QUICK_BACKEND used to be set to "vulkan" here. It is not the name Qt 6
+-- reads: the scenegraph takes QSG_RHI_BACKEND, and Qt logged the unknown value
+-- and fell back at every launch, so the bar has always drawn on the default
+-- OpenGL RHI. The line is gone rather than renamed. Vulkan on a machine whose
+-- principal fault is xe driver hangs is a real behaviour change and belongs in
+-- a deliberate experiment, not in a typo correction.
 hl.env("GDK_BACKEND", "wayland,x11")
 hl.env("SDL_VIDEODRIVER", "wayland")
 hl.env("CLUTTER_BACKEND", "wayland")
