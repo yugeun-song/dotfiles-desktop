@@ -58,6 +58,12 @@ logout leaves nothing behind and a crashed unit comes back on its own.
     journalctl --user -u bar.service -f
     journalctl --user -t session-start
 
+When the desktop is there and cannot be seen, `~/recover-desktop` from a text
+console (Ctrl+Alt+F2) finds the compositor, removes outputs no connector
+backs, turns DPMS on, asks for the built-in panel and restarts what died. It
+ends nothing unless told to with `--logout` or `--kill`. A lock screen that
+will not go away is `unlock`'s job.
+
 ## The bar
 
 ```

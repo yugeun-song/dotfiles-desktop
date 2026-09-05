@@ -1,0 +1,265 @@
+#!/usr/bin/env bash
+# ============================================================================
+# recover-desktop - get a Hyprland session back from a text console
+#
+# For the cases where the desktop is still there and cannot be seen or used:
+# a panel left disabled, an output a test created, DPMS off, a service that
+# died, a compositor that stopped answering. Run it from Ctrl+Alt+F2 after
+# logging in there, then Ctrl+Alt+F1 back.
+#
+# Nothing about the machine is written down here. The runtime directory comes
+# from the uid, the compositor from its lock file, the built-in panel from the
+# connector names in sysfs, the services from the session target. That is
+# what makes this usable from a console that has none of the session's
+# environment, and on the next machine this repository is installed on.
+#
+# Usage:
+#   recover-desktop            diagnose, then the safe repairs, in order
+#   recover-desktop --status   diagnose only
+#   recover-desktop --logout   end the session cleanly, back to the greeter
+#   recover-desktop --kill     SIGTERM the compositor; the launcher restarts it
+#
+# The default never ends anything. --logout and --kill are the two steps that
+# do, and they are separate flags so they cannot happen by accident.
+#
+# A lock screen that will not go away is a different problem; that is what
+# `unlock` is for.
+# ============================================================================
+
+set -uo pipefail
+
+MODE="${1:-}"
+case "$MODE" in
+    ""|--status|--logout|--kill) ;;
+    *) echo "usage: ${0##*/} [--status|--logout|--kill]" >&2; exit 2 ;;
+esac
+
+UID_NOW=$(id -u)
+export XDG_RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$UID_NOW}"
+RT="$XDG_RUNTIME_DIR"
+TARGET=hyprland-session.target
+
+say()  { printf 'recover: %s\n' "$*"; }
+warn() { printf 'recover: %s\n' "$*" >&2; }
+
+# hyprctl against a compositor that hangs never returns; five seconds is long
+# enough for any answer and short enough to move on to --kill advice.
+hc() { timeout 5 hyprctl "$@"; }
+
+for tool in hyprctl jq timeout; do
+    command -v "$tool" >/dev/null 2>&1 || { warn "$tool is not installed; cannot read the compositor's state"; exit 1; }
+done
+
+# ---------------------------------------------------------------------------
+# Which compositor.
+# ---------------------------------------------------------------------------
+# Hyprland leaves its instance directory behind when it exits and removes only
+# the lock, so a directory with a lock is a live compositor. The lock's first
+# line is that compositor's pid and its second the wayland socket name; both
+# are read from the file rather than asked for, because asking a hung
+# compositor is the one thing that does not work.
+lock_pid() { sed -n '1{/^[0-9][0-9]*$/p}' "$RT/hypr/$1/hyprland.lock" 2>/dev/null; }
+lock_display() { sed -n 2p "$RT/hypr/$1/hyprland.lock" 2>/dev/null; }
+
+# A compositor that is itself a wayland client -- a nested one, such as the
+# monitor self-test runs -- has WAYLAND_DISPLAY in its own environment; the
+# session's compositor, started by greetd on a console, has none. That is
+# what tells them apart when both hold a lock. Among candidates of the same
+# kind the newest wins, which is what bin/unlock assumes too.
+live_instance() {
+    local d sig pid env_display newest="" newest_session=""
+    if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" && -e "$RT/hypr/${HYPRLAND_INSTANCE_SIGNATURE}/hyprland.lock" ]]; then
+        printf '%s\n' "$HYPRLAND_INSTANCE_SIGNATURE"
+        return 0
+    fi
+    for d in "$RT"/hypr/*/; do
+        [[ -e "$d/hyprland.lock" ]] || continue
+        sig=$(basename "$d")
+        [[ -z "$newest" || "$d" -nt "$RT/hypr/$newest/" ]] && newest="$sig"
+        pid=$(lock_pid "$sig")
+        [[ -n "$pid" && -r "/proc/$pid/environ" ]] || continue
+        env_display=$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -c '^WAYLAND_DISPLAY=')
+        (( env_display == 0 )) || continue
+        [[ -z "$newest_session" || "$d" -nt "$RT/hypr/$newest_session/" ]] && newest_session="$sig"
+    done
+    [[ -n "$newest_session" ]] && { printf '%s\n' "$newest_session"; return 0; }
+    [[ -n "$newest" ]] || return 1
+    printf '%s\n' "$newest"
+}
+
+SIG=$(live_instance) || {
+    warn "no running compositor: no hyprland.lock under $RT/hypr"
+    warn "the session has ended; log in again at the greeter, or check: systemctl status greetd"
+    exit 1
+}
+export HYPRLAND_INSTANCE_SIGNATURE="$SIG"
+
+HL_PID=$(lock_pid "$SIG")
+WL=$(lock_display "$SIG")
+[[ -n "$WL" ]] && export WAYLAND_DISPLAY="$WL"
+
+# Should a future lock file stop carrying the pid: the compositor is asked
+# while it still answers, and failing that the process list is, when it
+# holds exactly one Hyprland of this user's.
+if [[ ! "$HL_PID" =~ ^[0-9]+$ ]]; then
+    HL_PID=$(hc instances -j 2>/dev/null | jq -r --arg s "$SIG" '.[] | select(.instance == $s) | .pid' 2>/dev/null | head -1)
+fi
+if [[ ! "$HL_PID" =~ ^[0-9]+$ ]]; then
+    HL_PID=$(pgrep -u "$UID_NOW" -x Hyprland 2>/dev/null)
+    [[ "$(printf '%s\n' "$HL_PID" | grep -c .)" == 1 ]] || HL_PID=""
+fi
+
+if [[ "$MODE" == "--kill" ]]; then
+    if [[ ! "$HL_PID" =~ ^[0-9]+$ ]] || [[ ! -d "/proc/$HL_PID" ]]; then
+        warn "the lock file names no live pid; nothing to kill"
+        exit 1
+    fi
+    say "sending SIGTERM to Hyprland ($HL_PID); start-hyprland relaunches it, or the greeter returns"
+    kill -TERM "$HL_PID"
+    exit $?
+fi
+
+# ---------------------------------------------------------------------------
+# Diagnose.
+# ---------------------------------------------------------------------------
+if ! hc version >/dev/null 2>&1; then
+    warn "compositor $SIG (pid ${HL_PID:-?}) is not answering hyprctl"
+    warn "if it stays that way, run: ${0##*/} --kill"
+    exit 1
+fi
+
+if [[ "$MODE" == "--logout" ]]; then
+    say "asking the compositor to exit"
+    hc dispatch 'hl.dsp.exit()'
+    exit $?
+fi
+
+# Connector names the kernel has, and which of them are built-in panels. The
+# same classification config/monitors.lua uses, so the two agree on what the
+# panel is.
+declare -A KERNEL=()
+INTERNAL=()
+for status in /sys/class/drm/card*-*/status; do
+    [[ -e "$status" ]] || continue
+    name=$(basename "$(dirname "$status")")
+    name="${name#card*-}"
+    KERNEL["$name"]=1
+    case "$name" in
+        eDP*|LVDS*|DSI*) INTERNAL+=("$name") ;;
+    esac
+done
+
+report() {
+    local json real=0 synthetic=() fake=() line name disabled
+    json=$(hc monitors all -j 2>/dev/null) || { warn "could not list monitors"; return 1; }
+    say "compositor $SIG, pid ${HL_PID:-?}, display ${WL:-?}"
+    while IFS=$'\t' read -r name disabled line; do
+        [[ -n "$name" ]] || continue
+        printf '  %-12s %s  %s\n' "$name" "$([[ "$disabled" == "true" ]] && echo off || echo on )" "$line"
+        case "$name" in
+            FALLBACK|HEADLESS-*) synthetic+=("$name") ;;
+            *)
+                if [[ -z "${KERNEL[$name]:-}" ]]; then
+                    fake+=("$name")
+                elif [[ "$disabled" != "true" ]]; then
+                    real=$((real + 1))
+                fi
+                ;;
+        esac
+    done < <(printf '%s' "$json" | jq -r '.[] | [.name, (.disabled // false), "\(.width)x\(.height)@\(.refreshRate|floor) at \(.x)x\(.y) scale \(.scale) dpms \(.dpmsStatus)"] | @tsv')
+    REAL_ENABLED=$real
+    FAKE_OUTPUTS=("${fake[@]}")
+    (( ${#synthetic[@]} )) && say "synthetic outputs present: ${synthetic[*]}"
+    (( ${#fake[@]} )) && say "outputs the kernel does not have (created by hand or by a test): ${fake[*]}"
+    say "real outputs enabled: $real; built-in panels known to the kernel: ${INTERNAL[*]:-none}"
+    if command -v systemctl >/dev/null 2>&1; then
+        say "session target: $(systemctl --user is-active "$TARGET" 2>/dev/null)"
+        local u
+        for u in "${UNITS[@]}"; do
+            printf '  %-32s %s\n' "$u" "$(systemctl --user is-active "$u" 2>/dev/null)"
+        done
+    fi
+}
+
+# The units are whatever the target wants; that list lives in the target file
+# and nowhere else.
+UNITS=()
+if command -v systemctl >/dev/null 2>&1; then
+    read -r -a UNITS <<<"$(systemctl --user show "$TARGET" -p Wants --value 2>/dev/null)"
+fi
+
+REAL_ENABLED=0
+FAKE_OUTPUTS=()
+report || exit 1
+[[ "$MODE" == "--status" ]] && exit 0
+
+# ---------------------------------------------------------------------------
+# Repair, safest first. Each step is reported; none of them ends anything.
+# ---------------------------------------------------------------------------
+echo
+for name in "${FAKE_OUTPUTS[@]}"; do
+    say "removing $name, which no connector backs"
+    hc output remove "$name" >/dev/null 2>&1 || warn "could not remove $name"
+done
+
+say "DPMS on for every output"
+hc dispatch 'hl.dsp.dpms({ action = "enable" })' >/dev/null 2>&1 || warn "dpms request failed"
+
+# The policy module re-evaluates itself if it is loaded. If it is not -- a
+# config that failed to load, an older configuration -- the panel is asked
+# for directly, and if that leaves nothing lit a reload puts the catch-all
+# rule back on every output.
+if [[ "$(hc repl 'return MONITORS ~= nil' 2>/dev/null)" == "true" ]]; then
+    say "asking config/monitors.lua to re-evaluate"
+    hc eval 'MONITORS.evaluate("recover", false)' >/dev/null 2>&1 || warn "evaluate failed"
+else
+    say "the monitor policy module is not loaded; enabling the built-in panel by rule"
+    for name in "${INTERNAL[@]}"; do
+        hc eval "hl.monitor({ output = \"$name\", disabled = false, mode = \"highrr\", position = \"auto\", scale = \"1\" })" >/dev/null 2>&1 \
+            || warn "rule for $name refused"
+    done
+fi
+sleep 3
+
+REAL_ENABLED=0
+report >/dev/null 2>&1
+if (( REAL_ENABLED == 0 )); then
+    # A reload clears every rule and re-runs the policy from scratch, which
+    # is the stronger repair only because the policy re-arms its own net at
+    # load. The panel is asked for by rule again afterwards regardless.
+    say "still no real output enabled; reloading the configuration"
+    hc reload >/dev/null 2>&1 || warn "reload failed"
+    sleep 3
+    if [[ "$(hc repl 'return MONITORS ~= nil' 2>/dev/null)" == "true" ]]; then
+        hc eval 'MONITORS.evaluate("recover", false)' >/dev/null 2>&1 || warn "evaluate failed"
+    else
+        for name in "${INTERNAL[@]}"; do
+            hc eval "hl.monitor({ output = \"$name\", disabled = false, mode = \"highrr\", position = \"auto\", scale = \"1\" })" >/dev/null 2>&1 \
+                || warn "rule for $name refused"
+        done
+    fi
+    sleep 2
+fi
+
+if command -v systemctl >/dev/null 2>&1; then
+    # Units read the user manager's environment, not this shell's. After a
+    # compositor was replaced the manager may still name the dead one, and a
+    # bar started against that fails again; the two values that identify the
+    # compositor are pushed first, into the bus and the manager both.
+    say "telling the user manager which compositor this is"
+    if command -v dbus-update-activation-environment >/dev/null 2>&1; then
+        dbus-update-activation-environment --systemd HYPRLAND_INSTANCE_SIGNATURE WAYLAND_DISPLAY 2>/dev/null \
+            || warn "could not update the activation environment"
+    else
+        systemctl --user import-environment HYPRLAND_INSTANCE_SIGNATURE WAYLAND_DISPLAY 2>/dev/null \
+            || warn "could not update the manager environment"
+    fi
+    say "starting whatever in the session target has died"
+    (( ${#UNITS[@]} )) && systemctl --user reset-failed "${UNITS[@]}" 2>/dev/null
+    systemctl --user start "$TARGET" 2>/dev/null || warn "could not start $TARGET"
+fi
+
+echo
+report
+echo
+say "if the screen is still dark: ${0##*/} --logout, then log in again; ${0##*/} --kill if the compositor hangs"

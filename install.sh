@@ -244,6 +244,15 @@ seed "$SRC/hypr/hyprlock.conf"     "$CONFIG/hypr/hyprlock.conf"
 seed "$SRC/hypr/hyprpaper.conf"    "$CONFIG/hypr/hyprpaper.conf"
 mirror "$SRC/bin/bar"               "$HOME/.local/bin/bar"
 mirror "$SRC/bin/unlock"            "$HOME/.local/bin/unlock"
+# At the top of the home directory on purpose, not on PATH: it is typed from
+# a text console after the desktop has gone dark, where "~/recover-desktop"
+# is the one path that needs no memory of where anything is installed.
+mirror "$SRC/bin/recover-desktop"   "$HOME/recover-desktop"
+# The three commands are single files, which mirror() skips when the content
+# matches, mode or no mode, and make_executable below only walks the script
+# directories. A checkout that arrived at 644 would install commands nobody
+# can run.
+(( CHECK )) || chmod +x "$HOME/.local/bin/bar" "$HOME/.local/bin/unlock" "$HOME/recover-desktop" 2>/dev/null || true
 
 if (( CHECK )); then
     (( DRIFT )) && { echo; echo "run ./install.sh to apply"; exit 1; }
