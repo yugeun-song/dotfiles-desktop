@@ -112,7 +112,25 @@ mirror() {
     if [[ -d "$from" ]]; then
         [[ -e "$to" && ! -d "$to" ]] && rm -f "$to"
         mkdir -p "$to"
-        cp -a -- "$from/." "$to/"
+        # One file at a time, each written beside its target and renamed over
+        # it, the same way the single-file branch below works and for two more
+        # reasons. bash reads a running script incrementally, so a script that
+        # is blocked in a command -- session-watch.sh in inotifywait -- and
+        # is overwritten in place picks up reading from the new file's bytes
+        # at its old offset, and did: "unexpected EOF while looking for
+        # matching quote". And Hyprland reloads on the write of any module it
+        # has loaded, so an in-place copy could hand it a half-written file.
+        # A rename is one file, whole, or the old one.
+        while IFS= read -r -d '' rel; do
+            rel="${rel#./}"
+            if [[ -d "$from/$rel" && ! -L "$from/$rel" ]]; then
+                mkdir -p "$to/$rel"
+            else
+                mkdir -p "$(dirname "$to/$rel")"
+                cp -a -- "$from/$rel" "$to/$rel.new-$$"
+                mv -T -- "$to/$rel.new-$$" "$to/$rel"
+            fi
+        done < <(cd -- "$from" && find . -mindepth 1 -print0)
         # A file the repository no longer has is one a stale binding can still
         # reach, so it goes. Only inside this directory: local.lua and
         # monitor_settings.lua live a level up and are not ours to delete.
