@@ -11,3 +11,7 @@ fcitx5/*_??????
 # Python leaves these behind when a script is imported rather than run.
 __pycache__/
 *.pyc
+
+# The output settings of one machine. The example beside it is the tracked
+# file; this is the copy that is read.
+hypr/monitor_settings.lua

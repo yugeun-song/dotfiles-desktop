@@ -115,7 +115,7 @@ mirror() {
         cp -a -- "$from/." "$to/"
         # A file the repository no longer has is one a stale binding can still
         # reach, so it goes. Only inside this directory: local.lua and
-        # local.monitors live a level up and are not ours to delete.
+        # monitor_settings.lua live a level up and are not ours to delete.
         while IFS= read -r -d '' rel; do
             rel="${rel#./}"
             if [[ ! -e "$from/$rel" ]]; then
@@ -193,10 +193,52 @@ seed() {
     echo "seeded $to"
 }
 
-mirror "$SRC/hypr/hyprland.lua"      "$CONFIG/hypr/hyprland.lua"
+# config/ before hyprland.lua, and a reload afterwards.
+#
+# Hyprland reloads the moment a file it has loaded is written, and only files
+# it has loaded. hyprland.lua was mirrored first once, its reload ran while the
+# module it had just started requiring was not copied yet, the load failed
+# before the keybinds, and the session sat in emergency mode with three binds
+# and an error overlay. The new module's arrival changed nothing, because a
+# file the compositor has never loaded is not one it watches. So the modules
+# land first, and the explicit reload below makes the final state what is on
+# disk whatever the watcher saw halfway through the copy.
+# Where config/monitors.lua remembers the description of each output it has
+# seen, so a disabled panel still gets its scale. The module cannot create the
+# directory itself, and the reload below is its first chance to write there.
+(( CHECK )) || mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/hypr"
 mirror "$SRC/hypr/config"            "$CONFIG/hypr/config"
 mirror "$SRC/hypr/scripts"           "$CONFIG/hypr/scripts"
-mirror "$SRC/hypr/monitors.preset"  "$CONFIG/hypr/monitors.preset"
+# The one file under hypr/ that is not in the repository: this machine's
+# output settings, copied from monitor_settings_example.lua and edited.
+# Mirrored when it exists, mentioned when it does not; the policy runs on
+# its defaults without it.
+if [[ -f "$SRC/hypr/monitor_settings.lua" ]]; then
+    mirror "$SRC/hypr/monitor_settings.lua" "$CONFIG/hypr/monitor_settings.lua"
+elif (( ! CHECK )); then
+    echo "no hypr/monitor_settings.lua: copy hypr/monitor_settings_example.lua to it for this machine's scales"
+fi
+mirror "$SRC/hypr/hyprland.lua"      "$CONFIG/hypr/hyprland.lua"
+# Files this repository once installed and no longer does. The policy reads
+# monitor_settings.lua now; a preset left behind would only mislead.
+_retired_files=("$CONFIG/hypr/monitors.preset")
+for _retired in "${_retired_files[@]}"; do
+    [[ -e "$_retired" ]] || continue
+    if (( CHECK )); then
+        echo "DRIFT   $_retired is no longer used"; DRIFT=1
+    else
+        rm -f -- "$_retired" && echo "removed retired $_retired"
+    fi
+done
+unset _retired _retired_files
+if (( ! CHECK )); then
+    if command -v hyprctl >/dev/null 2>&1 && hyprctl version >/dev/null 2>&1; then
+        hyprctl reload >/dev/null 2>&1 && echo "reloaded the running compositor" \
+            || echo "could not reload the running compositor; run: hyprctl reload" >&2
+    else
+        echo "no compositor reachable from here; a running session picks this up at its next hyprctl reload"
+    fi
+fi
 seed "$SRC/hypr/hypridle.conf"     "$CONFIG/hypr/hypridle.conf"
 seed "$SRC/hypr/hyprlock.conf"     "$CONFIG/hypr/hyprlock.conf"
 seed "$SRC/hypr/hyprpaper.conf"    "$CONFIG/hypr/hyprpaper.conf"

@@ -6,8 +6,8 @@ status bar written in QML for quickshell.
 ## Layout
 
 ```
-hypr/config/      Hyprland configuration in Lua: keybinds, rules, env, monitors
-hypr/scripts/     what those keybinds call: monitor switching, capture, lock
+hypr/config/      Hyprland configuration in Lua: keybinds, rules, env, outputs
+hypr/scripts/     what those keybinds call: capture, lock
 quickshell/bar/   the status bar, written from scratch
 bin/              commands on $PATH: bar, unlock
 fontconfig/       font chain: Inter for latin, Pretendard for Hangul
@@ -16,6 +16,34 @@ kde/              Qt and KDE colours, so file dialogs match the bar
 fcitx5/           Korean input configuration
 theme/            design notes for the colour system
 ```
+
+## Outputs and the session
+
+Which screens are on is decided inside the compositor, by
+`hypr/config/monitors.lua`: any external output becomes the desktop and the
+built-in panel goes off; with none, the panel is the desktop; `keep_internal`
+in the settings, or a file named `~/.config/hypr/keep-internal`, means both.
+It reacts to hotplug through Hyprland's own events, re-applies itself on every
+reload, and turns the panel back on if it ever finds nothing enabled. There is
+no watcher process. `hypr/scripts/monitors-selftest.sh` exercises all of it in
+a nested compositor.
+
+What describes one machine -- the scale of its panel, whether it wants both
+screens -- lives in `hypr/monitor_settings.lua`, which is not tracked. Copy
+`hypr/monitor_settings_example.lua` to that name and edit it; the example
+documents every field and carries the values in use on the machine this was
+written on. Without the file, or with a broken one, the policy runs on its
+defaults and says so in a notification. The compositor does not watch the
+file; `hyprctl reload` after editing it.
+
+The lid binding assumes logind leaves the lid switch alone, which is a system
+file this repository does not install:
+
+    # /etc/systemd/logind.conf.d/10-lid.conf
+    [Login]
+    HandleLidSwitch=ignore
+    HandleLidSwitchExternalPower=ignore
+    HandleLidSwitchDocked=ignore
 
 ## The bar
 
@@ -52,8 +80,8 @@ no longer has.
 
 These were links once, because a link makes an edit live without running
 anything. What a link also does is make the installed path resolve back into the
-working tree: `auto_monitors.sh` walked up from its own location and read the
-repository's `monitors.preset` rather than the installed one, and a directory
+working tree: the old monitor script walked up from its own location and read
+the repository's preset file rather than the installed one, and a directory
 replaced under a watcher is a crash rather than a reload.
 
 **Nothing edited here runs until `./install.sh` is run again**, and a supervisor

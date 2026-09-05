@@ -17,7 +17,7 @@ Singleton {
     // as individual values get nudged.
     // ---------------------------------------------------------------------
     // The bar sets this to the screen it is drawn on. Only one output is ever
-    // active on this machine (auto_monitors.sh disables the laptop panel while
+    // active on this machine (config/monitors.lua disables the laptop panel while
     // an external display is attached), so a single global scale is accurate;
     // a multi-head setup would need this per bar instead of in the singleton.
     // Deterministic, rather than whichever bar finished loading last. With two

@@ -56,6 +56,9 @@ end
 
 load_module("env")
 load_module("general")
+-- After general, which registers the catch-all monitor rule, and before
+-- keybinds, which binds the lid switch to functions this module defines.
+load_module("monitors")
 load_module("rules")
 load_module("keybinds")
 load_module("execs")

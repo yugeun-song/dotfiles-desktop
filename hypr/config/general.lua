@@ -1,15 +1,16 @@
 -- Compositor settings: outputs, input, layout, appearance, motion.
 
 -- A catch-all so an output nobody has configured still lights up at its best
--- mode. scripts/auto_monitors.sh refines this at runtime and on every
--- hotplug; this line only has to make the first frame appear.
+-- mode. config/monitors.lua adds a rule per output on top of this, at load
+-- and on every hotplug; this line only has to make the first frame appear.
 --
 -- highrr, not preferred. A monitor's preferred mode is whatever its EDID puts
 -- in the first detailed timing, and on the Philips here that is 2560x1440@60,
--- so the session came up at 60 and auto_monitors.sh then modeset it to 144:
--- the log carries both, back to back, at every start and every reload. A
--- modeset is the one operation auto_monitors.sh's own header says this GPU is
--- not trusted with, so the cheapest fix is to not ask for the wrong mode first.
+-- so the session came up at 60 and the policy then modeset it to 144: the
+-- log carried both, back to back, at every start and every reload. A modeset
+-- is the one operation this GPU is not trusted with, so the cheapest fix is
+-- to not ask for the wrong mode first. monitors.lua asks for highrr as well,
+-- so its rule for an external matches this one and costs nothing to apply.
 hl.monitor({
     output = "",
     mode = "highrr",

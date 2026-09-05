@@ -398,12 +398,13 @@ hl.bind("CTRL + SHIFT + ALT + SUPER + Delete", hl.dsp.exec_cmd("systemctl powero
 
 --##! Lid
 -- The panel goes dark, the session does not go to sleep, and the keyboard
--- keeps working. Through a script because the right action depends on whether
--- an external is connected, and because `hyprctl dispatch dpms off eDP-1` is a
--- Lua parse error under this configuration: it answers ok and does nothing.
-hl.bind("switch:on:Lid Switch", hl.dsp.exec_cmd(scripts .. "/lid.sh close"),
+-- keeps working. logind is told to ignore the switch in
+-- /etc/systemd/logind.conf.d, so this binding is the only thing that answers
+-- it. The functions live in config/monitors.lua because the right action
+-- depends on which outputs are enabled, and that module is what knows.
+hl.bind("switch:on:Lid Switch", function() MONITORS.lid_close() end,
     { locked = true, description = "Lid: internal panel off" })
-hl.bind("switch:off:Lid Switch", hl.dsp.exec_cmd(scripts .. "/lid.sh open"),
+hl.bind("switch:off:Lid Switch", function() MONITORS.lid_open() end,
     { locked = true, description = "Lid: internal panel on" })
 
 --##! Virtual machines

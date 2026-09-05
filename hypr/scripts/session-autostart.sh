@@ -322,9 +322,6 @@ fi
 
 "$SCRIPTS/gsettings-apply.sh" || log "gsettings-apply failed"
 
-# Outputs first, so the first frame lands on the right screen.
-start argv "auto_monitors_watcher" "$SCRIPTS/auto_monitors_watcher.sh"
-
 # The status bar, under bin/bar rather than started directly. quickshell does
 # crash, and an unsupervised bar stays gone until the next login; bar brings it
 # back and gives up only if it is crashing in a loop. bar takes an exclusive
