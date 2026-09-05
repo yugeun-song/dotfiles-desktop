@@ -272,12 +272,6 @@ mirror "$SRC/bin/recover-desktop"   "$HOME/recover-desktop"
 # can run.
 (( CHECK )) || chmod +x "$HOME/.local/bin/bar" "$HOME/.local/bin/unlock" "$HOME/recover-desktop" 2>/dev/null || true
 
-if (( CHECK )); then
-    (( DRIFT )) && { echo; echo "run ./install.sh to apply"; exit 1; }
-    echo "everything installed is current"
-    exit 0
-fi
-
 # The session's units: the target the compositor starts, the watch that stops
 # it, and one service per long-running program. Mirrored like the rest of what
 # this repository authors, not linked: systemd reads user units at login, and a
@@ -336,7 +330,9 @@ mirror "$SRC/dbus/services/org.fcitx.Fcitx5.service" \
 # had, which is a worse-looking desktop and not a broken one.
 cursor_tint=$(sed -n 's/^FILL = "\(#[0-9a-fA-F]\{6\}\)".*/\1/p' \
               "$SRC/theme/cursor/pointer.py" | head -1)
-if [[ -n "$cursor_tint" ]]; then
+if (( CHECK )); then
+    :
+elif [[ -n "$cursor_tint" ]]; then
     if "$SRC/theme/cursor/tint-cursors.py" --from Oxygen_White \
            --name Spaceduck-Sky --tint "$cursor_tint" \
            --comment "Oxygen_White recoloured to the drawn pointer's blue"; then
@@ -371,7 +367,7 @@ seed "$SRC/kde/baloofilerc"      "$CONFIG/baloofilerc"
 # the daemon but leaves systemd starting and immediately stopping a unit at
 # every login. Disabling stops that, and does nothing if the unit was never
 # enabled, which is the usual case on a machine that has not run Plasma.
-if command -v systemctl >/dev/null 2>&1; then
+if (( ! CHECK )) && command -v systemctl >/dev/null 2>&1; then
     systemctl --user disable kde-baloo.service >/dev/null 2>&1 || true
 fi
 
@@ -391,7 +387,7 @@ fi
 #
 # All of it is a no-op where drkonqi was never installed, which is the case a
 # fresh machine from packages/install-target.txt is in.
-if command -v systemctl >/dev/null 2>&1; then
+if (( ! CHECK )) && command -v systemctl >/dev/null 2>&1; then
     for _u in drkonqi-coredump-launcher.socket \
               drkonqi-coredump-pickup.service \
               drkonqi-coredump-cleanup.timer \
@@ -439,8 +435,21 @@ make_executable() {
 # cp -a carries whatever mode the checkout had. A tree unpacked from an archive,
 # or cloned with core.fileMode false, arrives at 644, and then the key bindings
 # do nothing and the pills never fill while this script still reports success.
-make_executable "$CONFIG/quickshell/bar/scripts" "the caps lock, input method, weather and alarm pills"
-make_executable "$CONFIG/hypr/scripts" "the session, terminal and capture bindings"
+# Reported, not fatal: under set -e a missing script directory would end the
+# run here and skip the font chain below without a word about it.
+if (( ! CHECK )); then
+    make_executable "$CONFIG/quickshell/bar/scripts" "the caps lock, input method, weather and alarm pills" || :
+    make_executable "$CONFIG/hypr/scripts" "the session, terminal and capture bindings" || :
+fi
+
+if (( CHECK )); then
+    if [[ ! -f "$FONTCONF" ]] || ! cmp -s "$SRC/fontconfig/local.conf" "$FONTCONF"; then
+        echo "DRIFT   $FONTCONF is behind $SRC/fontconfig/local.conf"; DRIFT=1
+    fi
+    (( DRIFT )) && { echo; echo "run ./install.sh to apply"; exit 1; }
+    echo "everything installed is current"
+    exit 0
+fi
 
 echo
 if [[ -f "$FONTCONF" ]] && cmp -s "$SRC/fontconfig/local.conf" "$FONTCONF"; then
