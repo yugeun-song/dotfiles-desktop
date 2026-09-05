@@ -154,7 +154,7 @@ through 15 of p10k's 256-colour numbering follow from it.
 
 ### 2.2 File format
 
-The path is `~/workspace/dotfiles-desktop/theme/palettes/<name>.json`.
+The path is `~/dotfiles-desktop/theme/palettes/<name>.json`.
 
 ```json
 {
@@ -223,8 +223,8 @@ why the role table exists.
 
 ### 3.1 Where it lives and what it takes
 
-The file is `~/workspace/dotfiles-desktop/bin/theme`, beside `bin/bar` and
-`bin/unlock`, and `install.sh` links it to `~/.local/bin/theme`.
+The file is `~/dotfiles-desktop/bin/theme`, beside `bin/bar` and
+`bin/unlock`, and `install.sh` mirrors it to `~/.local/bin/theme`.
 
 ```
 theme list                    lists the palettes and which one is current
@@ -968,24 +968,27 @@ apply_hypr_border() {
 
 ### 3.8 What the script must not do
 
-- **Never call `hyprctl reload` on its own.** As `hypr/config/execs.lua:5-7` and
-  `hypr/scripts/session-autostart.sh:5-10` record, a reload re-runs the entire
-  exec block. `hypr/scripts/auto_monitors.sh:39` notes that a reload switches
-  the laptop panel it had turned off back on. Re-treading monitor configuration
-  and autostart for the sake of two colours is a steep price. It runs only when
-  `--reload-hypr` asks for it.
+- **Never call `hyprctl reload` on its own.** As `hypr/config/execs.lua:6-9`
+  records, a reload re-runs the entire exec block, and
+  `hypr/config/monitors.lua:33-40` re-evaluates the whole output policy on top
+  of that. Neither ends badly now -- the policy emits a docked panel's disabled
+  rule at load, so a reload no longer switches the laptop panel back on the way
+  the old shell watcher did -- but re-treading autostart and monitor
+  configuration for the sake of two colours is still a steep price. It runs
+  only when `--reload-hypr` asks for it.
 - **Never touch mode setting.** `hl.monitor`, resolutions, scales and enabling
   or disabling outputs are outside this script's remit. This machine carries
   GRUB cmdline workarounds for the `xe` driver's atomic commit problem, and
   stepping on mode setting while changing colours kills the display.
-- **Never restart the bar.** `bin/bar` has no `--restart`, and `--stop`
-  (`bin/bar:124-158`) takes the supervisor down with it. If the IPC call fails,
-  leave it to be read at the next start.
-- **Never restart fcitx5.** As `hypr/scripts/session-autostart.sh:113-115`
-  records, a restart loses the input context of every client that is up.
+- **Never restart the bar.** `bin/bar --restart` exists and is safe -- it
+  restarts `systemd/user/bar.service` -- but it drops the strip and every
+  pill's state to re-read two colours the running bar will take over IPC. If
+  the IPC call fails, leave it to be read at the next start.
+- **Never restart fcitx5.** As `install.sh:283-285` records, a restart costs
+  every open window its input context.
   `fcitx5-remote -r` is a reload, not a restart.
 - **Never touch `gsettings set gtk-theme`, `icon-theme` or `cursor-theme`.**
-  Those three belong to `hypr/scripts/gsettings-apply.sh:44-46` and have nothing
+  Those three belong to `hypr/scripts/gsettings-apply.sh:44-51` and have nothing
   to do with the palette. The single line for `color-scheme` is the exception.
 - **Never change the wallpaper.** `hyprpaper.conf` and
   `~/Pictures/Wallpapers/current.png` are user state. Deriving colours from the
@@ -1289,7 +1292,7 @@ Reconciling them is the work of making a new theme, not of editing spaceduck.
 
 ### 6.2 macos-dark
 
-`~/workspace/dotfiles-desktop/theme/palettes/macos-dark.json`.
+`~/dotfiles-desktop/theme/palettes/macos-dark.json`.
 
 ```json
 {

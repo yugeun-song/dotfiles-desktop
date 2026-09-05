@@ -71,9 +71,9 @@ trap cleanup EXIT
 # anything. What a link also does is make the installed path resolve back into
 # the working tree, so anything that finds a sibling by walking up from its own
 # location finds it in the repository rather than beside itself.
-# hypr/scripts/auto_monitors.sh read ../monitors.preset that way and the preset
-# was never installed at all; nothing reported it, the panel would simply have
-# come up at scale 1.
+# The old monitor script read its preset file that way and the preset was never
+# installed at all; nothing reported it, the panel would simply have come up at
+# scale 1.
 #
 # Unlike seed() this overwrites. The repository is the source of truth here, so
 # a difference at the destination is something to lose rather than to keep. The
