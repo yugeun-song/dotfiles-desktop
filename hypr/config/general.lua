@@ -90,9 +90,18 @@ hl.config({
         -- hangs under xe.
         vrr = 0,
         focus_on_activate = false,
-        -- Nothing here restores a session lock, and a stale restore leaves
-        -- an unlockable screen after a crash.
-        allow_session_lock_restore = false,
+        -- true, so a crashed lock screen can be replaced. When the locker dies
+        -- without unlocking, the compositor keeps the session locked -- the
+        -- ext-session-lock protocol requires it, and that is the security
+        -- guarantee. This option is only about whether a NEW locker may attach
+        -- to a session that is already locked. With it false, that attach is
+        -- denied (SessionLockManager.cpp: "Cannot re-lock, ... is disabled" ->
+        -- sendDenied), so hyprlock crashing leaves a locked screen with no
+        -- password field and no way in but a VT switch and a kill. true lets
+        -- the locker be restarted onto the still-locked session, which is the
+        -- documented purpose ("restart a lockscreen app in case it crashes")
+        -- and unlocks nothing on its own.
+        allow_session_lock_restore = true,
         -- Any input brings the outputs back. Both default to off, which means
         -- a screen switched off by the lid binding or left off across a
         -- suspend stays dark no matter what is typed at it. Locked, that is
