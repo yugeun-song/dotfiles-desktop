@@ -251,6 +251,44 @@ if (( CHECK )); then
     exit 0
 fi
 
+# The session's units: the target the compositor starts, the watch that stops
+# it, and one service per long-running program. Mirrored like the rest of what
+# this repository authors, not linked: systemd reads user units at login, and a
+# symlink into a working tree is a unit that disappears whenever that tree is
+# not where it was. The reasoning for each unit is in its own file.
+#
+# daemon-reload afterwards, or systemd keeps serving the unit list it read at
+# login and the new files are not there yet. What is already running is left
+# alone: a unit that is active keeps its old process until the target is
+# restarted, and the input method among them costs every open window its
+# input context when it restarts. The next login, or scripts/session-start.sh,
+# picks the new units up.
+for _unit in "$SRC"/systemd/user/*; do
+    mirror "$_unit" "$CONFIG/systemd/user/$(basename "$_unit")"
+done
+unset _unit
+
+# A unit this repository once shipped and no longer does would stay installed
+# and could still run: nothing sweeps that directory, which is shared with the
+# units other packages enable there. So every unit here carries a first-line
+# marker, and a file wearing the marker with no source left is removed.
+for _installed in "$CONFIG"/systemd/user/*.service "$CONFIG"/systemd/user/*.target; do
+    [[ -f "$_installed" ]] || continue
+    [[ -e "$SRC/systemd/user/$(basename "$_installed")" ]] && continue
+    [[ "$(head -n 1 "$_installed" 2>/dev/null)" == "# dotfiles-desktop" ]] || continue
+    if (( CHECK )); then
+        echo "DRIFT   $_installed is no longer in the repository"; DRIFT=1
+    else
+        rm -f -- "$_installed" && echo "removed retired $_installed"
+    fi
+done
+unset _installed
+
+# fcitx5's D-Bus activation, pointed at the unit. Same directory precedence as
+# every XDG data file: the copy under the home directory wins over /usr/share.
+mirror "$SRC/dbus/services/org.fcitx.Fcitx5.service" \
+       "${XDG_DATA_HOME:-$HOME/.local/share}/dbus-1/services/org.fcitx.Fcitx5.service"
+
 # The pointer, built rather than shipped.
 #
 # XCursor themes are bitmaps with the colour baked in, so a themed pointer is
@@ -339,96 +377,16 @@ if command -v systemctl >/dev/null 2>&1; then
 fi
 seed "$SRC/kde/SpaceduckDark.colors" "$HOME/.local/share/color-schemes/SpaceduckDark.colors"
 
-# hypr/config/execs.lua starts hyprland-session.target when the compositor
-# comes up, and that target is the only thing that pulls graphical-session.target
-# in. Without it the start fails, graphical-session.target never activates, and
-# every service keyed to it -- the four xdg-desktop-portal implementations
-# among them -- never starts. The visible result is a desktop that looks right
-# until a file dialog or a screen share is needed.
-#
-# It is written here rather than linked from the repository on purpose. systemd
-# reads user units at login, and a symlink pointing into a working tree is a
-# unit that disappears whenever that tree is not where it was: before the
-# repository has been cloned on a fresh machine, or after it is moved. Five
-# lines are not worth putting the graphical session behind that.
-install_session_target() {
-    local dir="$CONFIG/systemd/user"
-    local unit="$dir/hyprland-session.target"
-    local body
-    body=$(cat <<'UNIT'
-[Unit]
-Description=Hyprland session
-BindsTo=graphical-session.target
-Wants=graphical-session-pre.target
-After=graphical-session-pre.target
-UNIT
-)
-    if [[ -f "$unit" ]] && [[ "$(cat "$unit")" == "$body" ]]; then
-        echo "already current $unit"
-        return 0
+if (( ! CHECK )); then
+    if command -v systemctl >/dev/null 2>&1; then
+        systemctl --user daemon-reload 2>/dev/null \
+            || echo "  could not reload the user manager; the units apply at the next login" >&2
+        # hypridle runs under the unit its package ships; enabling is what
+        # hooks it to graphical-session.target, and it is idempotent.
+        systemctl --user enable hypridle.service >/dev/null 2>&1 \
+            || echo "  could not enable hypridle.service; the screen will not lock" >&2
     fi
-    mkdir -p "$dir"
-    printf '%s\n' "$body" > "$unit" || {
-        echo "could not write $unit, so the graphical session will not come up" >&2
-        return 1
-    }
-    echo "wrote $unit"
-    # Without this systemd keeps serving the unit list it read at login and the
-    # new file is not there yet.
-    systemctl --user daemon-reload 2>/dev/null \
-        || echo "  could not reload the user manager; the unit applies at the next login" >&2
-}
-install_session_target
-
-# hypridle starts before the compositor has a socket, and gives up for good.
-#
-# The unit the package ships is After=graphical-session.target, and reaching a
-# target is not the same as the compositor being ready to accept a client: it
-# came up, answered "[CRITICAL] Couldn't connect to a wayland compositor", was
-# restarted five times inside systemd's default rate limit and ended at
-# start-limit-hit. Observed on 2026-08-28.
-#
-# What that costs is not obvious from the message. hypridle is what answers
-# `loginctl lock-session`, so with it dead: Ctrl+Alt+L does nothing, the screen
-# does not lock before a suspend you asked for, and it does not come back on
-# wake. The machine suspends unlocked and nothing says so.
-#
-# The drop-in waits for the socket rather than assuming it, and takes the rate
-# limit off so a slow start is a slow start rather than a permanent failure.
-install_hypridle_dropin() {
-    local dir="$CONFIG/systemd/user/hypridle.service.d"
-    local unit="$dir/10-wait-for-compositor.conf"
-    local body
-    body=$(cat <<'UNIT'
-[Unit]
-After=hyprland-session.target
-PartOf=hyprland-session.target
-# No rate limit. Waiting is the normal case here, not a fault to give up on.
-StartLimitIntervalSec=0
-
-[Service]
-# Up to twenty seconds for the compositor to answer, checked five times a
-# second. WAYLAND_DISPLAY reaches this unit through the
-# dbus-update-activation-environment in hypr/config/execs.lua.
-ExecStartPre=/bin/sh -c 'i=0; while [ $i -lt 100 ]; do [ -S "${XDG_RUNTIME_DIR}/${WAYLAND_DISPLAY}" ] && exit 0; i=$((i+1)); sleep 0.2; done; echo "no wayland socket after 20s" >&2; exit 1'
-Restart=on-failure
-RestartSec=2
-UNIT
-)
-    if [[ -f "$unit" ]] && [[ "$(cat "$unit")" == "$body" ]]; then
-        echo "already current $unit"
-        return 0
-    fi
-    mkdir -p "$dir"
-    printf '%s\n' "$body" > "$unit" || {
-        echo "could not write $unit, so the screen may not lock before suspend" >&2
-        return 1
-    }
-    echo "wrote $unit"
-    systemctl --user daemon-reload 2>/dev/null \
-        || echo "  could not reload the user manager; the drop-in applies at the next login" >&2
-}
-install_hypridle_dropin
+fi
 
 make_executable() {
     local dir="$1" consumer="$2" f found=0 failed=0
@@ -455,7 +413,7 @@ make_executable() {
 # or cloned with core.fileMode false, arrives at 644, and then the key bindings
 # do nothing and the pills never fill while this script still reports success.
 make_executable "$CONFIG/quickshell/bar/scripts" "the caps lock, input method, weather and alarm pills"
-make_executable "$CONFIG/hypr/scripts" "the monitor, terminal and capture bindings"
+make_executable "$CONFIG/hypr/scripts" "the session, terminal and capture bindings"
 
 echo
 if [[ -f "$FONTCONF" ]] && cmp -s "$SRC/fontconfig/local.conf" "$FONTCONF"; then

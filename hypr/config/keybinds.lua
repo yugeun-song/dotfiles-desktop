@@ -69,7 +69,7 @@ hl.bind("XF86PowerOff", hl.dsp.global("quickshell:powerMenu"),
     { description = "Session menu" })
 hl.bind("CTRL + ALT + Delete", hl.dsp.global("quickshell:powerMenu"),
     { description = "Session dialog" })
-hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd(scripts .. "/session-autostart.sh"),
+hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd("systemd-cat -t session-start " .. scripts .. "/session-start.sh"),
     { description = "Restart anything in the session that died" })
 
 --##! Window focus

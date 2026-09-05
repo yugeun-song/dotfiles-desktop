@@ -38,6 +38,14 @@ reload() {
         printf 'wallpaper: hyprpaper is not running, it will pick this up at next start\n' >&2
         return 0
     }
+    # Run as ExecStartPost of hyprpaper.service, this arrives while hyprpaper
+    # is still coming up, and IPC is refused until it is listening. Five
+    # seconds in quarter-second steps, then the request is sent regardless
+    # so a slow start is reported by the check below rather than skipped.
+    for _ in $(seq 20); do
+        hyprctl hyprpaper listactive >/dev/null 2>&1 && break
+        sleep 0.25
+    done
     # unload and preload are refused by this build ("invalid hyprpaper request")
     # and only listactive and wallpaper are answered, so failures from the
     # first two are not treated as failures. wallpaper alone loads the file,

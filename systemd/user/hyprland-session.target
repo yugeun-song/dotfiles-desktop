@@ -1,0 +1,35 @@
+# dotfiles-desktop
+# The session, as systemd sees it.
+#
+# Started by hypr/scripts/session-start.sh once the compositor is up, and
+# stopped by hypr/scripts/session-watch.sh when it goes. Everything with a
+# process behind it -- the bar, the input method, the wallpaper daemon, the
+# clipboard watchers, the polkit agent, the idle daemon -- is wanted by this
+# target and PartOf it. So a login starts the lot, a logout ends the lot with
+# nothing left behind, and a compositor replaced underneath them (start-hyprland
+# relaunches one that crashed) restarts the lot against the new one.
+#
+# These used to be started by a script that checked /proc for an existing copy
+# before each start and killed leftovers of the previous session by instance
+# signature. What that could not do was react: a bar that died stayed dead
+# until the next login, and an input method that outlived its compositor kept
+# running with a display nobody could reach. systemd already knows how to
+# supervise a process and how to stop a group of them, at no cost while
+# nothing happens.
+#
+# graphical-session.target is the generic name the portals and the idle daemon
+# key on. BindsTo brings it up with this target; PropagatesStopTo takes it down
+# with this target, which BindsTo alone does not do.
+[Unit]
+Description=Hyprland session
+BindsTo=graphical-session.target
+PropagatesStopTo=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target
+Wants=hyprland-session-watch.service
+Wants=bar.service fcitx5.service hyprpaper.service
+Wants=cliphist-text.service cliphist-image.service polkit-agent.service
+# hypridle's own unit is WantedBy graphical-session.target already; it is
+# named here too so that this file is the one list of what the session
+# runs, which the scripts read back with `systemctl show -p Wants`.
+Wants=hypridle.service

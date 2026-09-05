@@ -9,7 +9,7 @@ import Quickshell.Services.Notifications
 // Nothing owned org.freedesktop.Notifications on this machine before this
 // existed. mako was in the package list and was never installed, so every
 // notification the desktop sent went nowhere: capture.sh announcing a saved
-// screenshot, session-autostart.sh reporting that it could not start something.
+// screenshot, session-start.sh reporting that it could not start something.
 // They were not lost noisily, they were simply never delivered.
 //
 // The server lives here rather than in a module because a second copy would try

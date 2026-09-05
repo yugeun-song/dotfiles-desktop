@@ -44,7 +44,7 @@ I=org.gnome.desktop.interface
 set_key "$I" gtk-theme      "Breeze-Dark"
 set_key "$I" icon-theme     "breeze-dark"
 # Taken from the environment rather than written again here. This script is
-# started by session-autostart.sh from inside the Hyprland session, so the
+# started by session-start.sh from inside the Hyprland session, so the
 # values hypr/config/env.lua exported are already present. A second copy of the
 # number is how the pointer ends up a different size in GTK windows than
 # everywhere else. The fallbacks cover being run by hand from a plain shell.

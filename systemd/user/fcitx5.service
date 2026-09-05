@@ -1,0 +1,36 @@
+# dotfiles-desktop
+# The input method.
+#
+# fcitx5 ships a D-Bus activation file and no unit, so the first client that
+# asks for org.fcitx.Fcitx5 while nothing owns it -- a toolkit initialising, a
+# fcitx5-remote poll -- has the bus spawn a bare fcitx5 with whatever
+# environment the bus had at the time. That is how the input method ended up
+# bound to a compositor that had already exited: activated during the logout,
+# outliving the session, and answering the next login with a dead display.
+# dbus/services/org.fcitx.Fcitx5.service points activation at this unit
+# instead, so every way of starting fcitx5 lands here, in the session's
+# environment, and ends with the session.
+#
+# -r replaces an instance that is already running, whichever way it was
+# started. Without it a leftover holding the bus name would make this unit
+# fail, restart, and hit its limit.
+#
+# Type=dbus: the unit counts as started when the name is owned, so anything
+# ordered after it can talk to it.
+[Unit]
+Description=Input method
+PartOf=hyprland-session.target
+After=hyprland-session.target
+Requisite=hyprland-session.target
+ConditionPathExists=/usr/bin/fcitx5
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=dbus
+BusName=org.fcitx.Fcitx5
+WorkingDirectory=%h
+ExecStart=/usr/bin/fcitx5 -r
+Restart=on-failure
+RestartSec=1
+Slice=session.slice

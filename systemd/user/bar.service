@@ -1,0 +1,41 @@
+# dotfiles-desktop
+# The status bar. Formerly kept up by bin/bar, a bash supervisor with its own
+# restart budget, backoff and orphan reaping; every one of those is a systemd
+# feature, and the supervisor could still be left holding its lock by a
+# session that ended. The script remains as a front end to this unit.
+#
+# Restart=on-failure with a start limit is the same contract the supervisor
+# had: a crash brings the bar back, a config that fails at load gives up
+# after five tries in two minutes rather than looping forever, and the delay
+# between tries doubles up to thirty seconds.
+#
+# The pill helpers quickshell spawns live in this unit's cgroup, so they end
+# with it instead of being reparented to init and polling forever.
+[Unit]
+Description=Status bar
+PartOf=hyprland-session.target
+After=hyprland-session.target
+Requisite=hyprland-session.target
+ConditionPathExists=%E/quickshell/bar/shell.qml
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# Everything the launcher starts inherits the bar's working directory.
+WorkingDirectory=%h
+# quickshell writes a per-instance log directory under $XDG_RUNTIME_DIR and
+# never removes it, so one accumulates per start: thirty of them, 3.9 MB of
+# tmpfs, when this was first noticed, each carrying every window title its
+# session saw. Cleared before each start, and only when no quickshell of any
+# name is alive to be holding one open. The dash keeps a failed sweep from
+# failing the bar.
+ExecStartPre=-/bin/sh -c 'pgrep -x qs >/dev/null || pgrep -x quickshell >/dev/null || rm -rf -- "${XDG_RUNTIME_DIR}/quickshell/by-id"/*'
+# Through bin/bar --once, which finds the binary under whichever name the
+# package gives it and carries the log rules, so they are written once.
+ExecStart=%h/.local/bin/bar --once
+Restart=on-failure
+RestartSec=1
+RestartSteps=5
+RestartMaxDelaySec=30
+Slice=session.slice

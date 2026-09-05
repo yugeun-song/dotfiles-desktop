@@ -7,8 +7,10 @@ status bar written in QML for quickshell.
 
 ```
 hypr/config/      Hyprland configuration in Lua: keybinds, rules, env, outputs
-hypr/scripts/     what those keybinds call: capture, lock
+hypr/scripts/     what the keybinds and the units call: capture, lock, session
 quickshell/bar/   the status bar, written from scratch
+systemd/user/     the session target and one unit per long-running program
+dbus/             fcitx5's D-Bus activation, pointed at its unit
 bin/              commands on $PATH: bar, unlock
 fontconfig/       font chain: Inter for latin, Pretendard for Hangul
 gtk/              GTK 3 and 4 settings
@@ -44,6 +46,17 @@ file this repository does not install:
     HandleLidSwitch=ignore
     HandleLidSwitchExternalPower=ignore
     HandleLidSwitchDocked=ignore
+
+Everything with a process behind it -- the bar, fcitx5, hyprpaper, the
+clipboard watchers, the polkit agent, hypridle -- is a systemd user unit under
+`hyprland-session.target`. The compositor starts the target through
+`hypr/scripts/session-start.sh` and a watch on its lock file stops it, so a
+logout leaves nothing behind and a crashed unit comes back on its own.
+`Ctrl+Super+R` runs the start script again, which starts whatever died.
+
+    systemctl --user status hyprland-session.target
+    journalctl --user -u bar.service -f
+    journalctl --user -t session-start
 
 ## The bar
 
@@ -84,7 +97,7 @@ working tree: the old monitor script walked up from its own location and read
 the repository's preset file rather than the installed one, and a directory
 replaced under a watcher is a crash rather than a reload.
 
-**Nothing edited here runs until `./install.sh` is run again**, and a supervisor
+**Nothing edited here runs until `./install.sh` is run again**, and a unit
 already running keeps the old code until it is restarted. A fix that was
 committed, pushed and never installed cost a login once. `./install.sh --check`
 names every path that is behind and exits 1.
@@ -141,11 +154,15 @@ for the work is due.
 ## Running the bar
 
 ```sh
-qs -p ~/.config/quickshell/bar
+bar --restart        # pick up a QML change
+bar --log            # follow quickshell's output
 
-BAR_PREVIEW=bottom qs -p ~/.config/quickshell/bar   # preview, reserves no space
-BAR_VIZ_DEMO=1     qs -p ~/.config/quickshell/bar   # visualiser without audio
+BAR_PREVIEW=bottom bar --once   # preview, reserves no space
+BAR_VIZ_DEMO=1     bar --once   # visualiser without audio
 ```
 
 Preview mode anchors the bar to an edge without claiming an exclusive zone, so
-it can sit alongside another shell while being worked on.
+it can sit alongside another shell while being worked on. `--once` runs
+quickshell in the foreground outside its unit; two copies of one config cannot
+run at the same time, so stop the unit first or point `BAR_CONFIG_DIR` at a
+copy.

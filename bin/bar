@@ -1,424 +1,49 @@
 #!/usr/bin/env bash
 # ============================================================================
-# bar - start the status bar and keep it up
+# bar - the status bar, by way of its systemd user unit
 #
-# Four things this exists to guarantee:
+# The bar is quickshell under systemd/user/bar.service, which is what restarts
+# it after a crash, gives up on a crash loop, and ends it with the session.
+# This script used to be that supervisor. What is left is the front end, so
+# the commands people typed keep working:
 #
-#   one instance     quickshell's -n exits immediately if this config is
-#                    already running, so launching twice cannot produce two
-#                    bars. Checking with pgrep instead would race.
+#   bar                 start it, or do nothing if it is running
+#   bar --restart       restart it, which is how a QML change is picked up
+#   bar --stop          stop it
+#   bar --status        whether it is running, and the last log lines
+#   bar --log           follow its log
+#   bar --once          run quickshell in the foreground, outside the unit
 #
-#   restarts         a crash brings the bar back rather than leaving an empty
-#                    strip until the next login.
-#
-#   bounded restarts a config that fails at load would otherwise respawn
-#                    forever. A restart loop is the same failure as a spawn
-#                    loop, only slower. After BUDGET crashes inside WINDOW
-#                    seconds this gives up and says why.
-#
-#   backoff          successive restarts wait longer, so a transient fault
-#                    does not turn into a hot loop while it clears.
-#
-# Usage:
-#   bar                 supervise in the foreground
-#   bar --once          start once, do not supervise
-#   bar --stop          stop a running bar
-#   bar --status        report whether one is running
+# --once is for working on the QML: BAR_PREVIEW=bottom bar --once puts a
+# second copy under the live one (see README). quickshell's -n means two
+# copies of one config cannot run, so stop the unit first for a preview of
+# the same config, or use a different BAR_CONFIG_DIR.
 # ============================================================================
 
 set -uo pipefail
 
 CONFIG_DIR="${BAR_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar}"
-STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/bar"
-LOG="$STATE_DIR/bar.log"
-RUNTIME_DIR="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
-
-BUDGET="${BAR_RESTART_BUDGET:-5}"     # crashes allowed inside the window
-WINDOW="${BAR_RESTART_WINDOW:-120}"   # seconds
-BACKOFF_MAX="${BAR_BACKOFF_MAX:-30}"  # seconds
-
-mkdir -p "$STATE_DIR"
-
-# Everything the launcher starts inherits quickshell's working directory, and
-# quickshell inherits this script's. Started from a terminal that happened to
-# be in a repository, every application opened from the launcher would come up
-# there instead of at home. Nothing here uses a relative path, so pinning it
-# costs nothing and makes the launcher behave the same however the bar was
-# started.
-cd "$HOME" 2>/dev/null || cd /
-
-log() { printf '%s  %s\n' "$(date -Iseconds)" "$*" | tee -a "$LOG" >&2; }
-
-# quickshell must exist, and so must the config. Failing here with a clear
-# message beats failing later with a QML backtrace.
-require() {
-    command -v qs >/dev/null 2>&1 || command -v quickshell >/dev/null 2>&1 || {
-        log "quickshell is not installed"; return 1; }
-    [[ -f "$CONFIG_DIR/shell.qml" ]] || {
-        log "no shell.qml under $CONFIG_DIR"; return 1; }
-}
-
-# An ended instance removes its lock file but leaves .socket2.sock behind, so a
-# socket test would call a dead session live. The inherited signature wins while
-# it lives, so a second seat cannot pull a healthy supervisor away.
-live_signature() {
-    local d s="${HYPRLAND_INSTANCE_SIGNATURE:-}"
-    [[ -n "$s" && -e "$RUNTIME_DIR/hypr/$s/hyprland.lock" ]] && { printf '%s\n' "$s"; return 0; }
-    for d in "$RUNTIME_DIR"/hypr/*/; do
-        [[ -e "$d/hyprland.lock" ]] || continue
-        basename "$d"
-        return 0
-    done
-    return 1
-}
-
-# The replacement compositor reused the name wayland-1 last time. Not a rule.
-live_wayland_display() {
-    local sock wl="${WAYLAND_DISPLAY:-}" newest=""
-    [[ -n "$wl" && -S "$RUNTIME_DIR/$wl" ]] && { printf '%s\n' "$wl"; return 0; }
-    for sock in "$RUNTIME_DIR"/wayland-[0-9]*; do
-        [[ -S "$sock" ]] || continue
-        [[ -z "$newest" || "$sock" -nt "$newest" ]] && newest="$sock"
-    done
-    [[ -n "$newest" ]] || return 1
-    basename "$newest"
-}
-
-# Two failures, one guard. Launched before the socket exists, quickshell gets no
-# Qt platform plugin and qFatals. Launched with an ended session's signature it
-# draws fine and answers no hyprland request, so the workspaces freeze while the
-# battery keeps working.
-wait_for_compositor() {
-    local i live wl
-
-    for ((i = 0; i < 100; i++)); do
-        if live=$(live_signature) && wl=$(live_wayland_display); then
-            if [[ "$live" != "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-                log "compositor is $live, not ${HYPRLAND_INSTANCE_SIGNATURE:-none}; following it"
-                export HYPRLAND_INSTANCE_SIGNATURE="$live"
-            fi
-            if [[ "$wl" != "${WAYLAND_DISPLAY:-}" ]]; then
-                log "wayland display is $wl, not ${WAYLAND_DISPLAY:-none}; following it"
-                export WAYLAND_DISPLAY="$wl"
-            fi
-            hyprctl version >/dev/null 2>&1 && return 0
-        fi
-        sleep 0.2
-    done
-
-    log "the compositor did not answer in 20s"
-    return 1
-}
-
-# quickshell outlives its compositor -- that is the symptom -- so wait() never
-# returns and a check at the top of the loop is never reached.
-watch_session() {
-    local sig="$1" target="$2"
-    [[ -n "$sig" ]] || return 0
-    while [[ -e "$RUNTIME_DIR/hypr/$sig/hyprland.lock" ]]; do
-        [[ -d "/proc/$target" ]] || return 0
-        sleep 1
-    done
-    log "session $sig has ended; stopping the bar it was drawing for"
-    kill "$target" 2>/dev/null
-}
+UNIT=bar.service
+LOG_RULES='quickshell.hyprland.ipc.events.debug=false;quickshell.wayland.toplevel.debug=false;quickshell.dbus.properties.debug=false'
 
 runner() {
     if command -v qs >/dev/null 2>&1; then echo qs; else echo quickshell; fi
 }
 
-# A bar is quickshell started with -p "$CONFIG_DIR". Testing the cmdline for
-# the path as a substring would also match an editor with the config open, so
-# match on the program and on the argument that follows -p.
-running_pids() {
-    local d p comm arg prev hit
-    for d in /proc/[0-9]*; do
-        p="${d#/proc/}"
-        read -r comm 2>/dev/null < "$d/comm" || continue
-        [[ "$comm" == qs || "$comm" == quickshell ]] || continue
-        prev=""; hit=0
-        while IFS= read -r -d '' arg; do
-            if [[ "$prev" == "-p" || "$prev" == "--path" ]] && [[ "$arg" == "$CONFIG_DIR" ]]; then
-                hit=1; break
-            fi
-            prev="$arg"
-        done 2>/dev/null < "$d/cmdline"
-        (( hit )) && printf '%s\n' "$p"
-    done
-}
-
-# quickshell's QML spawns the pill watchers as its own children, and they are
-# loops with no end condition. When quickshell dies they are reparented to init
-# and keep polling forever, so without this every restart leaves another set
-# behind and they accumulate for as long as the session lasts.
-#
-# Only orphans are touched. A live bar's scripts still have that bar as their
-# parent, so they never match and a running bar is never disturbed.
-reap_orphan_scripts() {
-    local d p ppid args victims=()
-    for d in /proc/[0-9]*; do
-        p="${d#/proc/}"
-        [[ -r "$d/status" ]] || continue
-        ppid=$(awk '/^PPid:/ { print $2; exit }' "$d/status" 2>/dev/null) || continue
-        [[ "$ppid" == 1 ]] || continue
-        args=$(tr '\0' ' ' < "$d/cmdline" 2>/dev/null) || continue
-        [[ "$args" == *"$CONFIG_DIR/scripts/"* ]] || continue
-        victims+=("$p")
-    done
-    (( ${#victims[@]} )) || return 0
-    log "reaping orphaned bar scripts: ${victims[*]}"
-    kill "${victims[@]}" 2>/dev/null
-}
-
-# quickshell writes a per-instance log directory under $XDG_RUNTIME_DIR and
-# never removes it, so one accumulates for every start the machine has ever
-# made -- thirty of them, 3.9 MB, when this was written. That is tmpfs, which
-# means RAM held for sessions that ended.
-#
-# The content matters as much as the size. Each log carries a trace of every
-# window title its session saw, which is the exact category the --log-rules
-# below name: those rules quieten the console and do not touch what is written
-# to the file, and quickshell offers no switch that turns the file off. So the
-# directories are cleared instead.
-#
-# Only when nothing can own one. A running instance holds its own directory
-# open, so the sweep is skipped whenever a shell of either name is alive, and
-# it runs here, after the previous session's instances have been reaped and
-# before this one starts.
-reap_stale_logs() {
-    local dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/quickshell/by-id"
-    [[ -d "$dir" ]] || return 0
-    pgrep -x qs >/dev/null 2>&1 && return 0
-    pgrep -x quickshell >/dev/null 2>&1 && return 0
-
-    local n
-    n=$(find "$dir" -mindepth 1 -maxdepth 1 -type d 2>/dev/null | wc -l)
-    (( n )) || return 0
-    find "$dir" -mindepth 1 -maxdepth 1 -type d -exec rm -rf -- {} + 2>/dev/null
-    log "cleared $n stale quickshell log directories"
-}
-
-# The supervisor holds an exclusive lock on its pidfile for as long as it
-# runs, so a pid left behind by a killed supervisor never reads as alive.
-supervisor_alive() {
-    [[ -s "$STATE_DIR/supervisor.pid" ]] || return 1
-    ! flock -n "$STATE_DIR/supervisor.pid" true
-}
-
 case "${1:-}" in
-    --status)
-        mapfile -t pids < <(running_pids)
-        if (( ${#pids[@]} )); then
-            echo "running: ${pids[*]}"
-        else
-            echo "not running"
-        fi
-        exit 0
-        ;;
-    --stop)
-        # The supervisor goes first: killing only the child is a crash from
-        # its point of view, and it would restart the bar and charge the
-        # restart budget for it.
-        stopped=0
-        if supervisor_alive; then
-            read -r sup < "$STATE_DIR/supervisor.pid"
-            if [[ -n "$sup" ]] && kill "$sup" 2>/dev/null; then
-                stopped=1
-                for _ in {1..40}; do
-                    supervisor_alive || break
-                    sleep 0.25
-                done
-                supervisor_alive && kill -9 "$sup" 2>/dev/null
-            fi
-        fi
-        mapfile -t pids < <(running_pids)
-        if (( ${#pids[@]} )); then
-            stopped=1
-            kill "${pids[@]}" 2>/dev/null
-            sleep 1
-            mapfile -t pids < <(running_pids)
-            if (( ${#pids[@]} )); then
-                kill -9 "${pids[@]}" 2>/dev/null
-                sleep 0.5
-                mapfile -t pids < <(running_pids)
-            fi
-        fi
-        if (( ${#pids[@]} )); then
-            echo "still running: ${pids[*]}"
-            exit 1
-        fi
-        if (( stopped )); then echo "stopped"; else echo "not running"; fi
-        exit 0
-        ;;
+    "")         exec systemctl --user start "$UNIT" ;;
+    --restart)  exec systemctl --user restart "$UNIT" ;;
+    --stop)     exec systemctl --user stop "$UNIT" ;;
+    --status)   exec systemctl --user --no-pager status "$UNIT" ;;
+    --log)      exec journalctl --user -u "$UNIT" -f ;;
     --once)
-        require || exit 1
-        wait_for_compositor || exit 1
-        exec "$(runner)" -n --log-rules 'quickshell.hyprland.ipc.events.debug=false;quickshell.wayland.toplevel.debug=false;quickshell.dbus.properties.debug=false' -p "$CONFIG_DIR"
+        command -v "$(runner)" >/dev/null 2>&1 || { echo "bar: quickshell is not installed" >&2; exit 1; }
+        [[ -f "$CONFIG_DIR/shell.qml" ]] || { echo "bar: no shell.qml under $CONFIG_DIR" >&2; exit 1; }
+        cd "$HOME" 2>/dev/null || cd /
+        exec "$(runner)" -n --log-rules "$LOG_RULES" -p "$CONFIG_DIR"
+        ;;
+    *)
+        echo "usage: bar [--restart|--stop|--status|--log|--once]" >&2
+        exit 2
         ;;
 esac
-
-require || exit 1
-
-# Nothing signals a supervisor at logout, so one outlives its session and keeps
-# the lock. Deferring to it handed the next login a bar that drew and answered
-# nothing. Qualify the holder instead, and reopen the fd after a takeover: the
-# holder's EXIT trap unlinks the pidfile, and supervisor_alive() tests by path.
-claim_lock() {
-    local attempt holder sig
-    for ((attempt = 0; attempt < 3; attempt++)); do
-        exec {lockfd}>>"$STATE_DIR/supervisor.pid"
-        flock -n "$lockfd" && return 0
-
-        holder=""
-        [[ -s "$STATE_DIR/supervisor.pid" ]] && read -r holder < "$STATE_DIR/supervisor.pid"
-
-        # Nothing to qualify, so wait rather than assume.
-        if [[ -z "$holder" || ! -d "/proc/$holder" ]]; then
-            exec {lockfd}>&-
-            sleep 0.5
-            continue
-        fi
-
-        # An unreadable environment has said nothing about its session.
-        if [[ ! -r "/proc/$holder/environ" ]]; then
-            log "supervisor $holder owns $CONFIG_DIR and its session cannot be read, leaving it alone"
-            return 1
-        fi
-
-        sig=$(tr '\0' '\n' < "/proc/$holder/environ" 2>/dev/null \
-              | sed -n 's/^HYPRLAND_INSTANCE_SIGNATURE=//p')
-        if [[ -n "$sig" && -e "$RUNTIME_DIR/hypr/$sig/hyprland.lock" ]]; then
-            log "supervisor $holder owns $CONFIG_DIR for the live session, leaving it alone"
-            return 1
-        fi
-
-        log "supervisor $holder owns $CONFIG_DIR for a session that has ended; taking over"
-        kill "$holder" 2>/dev/null
-        for _ in {1..40}; do
-            [[ -d "/proc/$holder" ]] || break
-            sleep 0.25
-        done
-        [[ -d "/proc/$holder" ]] && kill -9 "$holder" 2>/dev/null
-        exec {lockfd}>&-
-        sleep 0.25
-    done
-    log "could not take the lock on $CONFIG_DIR"
-    return 1
-}
-
-claim_lock || exit 0
-printf '%s\n' "$$" > "$STATE_DIR/supervisor.pid"
-
-child=
-watcher=
-cleanup() {
-    [[ -n "$child" ]] && kill "$child" 2>/dev/null
-    [[ -n "$watcher" ]] && kill "$watcher" 2>/dev/null
-    # A supervisor that was taken over must not delete its successor's pidfile.
-    local owner=""
-    [[ -s "$STATE_DIR/supervisor.pid" ]] && read -r owner < "$STATE_DIR/supervisor.pid"
-    [[ "$owner" == "$$" ]] && rm -f "$STATE_DIR/supervisor.pid"
-    return 0
-}
-trap cleanup EXIT
-trap 'exit 143' INT TERM
-
-# A bar running with no supervisor holding the lock is an orphan: its
-# supervisor was signalled and it was not. Nothing is watching it, so stop it
-# and take the config over rather than reporting success and walking away.
-mapfile -t orphans < <(running_pids)
-if (( ${#orphans[@]} )); then
-    log "taking over unsupervised instance ${orphans[*]}"
-    kill "${orphans[@]}" 2>/dev/null
-    for _ in {1..40}; do
-        mapfile -t orphans < <(running_pids)
-        (( ${#orphans[@]} )) || break
-        sleep 0.25
-    done
-    if (( ${#orphans[@]} )); then
-        kill -9 "${orphans[@]}" 2>/dev/null
-        sleep 0.5
-    fi
-fi
-
-# Anything left by an instance that died before this supervisor existed.
-reap_orphan_scripts
-reap_stale_logs
-
-crash_times=()
-crashes=0
-backoff=1
-
-while :; do
-    # Every pass: find the compositor that replaced ours, or release the lock.
-    if ! wait_for_compositor; then
-        log "no compositor left; releasing $CONFIG_DIR"
-        exit 0
-    fi
-
-    # The child's own output is the only record of why a QML load failed, so
-    # it goes to the file the give-up message points at. It must not inherit
-    # the lock fd, or an orphan would keep the lock after this exits.
-    "$(runner)" -n --log-rules 'quickshell.hyprland.ipc.events.debug=false;quickshell.wayland.toplevel.debug=false;quickshell.dbus.properties.debug=false' -p "$CONFIG_DIR" >>"$LOG" 2>&1 {lockfd}>&- &
-    child=$!
-    watch_session "${HYPRLAND_INSTANCE_SIGNATURE:-}" "$child" {lockfd}>&- &
-    watcher=$!
-    wait "$child"
-    rc=$?
-    child=
-    kill "$watcher" 2>/dev/null
-    watcher=
-    reap_orphan_scripts
-
-    # Not a crash. Scoped tightly: exempting every TERM would let anything that
-    # keeps killing the bar respawn it forever at a backoff that never grows.
-    if (( rc == 143 )) && [[ ! -e "$RUNTIME_DIR/hypr/${HYPRLAND_INSTANCE_SIGNATURE:-}/hyprland.lock" ]]; then
-        log "the compositor this bar drew on has gone; not counting it as a crash"
-        continue
-    fi
-
-    # -n returns non-zero when another instance already holds this config.
-    # That is a correct outcome, not a crash: something else is drawing the
-    # bar, so this supervisor has nothing to do.
-    if (( rc != 0 )) && [[ -n "$(running_pids)" ]]; then
-        log "another instance already owns $CONFIG_DIR, leaving it alone"
-        exit 0
-    fi
-
-    # Count the crashes still inside the window rather than restarting the
-    # window at a fixed point: the backoff sleeps are long enough to outrun a
-    # fixed window, which would keep the count from ever reaching the budget.
-    now=$SECONDS
-    crash_times+=("$now")
-    kept=()
-    for t in "${crash_times[@]}"; do
-        (( now - t <= WINDOW )) && kept+=("$t")
-    done
-    crash_times=("${kept[@]}")
-    crashes=${#crash_times[@]}
-    (( crashes == 1 )) && backoff=1
-
-    if (( crashes > BUDGET )); then
-        log "gave up after $crashes restarts in ${WINDOW}s (last exit $rc)"
-        if (( rc == 127 )); then
-            log "the $(runner) binary is gone; reinstall quickshell"
-        elif (( rc > 128 )); then
-            log "killed by signal $(( rc - 128 ))"
-        else
-            log "the configuration is probably failing at load; the error is above in $LOG, or run: $(runner) -p $CONFIG_DIR"
-        fi
-        exit 1
-    fi
-
-    log "exited with $rc, restart $crashes/$BUDGET in ${backoff}s"
-    # A trapped signal waits for the foreground command to return, so sleeping
-    # in the foreground would hold --stop off for the whole backoff. Parked in
-    # $child so the EXIT trap kills it, and without the lock fd so it cannot
-    # keep the lock open after this shell is killed.
-    sleep "$backoff" {lockfd}>&- &
-    child=$!
-    wait "$child"
-    child=
-    backoff=$(( backoff * 2 ))
-    (( backoff > BACKOFF_MAX )) && backoff=$BACKOFF_MAX
-done

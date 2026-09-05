@@ -1,0 +1,9 @@
+# Installed to ~/.local/share/dbus-1/services, where it shadows the copy fcitx5
+# ships in /usr/share. Same name, same command, one extra line: activation
+# goes through the unit in systemd/user/fcitx5.service, which is what makes
+# the bus start an input method in the session's environment instead of the
+# bus's own. The reasoning is in that unit.
+[D-BUS Service]
+Name=org.fcitx.Fcitx5
+Exec=/usr/bin/fcitx5
+SystemdService=fcitx5.service
