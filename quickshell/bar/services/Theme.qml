@@ -121,6 +121,11 @@ Singleton {
     readonly property int notifRowRadius:   root.px(12)
     readonly property int notifRowPad:      root.px(12)
     readonly property int notifBorder:      Math.max(2, root.px(2))
+    // The dwell bar along the bottom of a toast. Four rather than the border's
+    // two: at two it read as part of the border. Keep it well under
+    // notifRadius -- the strip is a window onto a corner arc, and a taller one
+    // climbs further up that arc than the eye reads as a bar.
+    readonly property int notifLifeBar:     Math.max(4, root.px(4))
 
     // ---------------------------------------------------------------------
     // spaceduck palette, matching the kitty theme

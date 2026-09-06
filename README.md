@@ -83,6 +83,15 @@ Every dimension derives from one number, `Theme.scale`, which is itself
 derived from the logical height of the screen the bar is drawn on. Set
 `BAR_SCALE` to override it.
 
+The bar is also the notification server. Toasts stack under its right edge and
+everything is kept behind `SUPER + N`. A toast dwells five seconds, twenty at
+critical urgency, and the thin bar along its bottom edge is that dwell running
+out. Drag one right to dismiss it; click it to run its default action.
+
+Critical toasts leave on their own too. The convention that urgency 2 waits to
+be acknowledged assumes a server with nowhere else to put the notification, and
+this one has the history panel.
+
 Two things are worth knowing before editing it.
 
 Nerd Font glyphs are written as code points rather than literal characters.

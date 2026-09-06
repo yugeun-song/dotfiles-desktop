@@ -18,6 +18,12 @@ Scope {
     // Long enough to finish reading a line, short enough not to sit in the way.
     readonly property int dwellMs: 5000
 
+    // Critical toasts leave too, just later. The convention that urgency 2
+    // waits to be acknowledged is for a server with nowhere else to put the
+    // notification; this one has the history panel. Left forever, one badly
+    // aimed critical toast holds the corner of the screen for the session.
+    readonly property int criticalDwellMs: 20000
+
     // Beyond this the stack reaches the bottom of the screen and the oldest are
     // unreadable anyway, so the oldest give way to what just arrived.
     readonly property int maxVisible: 4
@@ -116,6 +122,13 @@ Scope {
 
                         required property var modelData
 
+                        // One dwell, read by the timer that ends this toast and
+                        // by the bar that draws it running out. Two numbers
+                        // would drift.
+                        readonly property int dwellMs: slot.modelData.critical
+                                                       ? root.criticalDwellMs
+                                                       : root.dwellMs
+
                         width: parent.width
                         height: Math.ceil(card.implicitHeight)
                         clip: true
@@ -124,6 +137,10 @@ Scope {
                         // swipe. One way out, so all three look the same.
                         SequentialAnimation {
                             id: leaving
+
+                            // Left running, the bar reaches zero behind the
+                            // exit animation and asks for a second one.
+                            onStarted: countdown.stop()
 
                             NumberAnimation {
                                 target: card
@@ -144,12 +161,14 @@ Scope {
                             }
                         }
 
-                        // A critical notification is the one class the spec says
-                        // must not disappear on its own: it is what a dying
-                        // battery uses. Everything else times out.
+                        // This timer, not the bar below, is what ends the
+                        // toast; the bar only draws the same interval. A
+                        // drawing fault then costs the readout and not the
+                        // expiry, which is the way round it has to be for a
+                        // surface that covers the screen.
                         Timer {
-                            running: !slot.modelData.critical
-                            interval: root.dwellMs
+                            running: true
+                            interval: slot.dwellMs
 
                             onTriggered: leaving.start()
                         }
@@ -178,6 +197,7 @@ Scope {
                             Component.onCompleted: {
                                 card.x = card.width;
                                 entering.start();
+                                countdown.start();
                             }
 
                             NumberAnimation {
@@ -281,6 +301,56 @@ Scope {
                                     font.letterSpacing: Theme.notifTracking
                                     color: Theme.muted
                                     topPadding: Theme.px(7)
+                                }
+                            }
+
+                            // The dwell, drawn, on the same slot.dwellMs the
+                            // timer above counts.
+                            //
+                            // Two items, because Item.clip is a bounding
+                            // rectangle and a rounded card cannot be clipped
+                            // to. The visible strip is a window onto the bottom
+                            // of a rectangle carrying the card's own radius, so
+                            // in those few pixels its edges are the corner arc
+                            // itself and the bar follows the corners out rather
+                            // than crossing them or stopping short of them.
+                            //
+                            // The window shrinks, not the rounded piece inside
+                            // it: shrinking the piece would drag its left corner
+                            // along too.
+                            Item {
+                                id: life
+
+                                readonly property int span: card.width - card.border.width * 2
+
+                                x: card.border.width
+                                anchors.bottom: card.bottom
+                                anchors.bottomMargin: card.border.width
+                                height: Theme.notifLifeBar
+                                clip: true
+
+                                Rectangle {
+                                    // Tall enough for a full quarter circle,
+                                    // pushed up so only its bottom edge lands
+                                    // inside the window.
+                                    width: life.span
+                                    height: card.radius * 2
+                                    y: life.height - height
+                                    radius: Math.max(0, card.radius - card.border.width)
+
+                                    // The border's expression, not a copy of
+                                    // the colours it resolves to.
+                                    color: card.border.color
+                                }
+
+                                NumberAnimation {
+                                    id: countdown
+
+                                    target: life
+                                    property: "width"
+                                    from: life.span
+                                    to: 0
+                                    duration: slot.dwellMs
                                 }
                             }
 

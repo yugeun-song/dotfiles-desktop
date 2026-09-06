@@ -1392,10 +1392,11 @@ writing an entire GTK stylesheet. The caps lock segment alone is bound as an
 exception, because the fact that it disagreed with the bar was already written
 down in a comment at `Theme.qml:100-102`.
 
-**Notifications have nothing to paint.** No notification daemon is installed.
-`pacman -Qq` shows `libnotify` and neither dunst, mako nor swaync.
-`capture.sh:36-40` calls `notify-send`, and with no server that notification
-appears nowhere. When a daemon is chosen it becomes a consumer.
+**Notifications are drawn by the bar, so they never became a consumer.** This
+entry used to say there was nothing to paint, because no notification server was
+installed. The bar owns `org.freedesktop.Notifications` now, and toasts and the
+history panel are QML surfaces like the pills: they read `Theme` directly, so
+they follow the palette without a template or a line in `theme build`.
 
 **hyprpicker has no colours.** `capture.sh:109` calls it as `hyprpicker -a -n`,
 and the tool magnifies the screen without drawing anything of its own. It has no
