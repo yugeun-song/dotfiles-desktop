@@ -66,8 +66,21 @@ Scope {
             // machine that wakes unlocked, and hypridle died twice in one boot.
             // lock.sh holds hyprlock in the foreground, so it is detached and
             // waited on; if the lock never appears the session is not suspended.
+            //
+            // Through app-scope.sh, and here the cgroup it escapes is a
+            // security question: setsid alone stays in bar.service's group, so
+            // quickshell being restarted while this lock was up would have
+            // taken the lock screen with it and left the session unlocked.
+            // Every other route to the lock runs from hypridle's unit.
+            // Backgrounded, because lock.sh does not return while hyprlock is
+            // up. setsid stays as the fallback if the wrapper is missing --
+            // worse containment beats no lock at all.
             command: ["sh", "-c",
-                "pidof hyprlock >/dev/null 2>&1 || setsid -f \"$HOME/.config/hypr/scripts/lock.sh\" >/dev/null 2>&1; " +
+                "l=\"$HOME/.config/hypr/scripts/lock.sh\"; " +
+                "s=\"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar/scripts/app-scope.sh\"; " +
+                "pidof hyprlock >/dev/null 2>&1 || " +
+                "if [ -r \"$s\" ]; then sh \"$s\" -- \"$l\" >/dev/null 2>&1 & " +
+                "else setsid -f \"$l\" >/dev/null 2>&1; fi; " +
                 "for _ in $(seq 50); do pidof hyprlock >/dev/null 2>&1 && exec systemctl suspend; sleep 0.1; done; " +
                 "notify-send -u critical 'Sleep cancelled' 'The screen did not lock, so the session was not suspended.'"],
             probe: "systemctl"
