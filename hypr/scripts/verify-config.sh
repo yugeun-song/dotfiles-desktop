@@ -6,6 +6,11 @@
 # which is a strange price for a syntax check. So the check runs against a
 # copy of the tree with the autostart module emptied out.
 #
+# It catches a module that does not parse and one that throws while loading. It
+# cannot catch a Lua error inside a bind callback, because nothing here presses
+# the key -- so a callback whose body can fail needs its own pcall and its own
+# fallback. monitor_settings.lua is machine-local and not read here.
+#
 # Usage: verify-config.sh [config-dir]     (default: the directory above this)
 
 set -euo pipefail
@@ -25,15 +30,10 @@ fi
 work="$(mktemp -d)"
 trap 'rm -rf -- "$work"' EXIT
 
-# -L, because $SRC is normally ~/.config/hypr where install.sh put symlinks
-# back to the repository. Without it $work/config is a link to the real
-# tree, and emptying $work/config/execs.lua below writes straight through
-# it and destroys the committed file.
 # -L follows a link instead of copying it. That mattered while ~/.config/hypr
-# held symlinks into the working tree: without it the copy was a link too, and
-# emptying execs.lua below would have followed it and truncated the real file.
-# The tree is real files now, so -L is a no-op here and is kept because the
-# argument for it comes back the moment anything is linked again.
+# held symlinks into the working tree: emptying execs.lua below would have
+# truncated the real file. A no-op now, kept because the argument returns the
+# moment anything is linked again.
 cp -aL -- "$SRC/hyprland.lua" "$work/"
 cp -aL -- "$SRC/config" "$work/"
 
@@ -45,11 +45,33 @@ printf -- '-- emptied by verify-config.sh\n' > "$work/config/execs.lua"
 # what is being verified here.
 rm -f -- "$work/local.lua"
 
-out="$(Hyprland --verify-config -c "$work/hyprland.lua" 2>&1)" || true
+# config/monitors.lua calls hl.timer while it loads, and hl.timer at load time
+# segfaults `--verify-config`. The crash took the whole check with it, and this
+# script answered "config ok" to everything, syntax errors included. Stubbed in
+# the copy, appended to the module loaded first so error line numbers still
+# match. Guarded: creating a missing module would hide the error about it.
+if [[ -f "$work/config/env.lua" ]]; then
+    printf '\nhl.timer = function() end\n' >> "$work/config/env.lua"
+fi
+
+# Bounded, because install.sh runs this before it copies anything: a wedge here
+# would stop an install with no output. It has never taken a tenth of a second.
+status=0
+out="$(timeout 60 Hyprland --verify-config -c "$work/hyprland.lua" 2>&1)" || status=$?
 
 # Everything before the banner is startup chatter about a compositor that is
 # not going to run.
 result="$(printf '%s\n' "$out" | sed -n '/Config parsing result/,$p' | tail -n +2)"
+
+# No banner is not a pass. Hyprland prints it for every configuration it
+# finishes reading, sound or broken, so its absence means the check did not run.
+# Reporting ok there is how a syntax error got approved.
+if [[ -z "$result" ]]; then
+    printf 'verify-config: %s produced no parsing result (Hyprland exited %s); the check did not run\n' \
+        "$SRC" "$status" >&2
+    printf '%s\n' "$out" | tail -n 20 >&2
+    exit 2
+fi
 
 # A clean parse prints the words "config ok" and nothing else. Treating any
 # output as a problem fails on success, which is a worse lie than the one
