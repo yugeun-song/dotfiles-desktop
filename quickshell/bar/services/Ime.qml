@@ -49,14 +49,21 @@ Singleton {
     property double asOf: 0
     property int restarts: 0
 
+    // Backs off rather than retrying at a fixed rate. inputmethod.sh exits 1 at
+    // once when fcitx5-remote is not on PATH -- the state of a fresh install --
+    // and two seconds there is a spawn and a log line every two seconds for the
+    // whole session. Doubling still brings a helper that died once back at once.
     Timer {
         id: supervisor
 
-        interval: 2000
+        property int delay: 2000
+
+        interval: supervisor.delay
         repeat: false
         onTriggered: {
             root.restarts = root.restarts + 1;
             console.warn("[ime] helper exited, restart", root.restarts);
+            supervisor.delay = Math.min(supervisor.delay * 2, 60000);
             poller.running = true;
         }
     }
@@ -81,6 +88,9 @@ Singleton {
 
         stdout: SplitParser {
             onRead: line => {
+                // Any line at all means the helper is alive and talking, so
+                // the supervisor's backoff starts over.
+                supervisor.delay = 2000;
                 const raw = line.trim();
                 // The script's no-reading token: fcitx5 did not answer, which
                 // is not the same as it answering that no input method is on.

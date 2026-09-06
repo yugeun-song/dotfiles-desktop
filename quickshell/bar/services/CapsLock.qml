@@ -15,14 +15,21 @@ Singleton {
     property double asOf: 0
     property int restarts: 0
 
+    // Backs off rather than retrying at a fixed rate. capslock.sh does not exit
+    // on its own, so one that keeps exiting cannot run here at all, and two
+    // seconds there is a spawn every two seconds for the whole session.
+    // Doubling still brings a helper that died once back at once.
     Timer {
         id: supervisor
 
-        interval: 2000
+        property int delay: 2000
+
+        interval: supervisor.delay
         repeat: false
         onTriggered: {
             root.restarts = root.restarts + 1;
             console.warn("[capslock] helper exited, restart", root.restarts);
+            supervisor.delay = Math.min(supervisor.delay * 2, 60000);
             poller.running = true;
         }
     }
@@ -47,6 +54,9 @@ Singleton {
 
         stdout: SplitParser {
             onRead: line => {
+                // Any line at all means the helper is alive and talking, so
+                // the supervisor's backoff starts over.
+                supervisor.delay = 2000;
                 const value = line.trim();
                 if (value === "0" || value === "1") {
                     root.active = value === "1";
