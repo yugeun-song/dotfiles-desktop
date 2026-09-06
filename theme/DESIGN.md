@@ -138,7 +138,7 @@ only six colours.
   `dotfiles-terminal/zsh/config/caps-lock.zsh:111`. It becomes `critical` plus
   `ink`. Since the generator also writes the file `caps-lock.zsh` reads, the
   manual synchronisation between the two repositories disappears entirely. This
-  is where the confession in the comment at `Theme.qml:100-102` stops being
+  is where the confession in the comment at `Theme.qml:149-150` stops being
   needed.
 - `accentTeal` (108) is used in two places, the volume OSD and battery normal.
   Volume goes to `positive` and battery normal to `tone6`. Charging is
@@ -617,9 +617,9 @@ alongside it is five white literals.
 ```
 quickshell/bar/modules/PopupMenu.qml:136   Qt.rgba(1, 1, 1, 0.09)
 quickshell/bar/modules/PopupMenu.qml:143   Qt.rgba(1, 1, 1, 0.1)
-quickshell/bar/modules/PowerMenu.qml:211   Qt.rgba(1, 1, 1, 0.05)
+quickshell/bar/modules/PowerMenu.qml:244   Qt.rgba(1, 1, 1, 0.05)
 quickshell/bar/modules/Osd.qml:159         Qt.rgba(1, 1, 1, 0.12)
-quickshell/bar/modules/Launcher.qml:322    Qt.rgba(1, 1, 1, 0.08)
+quickshell/bar/modules/Launcher.qml:327    Qt.rgba(1, 1, 1, 0.08)
 ```
 
 All five mean "a face slightly brighter than the ground", so they become
@@ -977,14 +977,15 @@ apply_hypr_border() {
   configuration for the sake of two colours is still a steep price. It runs
   only when `--reload-hypr` asks for it.
 - **Never touch mode setting.** `hl.monitor`, resolutions, scales and enabling
-  or disabling outputs are outside this script's remit. This machine carries
-  GRUB cmdline workarounds for the `xe` driver's atomic commit problem, and
-  stepping on mode setting while changing colours kills the display.
-- **Never restart the bar.** `bin/bar --restart` exists and is safe -- it
-  restarts `systemd/user/bar.service` -- but it drops the strip and every
-  pill's state to re-read two colours the running bar will take over IPC. If
-  the IPC call fails, leave it to be read at the next start.
-- **Never restart fcitx5.** As `install.sh:283-285` records, a restart costs
+  or disabling outputs are outside this script's remit. A modeset is the one
+  operation this GPU is not trusted with, as `hypr/config/general.lua:3-13`
+  records, and stepping on it while changing colours kills the display.
+- **Never restart the bar.** `bin/bar --restart` exists and no longer takes
+  the user's windows with it -- those live in `app-hyprland.slice` now -- but it
+  still drops the strip and every pill's state to re-read two colours the
+  running bar will take over IPC. If the IPC call fails, leave it to be read at
+  the next start.
+- **Never restart fcitx5.** As `install.sh:288-290` records, a restart costs
   every open window its input context.
   `fcitx5-remote -r` is a reload, not a restart.
 - **Never touch `gsettings set gtk-theme`, `icon-theme` or `cursor-theme`.**
@@ -1277,7 +1278,7 @@ section 2.2. Where the values came from:
 | `accent` | `#7aa2f7` | `Theme.qml:110` accentIndigo. The Hyprland border moves to this value |
 | `positive` | `#9ece6a` | `Theme.qml:107` |
 | `caution` | `#e0af68` | `Theme.qml:106` |
-| `critical` | `#f7768e` | `Theme.qml:104`, `caps-lock.zsh:111` |
+| `critical` | `#f7768e` | `Theme.qml:152`, `caps-lock.zsh:111` |
 | `tone1` | `#bb9af7` | `Theme.qml:111`, having absorbed `purple` at line 92 |
 | `tone2` | `#7a5ccc` | `Theme.qml:93` violet |
 | `tone3` | `#f2ce00` | `Theme.qml:90` yellow |
@@ -1390,7 +1391,7 @@ colour-cube entries and have nothing to do with the palette. Really binding this
 file would mean generating all 223 assignments, work of the same order as
 writing an entire GTK stylesheet. The caps lock segment alone is bound as an
 exception, because the fact that it disagreed with the bar was already written
-down in a comment at `Theme.qml:100-102`.
+down in a comment at `Theme.qml:149-150`.
 
 **Notifications are drawn by the bar, so they never became a consumer.** This
 entry used to say there was nothing to paint, because no notification server was

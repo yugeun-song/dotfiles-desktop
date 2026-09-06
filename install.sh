@@ -82,21 +82,14 @@ fi
 
 # Copy, every run, over whatever is there.
 #
-# For what this repository authors and nothing else writes: the Hyprland
-# configuration, the scripts, the quickshell tree, the two commands in bin/.
-# These used to be symlinked, because a link makes an edit live without running
-# anything. What a link also does is make the installed path resolve back into
-# the working tree, so anything that finds a sibling by walking up from its own
-# location finds it in the repository rather than beside itself.
-# The old monitor script read its preset file that way and the preset was never
-# installed at all; nothing reported it, the panel would simply have come up at
-# scale 1.
+# For what this repository authors and nothing else writes. These were symlinks
+# once, which made the installed path resolve back into the working tree: the
+# old monitor script walked up from its own location and read the repository's
+# preset rather than the installed one, which was never installed at all.
 #
-# Unlike seed() this overwrites. The repository is the source of truth here, so
-# a difference at the destination is something to lose rather than to keep. The
-# copy goes in place rather than being swapped in, because quickshell watches
-# these files and reloads on a write: a directory replaced underneath it is a
-# crash instead of a reload.
+# Unlike seed() this overwrites -- the repository is the source of truth here.
+# The copy goes in place rather than being swapped in, because quickshell
+# reloads on a write and a directory replaced underneath it crashes instead.
 mirror() {
     local from="$1" to="$2" rel
     if [[ ! -e "$from" ]]; then
@@ -175,19 +168,14 @@ mirror "$SRC/quickshell/bar"         "$CONFIG/quickshell/bar"
 # Copy, once, and then leave it alone.
 #
 # The rule this file follows: mirror what is authored here, seed what a program
-# owns. Everything under hypr/ and quickshell/ is written by hand, so the
-# repository wins on every run. The files below are not.
+# owns. fcitx5, KDE and GTK all save by writing a temp file beside the target
+# and rename()-ing it over, and rename() replaces a symlink rather than
+# following it -- so the first change made in a settings window turns the link
+# into a real file and the repository quietly stops being what runs.
 #
-# fcitx5 and KDE both save by writing a temp file beside the target and
-# rename()-ing it over, and rename() replaces a symlink rather than following
-# it. The first change made in either settings window turns the link into a
-# real file, and the repository quietly stops being what the machine reads.
-# GTK's tooling does the same to settings.ini.
-#
-# Linking those pretends to a relationship that does not survive first contact.
 # Seeding says what is true: this is where the settings start, and the program
-# owns them from then on. To take a change back, copy the file into the
-# repository; to push one out, delete the file and run this again.
+# owns them after. To take a change back, copy the file into the repository; to
+# push one out, delete it and run this again.
 seed() {
     local from="$1" to="$2"
     if [[ ! -e "$from" ]]; then
@@ -330,21 +318,16 @@ mirror "$SRC/dbus/services/org.fcitx.Fcitx5.service" \
 # The pointer, built rather than shipped.
 #
 # XCursor themes are bitmaps with the colour baked in, so a themed pointer is
-# not something a setting can ask for. theme/cursor/tint-cursors.py recolours a
-# packaged theme by luminance, keeping every hotspot, size and alias the source
-# had, and theme/cursor/pointer.py then redraws the plain arrow over the result.
+# not something a setting can ask for. tint-cursors.py recolours a packaged
+# theme by luminance, keeping every hotspot and alias, and pointer.py redraws
+# the plain arrow over the result.
 #
-# One colour feeds both, and it is pointer.py's rather than Theme.qml's.
+# One colour feeds both, and it is pointer.py's rather than Theme.qml's: while
+# the arrow alone carried a different one, the pointer changed colour on its way
+# onto a link and back on the way off. A cursor theme is one object to whoever
+# is looking at it.
 #
-# The arrow was asked for in the colours of a particular drawing, and for a
-# while it alone carried them while the rest of the theme still followed the
-# bar. That is visible in the only way that matters: the pointer changed colour
-# on its way onto a link and changed back on the way off. A cursor theme is one
-# object to whoever is looking at it, so it gets one colour, and the drawn arrow
-# is where that colour is written down.
-#
-# Failure is not fatal. A machine that cannot build it keeps whatever pointer it
-# had, which is a worse-looking desktop and not a broken one.
+# Failure is not fatal: the machine keeps whatever pointer it had.
 cursor_tint=$(sed -n 's/^FILL = "\(#[0-9a-fA-F]\{6\}\)".*/\1/p' \
               "$SRC/theme/cursor/pointer.py" | head -1)
 if (( CHECK )); then
@@ -391,19 +374,14 @@ fi
 # KDE's crash reporter, which on this desktop crashes on every crash it is told
 # about, including its own.
 #
-# It is a Qt GUI program started from a systemd user unit, so it has no wayland
-# display and Qt ends it with qFatal. That abort is itself a coredump, which
-# starts it again. One quickshell crash produced a hundred and thirty of its
-# cores and 1.1 GB under /var/lib/systemd/coredump before anyone noticed, and the
-# only thing in the notification area was "has encountered a fatal error".
+# It is a Qt GUI started from a systemd user unit, so it has no wayland display
+# and Qt ends it with qFatal -- an abort that is itself a coredump, which starts
+# it again. One quickshell crash left a hundred and thirty of its cores and
+# 1.1 GB under /var/lib/systemd/coredump.
 #
-# The socket is what launches it, so the socket is what has to go; disabling the
-# service alone leaves the socket to start it. Nothing here reads its reports:
-# they go to a Plasma dialog and to KDE's Sentry, and the machine keeps the cores
-# themselves, which coredumpctl reads without any of this.
-#
-# All of it is a no-op where drkonqi was never installed, which is the case a
-# fresh machine from packages/install-target.txt is in.
+# The socket is what launches it, so the socket is what has to go. Nothing here
+# reads its reports, and coredumpctl reads the cores without any of it. A no-op
+# where drkonqi was never installed.
 if (( ! CHECK )) && command -v systemctl >/dev/null 2>&1; then
     for _u in drkonqi-coredump-launcher.socket \
               drkonqi-coredump-pickup.service \
