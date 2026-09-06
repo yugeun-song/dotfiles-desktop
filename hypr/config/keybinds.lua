@@ -444,26 +444,79 @@ hl.bind("SUPER + ALT + M", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE
 -- locked = true so they still work on the lock screen, repeating so holding
 -- a key keeps stepping instead of moving one notch and stopping.
 --
--- Brightness is bound twice. The first hands the key to the shell, which
--- knows the difference between a backlight device and a monitor on DDC and
--- draws the readout. The second runs only when the shell is not there, so a
--- crashed bar costs the readout and not the key.
--- The process is named qs, not quickshell: bin/bar prefers the qs binary and
--- that is what ends up in comm. Matching only "quickshell" made this test
--- always fail, so the fallback fired alongside the shell handler and every
--- press moved two steps, all the way to a dark panel.
-local shell_alive = "pgrep -x qs >/dev/null 2>&1 || pgrep -x quickshell >/dev/null 2>&1"
+-- One binding per key, with the branch inside it. Hyprland runs every binding
+-- on a key rather than stopping at the first, so a shell binding plus a
+-- guarded fallback moved two steps whenever the guard was wrong -- and it was,
+-- because it matched "quickshell" against a process named qs. One binding
+-- cannot double-step whatever the guard decides. Do not add a second.
 
-hl.bind("XF86MonBrightnessUp", hl.dsp.global("quickshell:brightnessUp"),
-    { locked = true, repeating = true, description = "Brightness up" })
+-- A layer surface, not a process: the compositor already knows, where pgrep
+-- cost a fork on the thread that dispatches libinput. Prefix, because the bar
+-- surface takes quickshell's default name and a default is not ours to depend
+-- on; any shell surface answers the question, which is whether it is loaded.
+local SHELL_NAMESPACE = "quickshell"
+
+local function shell_is_up()
+    for _, l in ipairs(hl.get_layers()) do
+        if l.mapped and l.namespace:sub(1, #SHELL_NAMESPACE) == SHELL_NAMESPACE then
+            return true
+        end
+    end
+    return false
+end
+
+-- brightnessctl writes the internal panel, which monitors.lua switches off with
+-- the lid. Without this a bar that died closed would dim a panel nobody can see
+-- and leave it near zero. DDC is too slow to stand in at twenty-five presses a
+-- second, so on an external the honest fallback is none.
+--
+-- Brightness.qml's isInternal() copied, not reinvented: the two have to agree
+-- or the key means one thing with the bar up and another with it down.
+local INTERNAL_PREFIX = { "eDP", "LVDS", "DSI" }
+
+local function on_internal_panel()
+    local m    = hl.get_active_monitor()
+    local name = m and m.name or ""
+    if name == "" then
+        return true
+    end
+    for _, prefix in ipairs(INTERNAL_PREFIX) do
+        if name == prefix or name:sub(1, #prefix + 1) == prefix .. "-" then
+            return true
+        end
+    end
+    return false
+end
+
+-- Both questions inside pcall: a compositor that cannot answer one must not
+-- cost a key that also has to work on the lock screen. Unanswerable falls to
+-- brightnessctl, which is what this did before any of it. The dispatchers are
+-- checked for nil too, since hl.dsp.* reports a bad argument that way.
+--
+-- No floor named here. brightnessctl stops at its own, and the one percent
+-- Brightness.qml uses is of a maximum that differs per machine.
+local function brightness(shortcut, fallback)
+    local to_shell = hl.dsp.global(shortcut)
+    local to_panel = hl.dsp.exec_cmd(fallback)
+    return function()
+        local asked, up = pcall(shell_is_up)
+        if to_shell and asked and up then
+            hl.dispatch(to_shell)
+            return
+        end
+        local known, internal = pcall(on_internal_panel)
+        if to_panel and (not known or internal) then
+            hl.dispatch(to_panel)
+        end
+    end
+end
+
 hl.bind("XF86MonBrightnessUp",
-    hl.dsp.exec_cmd(shell_alive .. " || brightnessctl --class backlight -q s 5%+"),
-    { locked = true, repeating = true })
-hl.bind("XF86MonBrightnessDown", hl.dsp.global("quickshell:brightnessDown"),
-    { locked = true, repeating = true, description = "Brightness down" })
+    brightness("quickshell:brightnessUp", "brightnessctl --class backlight -q s 5%+"),
+    { locked = true, repeating = true, description = "Brightness up" })
 hl.bind("XF86MonBrightnessDown",
-    hl.dsp.exec_cmd(shell_alive .. " || brightnessctl --class backlight -q s 5%-"),
-    { locked = true, repeating = true })
+    brightness("quickshell:brightnessDown", "brightnessctl --class backlight -q s 5%-"),
+    { locked = true, repeating = true, description = "Brightness down" })
 
 -- Volume goes straight to wpctl rather than through the shell. It works with
 -- no shell running, and the shell watches Pipewire anyway, so the readout
