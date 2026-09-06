@@ -136,7 +136,8 @@ Item {
         property real notch: 0
 
         // The bounds the keyboard walk uses, so a wheel and Ctrl+Super+H land in
-        // the same place. hypr/scripts/workspace-walk.sh holds the same two.
+        // the same place. MIN_WORKSPACE and MAX_WORKSPACE in
+        // hypr/config/keybinds.lua hold the same two.
         readonly property int minWorkspace: 1
         readonly property int maxWorkspace: 100
 

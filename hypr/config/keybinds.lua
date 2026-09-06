@@ -21,7 +21,6 @@ local capture   = scripts .. "/capture.sh"
 local launch    = scripts .. "/launch.sh"
 local clipboard = scripts .. "/clipboard.sh"
 local shellkey  = scripts .. "/shell-global.sh"
-local dirwalk   = scripts .. "/focus-walk.sh"
 
 local app = {
     browser  = launch .. " 'google-chrome-stable' 'firefox' 'chromium' 'brave' 'librewolf'",
@@ -73,23 +72,139 @@ hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd("systemd-cat -t session-start " .. s
     { description = "Restart anything in the session that died" })
 
 --##! Window focus
+-- Hyprland's own movefocus wraps: from the leftmost window, left lands on the
+-- rightmost. So ask first whether anything is that way, and do nothing if not.
+-- Which window to land on is still Hyprland's to decide.
+--
+-- In here rather than scripts/focus-walk.sh, for the reason the workspace walk
+-- below is: the script asked hyprctl and then told hyprctl, and a second press
+-- inside that gap stepped from an answer one window old, which is the wrap
+-- this exists to prevent. A callback cannot be split that way.
+--
+-- This API never raises. A filter key it does not know is dropped, a selector
+-- it cannot resolve gives an empty list, a rejected dispatcher argument gives
+-- nil, and dispatching nil is silent -- each one a key that quietly stops
+-- working. Hence the checks below, all of which end in the compositor's own
+-- step plus one notification. Wrapping is bad; a dead key is worse.
+
+-- A veto, not a target: anything further left counts, diagonals included.
+-- Strict, so a window centred exactly on the focused one is not left of it.
+local beyond = {
+    l = function(w, cx, cy) return w.at.x + w.size.x / 2 < cx end,
+    r = function(w, cx, cy) return w.at.x + w.size.x / 2 > cx end,
+    u = function(w, cx, cy) return w.at.y + w.size.y / 2 < cy end,
+    d = function(w, cx, cy) return w.at.y + w.size.y / 2 > cy end,
+}
+
+-- Separate from the binding so the pcall there wraps the compositor calls and
+-- the arithmetic on what they return, and nothing else.
+local function anything_beyond(dir)
+    local active = hl.get_active_window()
+    -- No focused window is not a failure. There is simply nowhere to step from.
+    if active == nil then
+        return false
+    end
+
+    -- The object, not its id: a filter key set to nil is a filter key that is
+    -- not there, and the query then widens to every workspace instead of
+    -- failing. Caught here so it cannot read as somewhere to go.
+    local ws = active.workspace
+    if ws == nil then
+        return false
+    end
+
+    local cx = active.at.x + active.size.x / 2
+    local cy = active.at.y + active.size.y / 2
+    local past = beyond[dir]
+
+    -- hidden is tested here rather than asked for in the filter: it is a window
+    -- field and not a filter field, so the key would be dropped and the query
+    -- would answer as though nothing had been asked.
+    local seen_active = false
+    for _, w in ipairs(hl.get_windows({ workspace = ws, mapped = true })) do
+        if w.address == active.address then
+            seen_active = true
+        end
+        if not w.hidden and past(w, cx, cy) then
+            return true
+        end
+    end
+
+    -- A list without the focused window is not a list of this workspace -- the
+    -- shape an unresolvable filter comes back in. Read as an answer it means
+    -- eighteen dead keys, so it is raised onto the fallback below instead.
+    if active.mapped and not seen_active then
+        error("the window query did not return the focused window", 0)
+    end
+    return false
+end
+
+-- Once per kind of failure, not once a press: the same break is reached again
+-- on the next keystroke. A local, so a reload re-arms it.
+local walk_warned = {}
+
+local function walk_warn(tag, text)
+    if walk_warned[tag] then
+        return
+    end
+    walk_warned[tag] = true
+    pcall(function()
+        hl.notification.create({ text = "hypr: " .. text, duration = 15000 })
+    end)
+end
+
+local function focus_walk(mode, dir)
+    -- Built once at load, so a renamed dispatcher is a call on nil that
+    -- --verify-config catches. A rejected argument is not: it just returns nil,
+    -- and hl.dispatch takes nil silently, so that one is caught here.
+    local step
+    if mode == "focus" then
+        step = hl.dsp.focus({ direction = dir })
+    else
+        step = hl.dsp.window.move({ direction = dir })
+    end
+    if step == nil then
+        return function()
+            walk_warn("build", "no " .. mode .. " dispatcher for direction "
+                .. dir .. ": the direction keys cannot step")
+        end
+    end
+
+    return function()
+        local ok, found = pcall(anything_beyond, dir)
+        if ok and not found then
+            return
+        end
+        -- The check is the fragile half, so one that throws falls through to
+        -- the step: a wrong destination beats a key that stopped working.
+        if not ok then
+            walk_warn("check", "direction keys lost their edge check and wrap again: "
+                .. tostring(found))
+        end
+        local sent, err = pcall(hl.dispatch, step)
+        if not sent then
+            walk_warn("step", "direction keys cannot step: " .. tostring(err))
+        end
+    end
+end
+
 local vim_dir   = { H = "l", J = "d", K = "u", L = "r" }
 local arrow_dir = { Left = "l", Down = "d", Up = "u", Right = "r" }
 
 for key, dir in pairs(vim_dir) do
-    hl.bind("SUPER + " .. key, hl.dsp.exec_cmd(dirwalk .. " focus " .. dir),
+    hl.bind("SUPER + " .. key, focus_walk("focus", dir),
         { description = "Focus " .. dir })
-    hl.bind("SUPER + SHIFT + " .. key, hl.dsp.exec_cmd(dirwalk .. " move " .. dir),
+    hl.bind("SUPER + SHIFT + " .. key, focus_walk("move", dir),
         { description = "Move window " .. dir })
 end
 for key, dir in pairs(arrow_dir) do
-    hl.bind("SUPER + " .. key, hl.dsp.exec_cmd(dirwalk .. " focus " .. dir),
+    hl.bind("SUPER + " .. key, focus_walk("focus", dir),
         { description = "Focus " .. dir })
-    hl.bind("SUPER + SHIFT + " .. key, hl.dsp.exec_cmd(dirwalk .. " move " .. dir),
+    hl.bind("SUPER + SHIFT + " .. key, focus_walk("move", dir),
         { description = "Move window " .. dir })
 end
-hl.bind("SUPER + BracketLeft", hl.dsp.exec_cmd(dirwalk .. " focus l"))
-hl.bind("SUPER + BracketRight", hl.dsp.exec_cmd(dirwalk .. " focus r"))
+hl.bind("SUPER + BracketLeft", focus_walk("focus", "l"))
+hl.bind("SUPER + BracketRight", focus_walk("focus", "r"))
 
 --##! Window state
 hl.bind("SUPER + Q", hl.dsp.window.close(), { description = "Close window" })
@@ -146,25 +261,14 @@ end
 -- workspace lands on the last one. That is a jump across the whole set at the
 -- exact moment the intent was to find out there is nothing further left.
 --
--- And not through a script either, which is what this used to be.
--- scripts/workspace-walk.sh had to ask hyprctl where it was and then tell
--- hyprctl where to go: two round trips with a gap between them, and a wheel
--- flick or a held key puts a second invocation inside that gap. Both read the
--- same workspace, both aim at the same target, and the pair moves one step
--- instead of two. Measured: two concurrent "+1" walks from workspace 2 landed
--- on 3. While binds:workspace_back_and_forth was still on it was worse than a
--- lost step, because the second dispatch named a workspace that had already
--- been reached and sprang back to 2, which is the bounce that general.lua now
--- describes.
+-- And not through a script either, which is what this used to be and is no
+-- longer in the tree. It asked hyprctl and then told hyprctl, and a wheel flick
+-- put a second invocation inside that gap: both read the same workspace, both
+-- aimed at the same target, and the pair moved one step. Measured, two "+1"
+-- walks from 2 landed on 3. A callback cannot be split that way.
 --
--- A bind callback runs on the compositor's own thread inside the key handler.
--- The read and the dispatch cannot be split by another invocation, and there
--- is no fork per notch either.
---
--- Walking by number rather than over the workspaces that happen to exist,
--- because an empty workspace to the right is somewhere to go: Hyprland creates
--- it on arrival. Walking only the existing ones would mean the key does
--- nothing at all until a second workspace has been made some other way.
+-- By number rather than over the workspaces that exist, because an empty one to
+-- the right is somewhere to go: Hyprland creates it on arrival.
 local MIN_WORKSPACE = 1
 local MAX_WORKSPACE = 100
 
