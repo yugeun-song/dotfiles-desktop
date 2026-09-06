@@ -108,6 +108,12 @@ already running keeps the old code until it is restarted. A fix that was
 committed, pushed and never installed cost a login once. `./install.sh --check`
 names every path that is behind and exits 1.
 
+The installer parse-checks the Hyprland configuration first, through
+`hypr/scripts/verify-config.sh`, and refuses to install one that does not load:
+the mirrors reload the running compositor, and a module that throws while
+loading takes the session to emergency mode. A machine without Hyprland yet
+gets a warning and an unchecked copy, which is how it is first run.
+
 A **seed** is for everything a program owns. fcitx5, KDE and GTK save by writing
 a temp file beside the target and rename()-ing it over, and rename() replaces a
 symlink rather than following it: the first change made in one of their settings

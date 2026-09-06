@@ -61,6 +61,23 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# Parse-checked before anything is written and before the password prompt, so a
+# refusal touches nothing. The mirrors below reload the running compositor, and
+# a module that throws while loading takes the session to emergency mode.
+#
+# Only exit 1 stops the install. Anything else is the check not running, usually
+# because Hyprland is not installed yet -- the state of a first run.
+if (( ! CHECK )) && [[ -x "$SRC/hypr/scripts/verify-config.sh" ]]; then
+    _verify=0
+    "$SRC/hypr/scripts/verify-config.sh" "$SRC/hypr" >/dev/null || _verify=$?
+    case "$_verify" in
+        0) ;;
+        1) echo "install: the Hyprland configuration does not load; nothing was copied" >&2; exit 1 ;;
+        *) echo "install: could not verify the Hyprland configuration; copying it unchecked" >&2 ;;
+    esac
+    unset _verify
+fi
+
 (( CHECK )) || acquire_sudo
 
 # Copy, every run, over whatever is there.
