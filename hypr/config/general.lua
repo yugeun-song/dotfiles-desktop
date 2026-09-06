@@ -85,9 +85,11 @@ hl.config({
         disable_hyprland_logo = true,
         disable_splash_rendering = true,
         force_default_wallpaper = 0,
-        -- Variable refresh rate off. On this Intel iGPU it produces panel
-        -- flicker over DisplayPort and HDMI, and it shares the code path that
-        -- hangs under xe.
+        -- Off, and inert either way on this output: i915 and xe attach
+        -- vrr_capable to eDP and DisplayPort connectors only, so an HDMI one
+        -- has no such property. Setting 1 changes nothing on screen and tells
+        -- output-management clients adaptive sync is on when it is not.
+        -- Revisit on DisplayPort, where the property does exist.
         vrr = 0,
         focus_on_activate = false,
         -- true, so a crashed lock screen can be replaced. When the locker dies
@@ -145,20 +147,12 @@ hl.config({
     },
 
     binds = {
-        -- Off. With this on, an absolute workspace dispatch naming the
-        -- workspace already showing does not do nothing: it jumps to the
-        -- previous one. Three ordinary things then read as a bounce. The same
-        -- SUPER + digit pressed twice. A click on the chip that is already
-        -- lit. And, measured here, a fast wheel flick or a held walk key,
-        -- where two invocations of workspace-walk.sh read the same current
-        -- workspace before either has dispatched, both aim at the same target,
-        -- and the second one names a workspace that has already been reached
-        -- and springs back to where the walk started.
-        --
-        -- That last one is also why the ends felt like they flung you the
-        -- other way. Arriving at an end is exactly the moment the key gets
-        -- pressed once more to check there is nothing further, which is the
-        -- moment two invocations overlap.
+        -- Off. With this on, a dispatch naming the workspace already showing
+        -- jumps to the previous one instead of doing nothing, so SUPER + digit
+        -- pressed twice and a click on the lit chip both read as a bounce.
+        -- Arriving at an end is exactly when the key gets pressed once more to
+        -- check there is nothing further, which is why the ends felt like they
+        -- flung you back.
         workspace_back_and_forth = false,
         -- Only shapes the chain back_and_forth walks, so with that off it
         -- governs nothing. Set rather than deleted, because the two read as a
@@ -189,10 +183,10 @@ hl.gesture({ fingers = 3, direction = "swipe", action = "move" })
 -- ---------------------------------------------------------------------------
 -- Motion
 -- ---------------------------------------------------------------------------
--- Speeds are in tenths of a second, so these are all well under 200 ms. The
--- shape matters more than the duration: a decelerating curve puts most of the
--- movement in the first few frames, so the result is legible long before the
--- animation finishes and nothing feels like waiting.
+-- Speeds are tenths of a second, so 1.0 is 100 ms. Everything lands between 45
+-- and 165 ms except border at 330, which can afford to arrive late because it
+-- is never in the way. The shape matters more than the duration: a
+-- decelerating curve is legible long before the animation finishes.
 
 hl.curve("emphasizedDecel", {
     type = "bezier",
