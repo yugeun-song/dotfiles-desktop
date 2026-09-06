@@ -22,6 +22,9 @@ Type=simple
 WorkingDirectory=%h
 ExecStart=/usr/bin/hyprpaper
 ExecStartPost=-%E/hypr/scripts/wallpaper.sh --reload
-Restart=on-failure
+# always, not on-failure, for the reason in bar.service: systemd counts SIGTERM
+# and exit 0 as success, so on-failure left a unit killed by a stray pkill
+# inactive with nothing failed. The start limit above still bounds it.
+Restart=always
 RestartSec=1
 Slice=session.slice

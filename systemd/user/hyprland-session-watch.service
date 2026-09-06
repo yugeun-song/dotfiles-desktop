@@ -8,9 +8,11 @@
 # and stops the target the moment the file is unlinked. See the script for the
 # cases that does and does not cover.
 #
-# Restart=on-failure is for a watch that died of something other than doing
-# its job -- the script exits 0 only after stopping the target -- because a
-# session without its watch never stops on its own.
+# Restart=always with exit 0 excluded, the contract on-failure could not
+# express. A session without its watch never stops on its own, and systemd
+# counts a SIGTERM as success, so on-failure left a killed watch dead with
+# nothing failed. Exit 0 is the success path -- the script exits 0 only after
+# asking for the target to stop -- and restarting there would race that stop.
 [Unit]
 Description=Ends the Hyprland session target when the compositor exits
 PartOf=hyprland-session.target
@@ -19,6 +21,7 @@ After=hyprland-session.target
 [Service]
 Type=simple
 ExecStart=%E/hypr/scripts/session-watch.sh
-Restart=on-failure
+Restart=always
+RestartPreventExitStatus=0
 RestartSec=2
 Slice=session.slice

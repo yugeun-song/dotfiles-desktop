@@ -13,6 +13,9 @@ StartLimitBurst=5
 [Service]
 Type=simple
 ExecStart=/usr/bin/wl-paste --type image --watch cliphist store
-Restart=on-failure
+# always, not on-failure, for the reason in bar.service: systemd counts SIGTERM
+# and exit 0 as success, so on-failure left a unit killed by a stray pkill
+# inactive with nothing failed. The start limit above still bounds it.
+Restart=always
 RestartSec=1
 Slice=session.slice

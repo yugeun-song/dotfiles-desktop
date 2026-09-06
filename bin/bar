@@ -31,8 +31,15 @@ runner() {
 }
 
 case "${1:-}" in
-    "")         exec systemctl --user start "$UNIT" ;;
-    --restart)  exec systemctl --user restart "$UNIT" ;;
+    # reset-failed first. Five starts in two minutes leaves the unit in
+    # start-limit-hit, where systemd refuses start and restart alike -- so the
+    # documented way back was the one thing that could not bring the bar back.
+    # It does nothing to a unit that has not failed. The cost is a zeroed
+    # NRestarts, so --status stops recording quiet crash-loops; --log still does.
+    "")         systemctl --user reset-failed "$UNIT" 2>/dev/null
+                exec systemctl --user start "$UNIT" ;;
+    --restart)  systemctl --user reset-failed "$UNIT" 2>/dev/null
+                exec systemctl --user restart "$UNIT" ;;
     --stop)     exec systemctl --user stop "$UNIT" ;;
     --status)   exec systemctl --user --no-pager status "$UNIT" ;;
     --log)      exec journalctl --user -u "$UNIT" -f ;;

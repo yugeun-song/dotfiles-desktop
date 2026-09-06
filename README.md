@@ -51,8 +51,14 @@ Everything with a process behind it -- the bar, fcitx5, hyprpaper, the
 clipboard watchers, the polkit agent, hypridle -- is a systemd user unit under
 `hyprland-session.target`. The compositor starts the target through
 `hypr/scripts/session-start.sh` and a watch on its lock file stops it, so a
-logout leaves nothing behind and a crashed unit comes back on its own.
+logout leaves nothing behind and a unit that goes down comes back on its own.
 `Ctrl+Super+R` runs the start script again, which starts whatever died.
+
+They restart on anything but a stop, not only on a failing exit: systemd counts
+SIGTERM and exit 0 as success, so a bar killed by a stray `pkill` used to go
+quietly to inactive with nothing failed. Five starts in two minutes is still
+the ceiling, and `bar --restart` clears it first, because a unit that has hit
+it refuses `restart` too.
 
     systemctl --user status hyprland-session.target
     journalctl --user -u bar.service -f

@@ -4,13 +4,21 @@
 # feature, and the supervisor could still be left holding its lock by a
 # session that ended. The script remains as a front end to this unit.
 #
-# Restart=on-failure with a start limit is the same contract the supervisor
-# had: a crash brings the bar back, a config that fails at load gives up
-# after five tries in two minutes rather than looping forever, and the delay
-# between tries doubles up to thirty seconds.
+# Restart=always with a start limit is the same contract the supervisor had:
+# a bar that goes down comes back, a config that fails at load gives up after
+# five tries in two minutes rather than looping forever, and the delay between
+# tries doubles up to thirty seconds.
+#
+# always, not on-failure: systemd counts exit 0 and SIGTERM as success, so a
+# bar killed by a stray pkill went to inactive with nothing failed. Both halves
+# are reachable -- `qs -n` also exits 0 when another copy holds the config.
+#
+# It does not argue with a stop. systemd never restarts a unit a stop job
+# ended, and a ConditionPathExists that does not hold is a skip, not a loop.
 #
 # The pill helpers quickshell spawns live in this unit's cgroup, so they end
 # with it instead of being reparented to init and polling forever.
+
 [Unit]
 Description=Status bar
 PartOf=hyprland-session.target
@@ -22,7 +30,8 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
-# Everything the launcher starts inherits the bar's working directory.
+# Everything the launcher starts inherits the bar's working directory, still
+# true through app-scope.sh: a scope has no execution context of its own.
 WorkingDirectory=%h
 # quickshell writes a per-instance log directory under $XDG_RUNTIME_DIR and
 # never removes it, so one accumulates per start: thirty of them, 3.9 MB of
@@ -34,7 +43,7 @@ ExecStartPre=-/bin/sh -c 'pgrep -x qs >/dev/null || pgrep -x quickshell >/dev/nu
 # Through bin/bar --once, which finds the binary under whichever name the
 # package gives it and carries the log rules, so they are written once.
 ExecStart=%h/.local/bin/bar --once
-Restart=on-failure
+Restart=always
 RestartSec=1
 RestartSteps=5
 RestartMaxDelaySec=30
