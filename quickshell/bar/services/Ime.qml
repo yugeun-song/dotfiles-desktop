@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.services
 
 // Named Ime, not InputMethod. QtQuick exports a type called InputMethod, and
 // any file importing QtQuick resolves that name to Qt's type instead of this
@@ -34,8 +35,12 @@ Singleton {
         Quickshell.execDetached(["gdbus", "call", "--session", "--dest", "org.fcitx.Fcitx5", "--object-path", "/controller", "--method", "org.fcitx.Fcitx.Controller1.Restart"]);
     }
 
+    // The one thing here the user leaves open, so it goes through Apps and
+    // outlives a `bar --restart`. The three around it stay on execDetached:
+    // each is done in milliseconds, and a transient unit plus a bus round trip
+    // on the Hangul toggle would buy a lifetime none of them has.
     function configure() {
-        Quickshell.execDetached(["fcitx5-configtool"]);
+        Apps.open(["fcitx5-configtool"]);
     }
 
     function reloadConfig() {

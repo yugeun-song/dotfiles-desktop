@@ -310,7 +310,7 @@ unset _unit
 # and could still run: nothing sweeps that directory, which is shared with the
 # units other packages enable there. So every unit here carries a first-line
 # marker, and a file wearing the marker with no source left is removed.
-for _installed in "$CONFIG"/systemd/user/*.service "$CONFIG"/systemd/user/*.target; do
+for _installed in "$CONFIG"/systemd/user/*.service "$CONFIG"/systemd/user/*.target "$CONFIG"/systemd/user/*.slice; do
     [[ -f "$_installed" ]] || continue
     [[ -e "$SRC/systemd/user/$(basename "$_installed")" ]] && continue
     [[ "$(head -n 1 "$_installed" 2>/dev/null)" == "# dotfiles-desktop" ]] || continue
@@ -455,7 +455,7 @@ make_executable() {
 # Reported, not fatal: under set -e a missing script directory would end the
 # run here and skip the font chain below without a word about it.
 if (( ! CHECK )); then
-    make_executable "$CONFIG/quickshell/bar/scripts" "the caps lock, input method, weather and alarm pills" || :
+    make_executable "$CONFIG/quickshell/bar/scripts" "the caps lock, input method, weather and alarm pills, and every program the bar opens" || :
     make_executable "$CONFIG/hypr/scripts" "the session, terminal and capture bindings" || :
 fi
 

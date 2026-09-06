@@ -146,8 +146,11 @@ Rectangle {
                 return;
             }
             root.activated();
+            // Through Apps rather than execDetached. Every command a pill
+            // carries opens a terminal the user is then going to work in --
+            // nmtui, bluetui, btop -- and `bar --restart` used to close it.
             if (root.command !== null)
-                Quickshell.execDetached(root.command);
+                Apps.open(root.command);
         }
     }
 

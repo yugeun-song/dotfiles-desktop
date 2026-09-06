@@ -33,3 +33,7 @@ Wants=cliphist-text.service cliphist-image.service polkit-agent.service
 # named here too so that this file is the one list of what the session
 # runs, which the scripts read back with `systemctl show -p Wants`.
 Wants=hypridle.service
+# app-hyprland.slice holds what the launcher and the pills open. Named here for
+# the same reason hypridle is: this file is the one list of what the session
+# runs, and session-start.sh reads it back to clear failed units.
+Wants=app-hyprland.slice

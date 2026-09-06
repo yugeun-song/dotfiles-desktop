@@ -148,12 +148,17 @@ Scope {
         // entry.command comes with the field codes already stripped, but
         // quickshell builds it without a terminal even for an entry that asks
         // for one, so btop and friends would start with no tty and exit.
+        //
+        // Apps.open rather than Quickshell.execDetached: everything started
+        // here has to survive `bar --restart`, which is the documented way to
+        // pick up a QML change and used to close whatever the launcher had
+        // opened along with the bar.
         const argv = entry.command;
         if (Array.isArray(argv) && argv.length > 0) {
             if (entry.runInTerminal === true)
-                Quickshell.execDetached(["kitty", "-e"].concat(argv));
+                Apps.open(["kitty", "-e"].concat(argv));
             else
-                Quickshell.execDetached(argv);
+                Apps.open(argv);
             return;
         }
         const exec = (entry.execString ?? "").replace(/%[fFuUdDnNickvm]/g, "").trim();
@@ -162,9 +167,9 @@ Scope {
             return;
         }
         if (entry.runInTerminal === true)
-            Quickshell.execDetached(["kitty", "-e", "sh", "-c", exec]);
+            Apps.open(["kitty", "-e", "sh", "-c", exec]);
         else
-            Quickshell.execDetached(["sh", "-c", exec]);
+            Apps.open(["sh", "-c", exec]);
     }
 
     LazyLoader {

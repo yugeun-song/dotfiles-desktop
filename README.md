@@ -9,7 +9,8 @@ status bar written in QML for quickshell.
 hypr/config/      Hyprland configuration in Lua: keybinds, rules, env, outputs
 hypr/scripts/     what the keybinds and the units call: capture, lock, session
 quickshell/bar/   the status bar, written from scratch
-systemd/user/     the session target and one unit per long-running program
+systemd/user/     the session target, one unit per long-running program, and
+                  the slice the launcher's programs run in
 dbus/             fcitx5's D-Bus activation, pointed at its unit
 bin/              commands on $PATH: bar, unlock
 fontconfig/       font chain: Inter for latin, Pretendard for Hangul
@@ -184,6 +185,8 @@ for the work is due.
 bar --restart        # pick up a QML change
 bar --log            # follow quickshell's output
 
+systemctl --user stop app-hyprland.slice   # close what the bar opened, not the bar
+
 BAR_PREVIEW=bottom bar --once   # preview, reserves no space
 BAR_VIZ_DEMO=1     bar --once   # visualiser without audio
 ```
@@ -193,3 +196,7 @@ it can sit alongside another shell while being worked on. `--once` runs
 quickshell in the foreground outside its unit; two copies of one config cannot
 run at the same time, so stop the unit first or point `BAR_CONFIG_DIR` at a
 copy.
+
+`bar --restart` no longer closes what the launcher and the pills opened: those
+run in `app-hyprland.slice` through `quickshell/bar/scripts/app-scope.sh`. They
+still end with the session, because the slice is `PartOf` its target.

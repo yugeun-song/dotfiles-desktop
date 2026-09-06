@@ -18,6 +18,11 @@
 #
 # The pill helpers quickshell spawns live in this unit's cgroup, so they end
 # with it instead of being reparented to init and polling forever.
+#
+# What the user opens from the launcher and the pills used to land there too
+# and die with it, so `bar --restart` closed every window it had opened. Those
+# go through quickshell/bar/scripts/app-scope.sh into app-hyprland.slice, which
+# is PartOf the session target: they outlive this unit and not the session.
 
 [Unit]
 Description=Status bar
