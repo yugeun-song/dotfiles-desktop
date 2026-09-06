@@ -114,17 +114,28 @@ hl.config({
     },
 
     debug = {
-        -- vfr is under debug, not misc, in this Hyprland. Leaving it true
-        -- suspends rendering when nothing changes, which saves battery and
-        -- adds a frame of latency to the next event. Off, because the motion
-        -- below is tuned against a panel that is always running.
-        vfr = false,
+        -- vfr is under debug, not misc, in this Hyprland. The note that used
+        -- to be here had the latency backwards.
+        --
+        -- Off, the compositor re-arms a frame after every frame and drives
+        -- itself at the panel rate whether or not anything changed. Measured
+        -- on a static screen: 3,275 atomic-commit ioctls a second, on the same
+        -- thread that dispatches libinput, redrawing nothing. It bought no
+        -- latency in exchange -- both paths wait for the same vblank, and what
+        -- changes is how many frames are drawn. The cost is one slow frame
+        -- after a long idle, while the GPU clocks back up.
+        vfr = true,
     },
 
     render = {
-        -- Same reason as vrr above: this path shares the code that hangs.
+        -- On for fullscreen only, so windowed work is untouched; the solitary
+        -- check it needs already runs every frame regardless. Expect it to
+        -- engage rarely -- a solitary client must have opened no subsurfaces,
+        -- and a browser's video path usually opens one. Read directScanoutTo
+        -- under a fullscreen window before believing any saving. 1 not 2,
+        -- because 2 also demands the window declare itself a game.
         -- Explicit sync is not configurable any more; mesa and DRM own it.
-        direct_scanout = 0,
+        direct_scanout = 1,
     },
 
     cursor = {
