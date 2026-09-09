@@ -290,12 +290,17 @@ Singleton {
 
     // The month, opened from the clock. The gap between the heading and the
     // grid is what gives this popup its width, the way the card's width token
-    // does for the player: both are meant to be wider than they are tall.
-    readonly property int calendarGap:         root.px(38)
-    readonly property int calendarCellSize:    root.px(22)
+    // does for the player: both are meant to be wider than they are tall. The
+    // heading carries the day at a size nothing else in the shell uses,
+    // because the card is read from across a desk, where a date in body type
+    // is a paragraph and a date in display type is a glance.
+    readonly property int calendarGap:         root.px(30)
+    readonly property int calendarCellSize:    root.px(28)
     readonly property int calendarMonthSize:   root.px(20)
-    readonly property int calendarDaySize:     root.px(13)
-    readonly property int calendarWeekdaySize: root.px(11)
+    readonly property int calendarTodaySize:   root.px(32)
+    readonly property int calendarTodayLabel:  root.px(13)
+    readonly property int calendarDaySize:     root.px(14)
+    readonly property int calendarWeekdaySize: root.px(12)
 
     readonly property int chipWidth:   root.px(27)
     readonly property int chipSpacing: root.px(3)
