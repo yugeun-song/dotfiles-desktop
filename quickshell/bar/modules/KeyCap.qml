@@ -14,8 +14,10 @@ import qs.services
 // the desktop, which is why it goes straight down: a key has a side, and it is
 // the same side whichever way the light falls.
 //
-// It takes the palette's yellow rather than a darker shade of the face. The
-// desktop behind it is dark, and a dark side disappears into it.
+// The side is the palette's grey rather than a darker shade of the face. A
+// shade of cream is still cream, and against a dark desktop the two edges read
+// as one thick face; the grey separates them. It was yellow, which was the only
+// accent left anywhere on this desktop once the bar went monochrome.
 Item {
     id: root
 
@@ -27,7 +29,7 @@ Item {
     property bool iconGlyph: false
 
     readonly property color face: Theme.beige
-    readonly property color shadow: Theme.yellow
+    readonly property color shadow: Theme.muted
     readonly property color ink: Theme.readableOn(root.face)
 
     // How far the side shows below the face.
