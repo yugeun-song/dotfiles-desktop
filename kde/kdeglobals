@@ -39,7 +39,7 @@ toolBarFont=Inter,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 
 [Colors:Window]
 BackgroundNormal=15,17,27
-BackgroundAlternate=27,28,54
+BackgroundAlternate=22,25,38
 DecorationFocus=122,162,247
 DecorationHover=125,207,255
 ForegroundNormal=236,240,193
@@ -53,7 +53,7 @@ ForegroundPositive=158,206,106
 
 [Colors:View]
 BackgroundNormal=15,17,27
-BackgroundAlternate=27,28,54
+BackgroundAlternate=22,25,38
 DecorationFocus=122,162,247
 DecorationHover=125,207,255
 ForegroundNormal=236,240,193
@@ -66,7 +66,7 @@ ForegroundNeutral=224,175,104
 ForegroundPositive=158,206,106
 
 [Colors:Button]
-BackgroundNormal=27,28,54
+BackgroundNormal=22,25,38
 BackgroundAlternate=15,17,27
 DecorationFocus=122,162,247
 DecorationHover=125,207,255
@@ -94,7 +94,7 @@ ForegroundNeutral=224,175,104
 ForegroundPositive=158,206,106
 
 [Colors:Tooltip]
-BackgroundNormal=27,28,54
+BackgroundNormal=22,25,38
 BackgroundAlternate=15,17,27
 DecorationFocus=122,162,247
 DecorationHover=125,207,255
@@ -108,7 +108,7 @@ ForegroundNeutral=224,175,104
 ForegroundPositive=158,206,106
 
 [Colors:Complementary]
-BackgroundNormal=27,28,54
+BackgroundNormal=22,25,38
 BackgroundAlternate=15,17,27
 DecorationFocus=122,162,247
 DecorationHover=125,207,255
@@ -122,7 +122,7 @@ ForegroundNeutral=224,175,104
 ForegroundPositive=158,206,106
 
 [Colors:Header]
-BackgroundNormal=27,28,54
+BackgroundNormal=22,25,38
 BackgroundAlternate=15,17,27
 DecorationFocus=122,162,247
 DecorationHover=125,207,255
@@ -138,7 +138,7 @@ ForegroundPositive=158,206,106
 # Window manager colours. Hyprland draws its own borders and ignores these,
 # but Qt applications with client side decorations read them.
 [WM]
-activeBackground=27,28,54
+activeBackground=22,25,38
 activeForeground=236,240,193
 inactiveBackground=15,17,27
 inactiveForeground=104,111,154

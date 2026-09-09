@@ -27,10 +27,14 @@ hl.config({
         allow_tearing = false,
         layout = "dwindle",
         col = {
-            -- The bar's green. An inactive border that is fully transparent
-            -- reads as no border at all, which is the point: only the focused
-            -- window is outlined.
-            active_border = "rgba(5ccc96ff)",
+            -- The bar's foreground, which is the lightest colour in the
+            -- palette the bar draws with. It was the bar's green while the
+            -- bar was a row of coloured pills and green was one of them; the
+            -- bar is monochrome now and an accent on the window border is the
+            -- only thing left claiming to be a status. An inactive border that
+            -- is fully transparent reads as no border at all, which is the
+            -- point: only the focused window is outlined.
+            active_border = "rgba(ecf0c1ff)",
             inactive_border = "rgba(00000000)",
         },
     },
