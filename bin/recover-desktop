@@ -43,8 +43,10 @@ say()  { printf 'recover: %s\n' "$*"; }
 warn() { printf 'recover: %s\n' "$*" >&2; }
 
 # hyprctl against a compositor that hangs never returns; five seconds is long
-# enough for any answer and short enough to move on to --kill advice.
-hc() { timeout 5 hyprctl "$@"; }
+# enough for any answer and short enough to move on to --kill advice. Named,
+# because the diagnosis below reports the number it waited.
+HC_TIMEOUT=5
+hc() { timeout "$HC_TIMEOUT" hyprctl "$@"; }
 
 for tool in hyprctl jq timeout; do
     command -v "$tool" >/dev/null 2>&1 || { warn "$tool is not installed; cannot read the compositor's state"; exit 1; }
@@ -109,22 +111,125 @@ if [[ ! "$HL_PID" =~ ^[0-9]+$ ]]; then
     [[ "$(printf '%s\n' "$HL_PID" | grep -c .)" == 1 ]] || HL_PID=""
 fi
 
+# ---------------------------------------------------------------------------
+# What a process that is not answering is doing.
+# ---------------------------------------------------------------------------
+# The scheduler state decides whether anything here can work, so it is read
+# before a signal is sent rather than after one fails. R and S are a process
+# running or waiting on its own descriptors -- a compositor wedged in
+# userspace -- and a signal reaches it. D is a process inside a kernel call
+# that refuses interruption: no signal is delivered there, SIGKILL included,
+# and only the call returning or the machine restarting ends it. Telling those
+# two apart is the difference between "send a stronger signal" and "stop
+# trying and reboot", and answering that was the one thing this script could
+# not do on 2026-09-09.
+#
+# stat's second field is the command in parentheses and may contain spaces, so
+# the state is taken from after the last ')' rather than by counting columns.
+proc_state() {
+    local line
+    line=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
+    printf '%s\n' "${line##*) }" | cut -d' ' -f1
+}
+
+state_words() {
+    case "$1" in
+        R) echo "running" ;;
+        S) echo "sleeping, interruptible" ;;
+        D) echo "in an uninterruptible kernel call" ;;
+        T) echo "stopped" ;;
+        t) echo "stopped by a tracer" ;;
+        Z) echo "a zombie, waiting to be reaped" ;;
+        *) echo "in state ${1:-unknown}" ;;
+    esac
+}
+
+# wchan names the kernel function the process is waiting in, which is what
+# says whether the wait is a modeset. Empty for a running process and
+# unreadable on some kernels; both are fine, it is a hint and not a verdict.
+describe_process() {
+    local pid="${1:-}" state wchan
+    if [[ ! "$pid" =~ ^[0-9]+$ ]] || [[ ! -d "/proc/$pid" ]]; then
+        warn "no live process to look at"
+        return 1
+    fi
+    state=$(proc_state "$pid")
+    wchan=$(cat "/proc/$pid/wchan" 2>/dev/null)
+    say "pid $pid is $(state_words "$state")${wchan:+, waiting in $wchan}"
+    if [[ "$state" == "D" ]]; then
+        warn "no signal reaches a process in that state, SIGKILL included"
+        return 2
+    fi
+    return 0
+}
+
+# Polls, because this process is not the compositor's parent and so has
+# nothing to wait(2) on. A zombie counts as gone: it has exited and only its
+# exit status is still held.
+gone_within() {
+    local seconds="$1" pid="$2" i
+    for (( i = 0; i < seconds * 4; i++ )); do
+        [[ -d "/proc/$pid" ]] || return 0
+        [[ "$(proc_state "$pid")" == "Z" ]] && return 0
+        sleep 0.25
+    done
+    [[ ! -d "/proc/$pid" ]]
+}
+
 if [[ "$MODE" == "--kill" ]]; then
     if [[ ! "$HL_PID" =~ ^[0-9]+$ ]] || [[ ! -d "/proc/$HL_PID" ]]; then
         warn "the lock file names no live pid; nothing to kill"
         exit 1
     fi
-    say "sending SIGTERM to Hyprland ($HL_PID); start-hyprland relaunches it, or the greeter returns"
-    kill -TERM "$HL_PID"
-    exit $?
+    describe_process "$HL_PID"
+    # Ending the compositor ends the session. greetd sees the session process
+    # exit and puts the greeter back on vt1. Nothing in this repository
+    # relaunches a compositor in place -- there is no start-hyprland, whatever
+    # the comments in this tree say -- so this is a logout with the windows
+    # lost, not a restart.
+    say "sending SIGTERM to Hyprland ($HL_PID); the greeter returns on vt1 and this session's windows are lost"
+    kill -TERM "$HL_PID" 2>/dev/null || { warn "could not signal $HL_PID"; exit 1; }
+    gone_within 5 "$HL_PID" && { say "it exited"; exit 0; }
+
+    # A compositor whose event loop has stopped never reaches its SIGTERM
+    # handler: the handler is a queued event like every other one, and the
+    # queue is the thing that stopped moving. So the polite signal is the one
+    # that cannot work in the case this flag exists for, and escalating is not
+    # an extra -- it is the point. Without it --kill reported success, changed
+    # nothing, and left the only remaining advice being to reboot.
+    warn "still there after 5s; sending SIGKILL"
+    kill -KILL "$HL_PID" 2>/dev/null
+    gone_within 5 "$HL_PID" && { say "it exited"; exit 0; }
+
+    warn "still there after SIGKILL, so it is inside a kernel call"
+    describe_process "$HL_PID"
+    warn "nothing from userspace ends it now; reboot from this console: systemctl reboot"
+    exit 1
 fi
 
 # ---------------------------------------------------------------------------
 # Diagnose.
 # ---------------------------------------------------------------------------
+# Everything below this point talks to the compositor, so a compositor that
+# does not answer ends the run here. What it must not do is end it with one
+# line of advice: this branch is the one a wedged session actually reaches,
+# and it used to say only "run --kill", which left the difference between a
+# compositor stuck in its own loop and one stuck in the kernel -- the
+# difference between a signal working and no signal ever working -- for the
+# user to discover by trying.
 if ! hc version >/dev/null 2>&1; then
-    warn "compositor $SIG (pid ${HL_PID:-?}) is not answering hyprctl"
-    warn "if it stays that way, run: ${0##*/} --kill"
+    warn "compositor $SIG (pid ${HL_PID:-?}) is not answering hyprctl within ${HC_TIMEOUT}s"
+    describe_process "${HL_PID:-}"
+    stuck=$?
+    echo >&2
+    warn "the session is still running: its windows and their unsaved work are still there,"
+    warn "and nothing that needs the compositor can be repaired while it stays this way."
+    if (( stuck == 2 )); then
+        warn "it is waiting on the kernel, so no signal will end it. Either the call returns"
+        warn "on its own, or the machine is restarted: systemctl reboot"
+    else
+        warn "to end it and get the greeter back, losing the windows: ${0##*/} --kill"
+    fi
     exit 1
 fi
 
