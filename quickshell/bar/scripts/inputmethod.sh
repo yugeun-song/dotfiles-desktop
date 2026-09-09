@@ -13,6 +13,12 @@
 # mozc with both idle, left the old name on the line for as long as the session
 # lasted, and the pill decides latin from that name.
 #
+# An empty name is an answer, not a failure. Instance::currentInputMethod()
+# returns "" and Instance::state() returns 0 when no input context is focused,
+# which is every window that takes no text: a video, a viewer, the browser
+# before the caret is in a field. fcitx5 is running and correct there. Only a
+# failed call -- fcitx5-remote exits 1 and prints nothing -- is a no-reading.
+#
 set -u
 
 # Same reason as capslock.sh: without the loadable, every pass forks
@@ -38,16 +44,21 @@ while :; do
     # switch shows up, and once every ten passes so that a switch made
     # with both engines idle is still noticed within three seconds.
     if [[ "$state" != "$last_state" || $(( n % 10 )) -eq 0 ]]; then
-        name=$(fcitx5-remote -n 2>/dev/null) || name=""
+        fresh=$(fcitx5-remote -n 2>/dev/null) || fresh=""
+        # Kept only when there is something to keep. The engine cannot be
+        # switched while no input context is focused, so the last one read is
+        # still the one that will be used the moment a field takes focus.
+        [[ -n "$fresh" ]] && name="$fresh"
     fi
     last_state="$state"
     n=$(( n + 1 ))
 
-    # A line goes out only when both halves are real. Substituting "none" and
-    # "unknown" for a failed query printed a well-formed line describing
-    # nothing, and the literal word "unknown" reached the bar as an engine
-    # name. "-" is the no-reading token, the same one capslock.sh uses.
-    if [[ -z "$state" || -z "$name" ]]; then
+    # Only a state that could not be read at all is a no-reading. The name is
+    # sent as it is, empty included: that is what "no input context" looks
+    # like, and the bar says so rather than showing the failure glyph over a
+    # working input method. Substituting a word for it printed a well-formed
+    # line describing nothing, and "unknown" reached the bar as an engine name.
+    if [[ -z "$state" ]]; then
         line="-"
     else
         line="${state}"$'\t'"${name}"

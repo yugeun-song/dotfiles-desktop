@@ -76,7 +76,21 @@ Row {
         // that is switched on, it is a thing that is set to one of two values,
         // and both values are already written out.
         label: Ime.label
-        tooltip: `Input     ${Ime.hangul ? "Hangul" : "Latin"}\nEngine    ${Ime.method}\nClick for input method actions`
+        // Dimmed while nothing focused takes text, on the same rule as the two
+        // radios beside it: a thing that is off is drawn darker than a thing
+        // that is on and idle.
+        accent: Ime.idle ? Theme.muted : Theme.fg
+        tooltip: {
+            const lines = [`Input     ${Ime.hangul ? "Hangul" : "Latin"}`];
+            lines.push(`Engine    ${Ime.method !== "" ? Ime.method : "none selected"}`);
+            // The line that answers the question this state raises. It looked
+            // like a broken input method and it is a window that takes no
+            // text.
+            if (Ime.idle)
+                lines.push("Context   none -- this window takes no text input");
+            lines.push("Click for input method actions");
+            return lines.join("\n");
+        }
         // No language toggle in the menu, still. The menu opens under the
         // pointer, so the next click lands on the first entry and clicking
         // twice would silently flip the input method. The Hangul key does

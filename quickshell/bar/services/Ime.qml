@@ -22,6 +22,13 @@ Singleton {
     // EN inside the same hangul input method.
     readonly property bool hangul: root.present && !root.method.startsWith("keyboard") && root.state === "2"
 
+    // State 0 with no engine: nothing focused has an input context, so there
+    // is nothing for fcitx5 to compose in and it says so. A video, a viewer,
+    // a browser window before the caret is in a field. The readout is latin,
+    // because that is what the next keystroke does, and the item dims to say
+    // the input method is not in the path rather than not working.
+    readonly property bool idle: root.state === "0"
+
     // KR and EN, not 한 and EN. A hangul syllable next to a latin pair is two
     // scripts in one readout, and it renders at a different height and weight
     // from everything else on the bar because it comes from a different font.
@@ -106,8 +113,10 @@ Singleton {
                     root.asOf = 0;
                     return;
                 }
+                // The engine may be empty and that is a reading: see idle.
+                // The state may not be, because it is the reading.
                 const parts = raw.split("\t");
-                if (parts.length !== 2 || parts[0] === "" || parts[1] === "") {
+                if (parts.length !== 2 || parts[0] === "") {
                     console.warn("[ime] unexpected line:", raw);
                     return;
                 }
