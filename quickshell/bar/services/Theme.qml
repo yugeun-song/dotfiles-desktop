@@ -241,6 +241,13 @@ Singleton {
     readonly property color surfaceDim:   Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.78)
     readonly property color surfaceFaint: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.52)
     readonly property color surfaceHover: root.menuHover
+
+    // A card sitting on a surface of the same colour has no edge, and a
+    // hairline border is not one either -- at a tenth opacity it disappears
+    // against anything dark. This is the surface lifted just enough to
+    // separate one card from the next without becoming a second colour.
+    readonly property color surfaceRaised: Qt.lighter(root.bg, 1.45)
+    readonly property color surfaceRaisedHover: Qt.lighter(root.bg, 1.9)
     readonly property int surfaceRadius:  root.px(16)
     readonly property int surfaceBorder:  Math.max(1, root.px(1))
 

@@ -330,7 +330,8 @@ Scope {
                                 implicitHeight: body.implicitHeight + Theme.notifRowPad * 2
                                 height: implicitHeight
                                 radius: Theme.notifRowRadius
-                                color: hover.containsMouse ? Qt.lighter(Theme.bg, 1.5) : Theme.bg
+                                color: hover.containsMouse ? Theme.surfaceRaisedHover
+                                                          : Theme.surfaceRaised
                                 border.width: slot.modelData.critical ? Theme.notifBorder
                                                                       : Theme.surfaceBorder
                                 border.color: slot.modelData.critical ? Theme.accentRed
