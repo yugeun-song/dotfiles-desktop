@@ -81,8 +81,12 @@ enabled = true
 # drivers/tty/vt/vt.c reduces each channel to one bit, so two different colours
 # arrive as one and nothing reports an error. Names are emitted as indexed SGR,
 # which the console looks up in the palette the boot line set.
-container = "black"     # slot 0,  #000000          the box takes the ground's
-                        # own colour, so it reads as a frame and not a panel
+container = "reset"     #                          whatever is behind the box.
+                        # It reads as a frame rather than a panel that way, and
+                        # "black" only looked the same because slot 0 is what
+                        # the console draws behind everything: in a terminal
+                        # with any other background the box was a black hole in
+                        # the rain. Reset is the terminal's own default.
 border    = "green"     # slot 2,  #5CCC96  10.53:1
 title     = "green"     # slot 2,  #5CCC96  10.53:1  the frame and its name are
                         # one object and are coloured as one
