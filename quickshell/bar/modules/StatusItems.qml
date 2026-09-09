@@ -155,7 +155,10 @@ Row {
         unknown: Net.unknown
         icon: Net.preferWired ? Theme.iconEthernet : Net.wifiIcon()
         iconScale: Theme.statusIconBoostMore
-        accent: Net.preferWired || Net.wifiConnected ? Theme.fg : Theme.muted
+        // Connected or not, and nothing in between. A radio that is off and
+        // one that is on with nothing joined are the same thing to whoever is
+        // looking at the bar: there is no network. The tooltip separates them.
+        accent: Net.preferWired || Net.wifiConnected ? Theme.fg : Theme.offTone
         command: root.terminal.concat([root.hyprScripts + "/launch.sh", "nmtui"])
         tooltip: {
             const lines = [];
@@ -193,7 +196,7 @@ Row {
         // more of its em box than they fill theirs, so the same factor made it
         // the largest glyph in the group.
         iconScale: Theme.statusIconBoost
-        accent: Bt.connectedCount > 0 ? Theme.fg : Theme.muted
+        accent: Bt.connectedCount > 0 ? Theme.fg : Theme.offTone
         // Not bluetoothctl directly: it puts the connected device in its
         // prompt and points argument-less commands at it, so it opens scoped
         // to whatever is already paired, which is the wrong place to start

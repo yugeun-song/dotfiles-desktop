@@ -242,6 +242,13 @@ Singleton {
     readonly property color surfaceFaint: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.52)
     readonly property color surfaceHover: root.menuHover
 
+    // A step below muted, for a radio with nothing on it -- switched off, or
+    // on and joined to nothing. muted is the tone of a reading that is present
+    // and quiet; this is the tone of no reading at all, and the two were the
+    // same colour while the difference is the one worth seeing from across the
+    // room.
+    readonly property color offTone: Qt.rgba(root.muted.r, root.muted.g, root.muted.b, 0.55)
+
     // A card sitting on a surface of the same colour has no edge, and a
     // hairline border is not one either -- at a tenth opacity it disappears
     // against anything dark. This is the surface lifted just enough to
