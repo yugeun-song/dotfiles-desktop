@@ -49,6 +49,11 @@ if [[ "$was" == "2" ]]; then
     fi
 fi
 
+# The cover art the lock screen shows is a cache lock-media.sh writes, and an
+# image widget keeps drawing whatever file is at its path. Cleared here so the
+# screen never opens showing the art of a track that stopped hours ago.
+rm -f -- "${XDG_CACHE_HOME:-$HOME/.cache}/hyprlock/art"
+
 hyprlock "$@"
 rc=$?
 
