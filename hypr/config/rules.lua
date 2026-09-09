@@ -11,9 +11,11 @@ hl.window_rule({ match = { title = "^(Open File|Save File|Save As|Open Folder)" 
 -- Picture in picture should stay visible and out of the tiling.
 hl.window_rule({ match = { title = "^(Picture-in-Picture)$" }, float = true, pin = true })
 
--- A pinned window keeps the accent border so it is obvious which one is
--- following you between workspaces.
-hl.window_rule({ match = { pin = true }, border_color = "rgba(5ccc96ff) rgba(00000000)" })
+-- A pinned window is the one that follows you between workspaces, and it says
+-- so by keeping its border when it loses focus rather than by being a colour.
+-- It was green, the last accent left on a desktop where the bar, the lock
+-- screen and the window borders are all one cream and one grey.
+hl.window_rule({ match = { pin = true }, border_color = "rgba(ecf0c1ff) rgba(686f9aff)" })
 
 -- The shell draws itself on a layer surface and has no business owning a
 -- toplevel. One does appear if a build without layer-shell support ever
