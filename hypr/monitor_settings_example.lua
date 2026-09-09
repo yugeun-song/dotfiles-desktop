@@ -48,6 +48,26 @@ return {
     -- settle_added_ms = 2000,
     -- settle_max_ms = 6000,
 
+    -- Turning the built-in panel off is done on its own, a moment after the
+    -- externals have been lit, and never in the same batch of rules. The two
+    -- are two modesets; sent together they reach the driver as one commit, and
+    -- on the laptop this was written on that took the compositor through a
+    -- state with no enabled output and left it wedged there. This is the gap
+    -- between them, and how soon afterwards the screen is checked to be still
+    -- lit (defaults 700 and 900).
+    --
+    -- Raise the delay if plugging a display still darkens everything; there is
+    -- no benefit to lowering it, because nothing waits on it but the panel
+    -- going off, which nobody is looking at.
+    -- panel_off_delay_ms = 700,
+    -- panel_off_verify_ms = 900,
+
+    -- How long to wait after the compositor reports a synthetic output --
+    -- its FALLBACK, which it builds when the last real screen goes away.
+    -- That is not a cable that needs to settle, it is the state this module
+    -- exists to leave, so it is answered almost immediately (default 60).
+    -- settle_synthetic_ms = 60,
+
     -- How long after acting to check that some real output is enabled, and
     -- how many times to insist on the panel if none is (defaults 3000, 5).
     -- verify_ms = 3000,

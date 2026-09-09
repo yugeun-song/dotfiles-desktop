@@ -55,7 +55,7 @@ cp -a "$SRC/config" "$WORK/"
 # No autostart in the nested compositor, for the same reason verify-config.sh
 # empties it: a second copy of every session service is not a test.
 printf -- '-- emptied by monitors-selftest.sh\n' > "$WORK/config/execs.lua"
-sed -i '1i MONITOR_POLICY_OVERRIDE = { internal = { "^WAYLAND%-", "^WL%-" }, synthetic = { "^FALLBACK$" }, sysfs = false, settle_removed_ms = 300, settle_added_ms = 300, verify_ms = 1500 }' "$WORK/hyprland.lua"
+sed -i '1i MONITOR_POLICY_OVERRIDE = { internal = { "^WAYLAND%-", "^WL%-" }, synthetic = { "^FALLBACK$" }, sysfs = false, settle_removed_ms = 300, settle_added_ms = 300, verify_ms = 1500, panel_off_delay_ms = 200, panel_off_verify_ms = 400 }' "$WORK/hyprland.lua"
 printf 'hl.config({ debug = { disable_logs = false } })\n' >> "$WORK/hyprland.lua"
 mkdir -p "$WORK/state/hypr"
 
@@ -103,10 +103,40 @@ expect() {
 sleep 2
 expect "alone: panel on" "WAYLAND-1 disabled=false"
 
+m=$(mark)
 n output create headless HEADLESS-1 >/dev/null
 sleep 1.2
 expect "docked: panel off" "WAYLAND-1 disabled=true"
 expect "docked: external on" "HEADLESS-1 disabled=false"
+
+# The rule that lights the external and the rule that darkens the panel must
+# leave as two emissions, not one. Together they are two modesets in one
+# commit, and on the machine this repository was written on that is what took
+# the compositor through a state with no enabled output and left it there:
+# eDP-1 released its CRTC, the driver reconsidered the connector HDMI-A-1 was
+# using, the compositor built its FALLBACK and never came out.
+#
+# Read from the module's own log lines rather than from the monitor list,
+# because the end state is identical either way. Only the order it was reached
+# in is what this checks, and only the log records that.
+lit=$(since "$m" | grep -c 'monitors: added HEADLESS-1 -> ')
+off=$(since "$m" | grep -c 'monitors: added HEADLESS-1 (panel off) -> WAYLAND-1:off')
+if (( lit == 1 && off == 1 )); then
+    echo "PASS  docked: the external was lit and the panel darkened in separate emissions"
+else
+    echo "FAIL  docked: wanted one lit emission and one panel-off emission, got lit=$lit off=$off"
+    since "$m" | grep 'monitors:' | sed 's/^.*\[Lua\] /      /'
+    FAILED=1
+fi
+
+# And the emission that lit the external must not have carried a disabled rule
+# for the panel with it.
+if since "$m" | grep -q 'monitors: added HEADLESS-1 -> .*WAYLAND-1:off'; then
+    echo "FAIL  docked: the panel was darkened in the same emission that lit the external"
+    FAILED=1
+else
+    echo "PASS  docked: the lighting emission carried no disabled rule"
+fi
 
 m=$(mark)
 n output remove HEADLESS-1 >/dev/null

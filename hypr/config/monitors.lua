@@ -104,10 +104,25 @@ local policy = {
     keep_internal = false,
     settle_removed_ms = 400,
     settle_added_ms = 2000,
+    -- A synthetic output arriving is the compositor reporting it has no screen
+    -- left. Nothing about that improves by waiting, so this is only long
+    -- enough to leave the event handler before rules are emitted.
+    settle_synthetic_ms = 60,
     settle_max_ms = 6000,
     verify_ms = 3000,
     verify_limit = 5,
     sysfs = true,
+    -- Between lighting the externals and darkening the panel. See the two
+    -- stages in M.evaluate: these are two modesets and they must not reach
+    -- the driver as one commit. The delay is not a settle window -- the
+    -- flapping has already settled by the time this is armed -- it is the gap
+    -- that keeps the panel's modeset out of the external's.
+    panel_off_delay_ms = 700,
+    -- How soon after darkening the panel to check that something is still
+    -- lit. The ordinary verify at 3 s is a net for a policy that decided
+    -- wrongly; this one is a net for the one action in the whole module that
+    -- can take the last screen away, so it is checked on its own and sooner.
+    panel_off_verify_ms = 900,
 }
 
 local function is_string_list(value)
@@ -446,17 +461,42 @@ local function keep_internal()
     return policy.keep_internal or exists(KEEP_INTERNAL_FILE)
 end
 
-local function desired(state, externals_present)
+-- The rules are split in two, and which half a rule lands in is decided by one
+-- question: does applying it take a screen away?
+--
+-- Everything that lights an output is safe in any order and at any time. It is
+-- additive; the worst an early one does is show two screens for a moment.
+-- Darkening the built-in panel is not that. It is the only rule this module
+-- emits that can leave the session with nothing to draw on, and on this
+-- machine it also frees a CRTC, which makes the driver reconsider the
+-- connector the externals are using. Emitted in the same batch as the rule
+-- that lights an external, the two modesets reach the driver together and the
+-- compositor passes through a state with no enabled output: it builds its
+-- FALLBACK there, and on 2026-09-09 it stopped in there and did not come out.
+-- The journal recorded the whole thing -- a wl_output added, one removed 2.4 s
+-- later (this delay, settle_added_ms), the last one removed, FALLBACK created
+-- and destroyed, and then no event of any kind for thirteen minutes while the
+-- process stayed alive and its clients stayed connected. The kernel logged
+-- nothing at all in that window, so nothing was stuck below the compositor.
+--
+-- So they go out separately, and the panel goes second.
+
+-- Everything that lights a screen. Never a disabled rule.
+--
+-- When the panel is to be turned off this emits no rule for it at all, rather
+-- than an enabled one: a rule is remembered until it is replaced, so silence
+-- here leaves whatever the panel's last rule said in force. That is what makes
+-- the two stages idempotent together -- a reload while docked runs stage one,
+-- which says nothing about the panel, and then stage two, which turns it off
+-- again, and the panel never blinks on in between.
+local function lit_rules(state, panel_off)
     local rules = {}
     for i, name in ipairs(state.external) do
         rules[#rules + 1] = enabled_rule(name, i == 1 and "0x0" or "auto")
     end
-    local panel_off = externals_present and not keep_internal()
-    for name in pairs(known) do
-        if classify(name) == "internal" then
-            if panel_off then
-                rules[#rules + 1] = { output = name, disabled = true }
-            else
+    if not panel_off then
+        for name in pairs(known) do
+            if classify(name) == "internal" then
                 rules[#rules + 1] = enabled_rule(name, "auto")
             end
         end
@@ -467,9 +507,25 @@ local function desired(state, externals_present)
     return rules
 end
 
-local last_summary = ""
+-- The panel, alone.
+local function panel_rules()
+    local rules = {}
+    for name in pairs(known) do
+        if classify(name) == "internal" then
+            rules[#rules + 1] = { output = name, disabled = true }
+        end
+    end
+    table.sort(rules, function(a, b)
+        return a.output < b.output
+    end)
+    return rules
+end
 
-local function apply(rules, reason)
+-- One remembered summary per stage, because the two now print separately and a
+-- single one would make each stage look like a change every time the other ran.
+local last_summary = {}
+
+local function apply(rules, reason, stage)
     local parts = {}
     for _, rule in ipairs(rules) do
         hl.monitor(rule)
@@ -480,9 +536,9 @@ local function apply(rules, reason)
         end
     end
     local summary = table.concat(parts, " ")
-    if summary ~= last_summary then
+    if summary ~= last_summary[stage] then
         print(string.format("monitors: %s -> %s", reason, summary))
-        last_summary = summary
+        last_summary[stage] = summary
     end
 end
 
@@ -500,6 +556,46 @@ local sysfs = {}
 local verify_generation = 0
 local verify_failures = 0
 local schedule_verify
+
+-- ---------------------------------------------------------------------------
+-- Stage two: the panel goes off on its own, later, and only if the externals
+-- are still there when the moment comes.
+-- ---------------------------------------------------------------------------
+local panel_off_generation = 0
+
+-- Drops a panel-off that is armed and has not run. Called wherever the world
+-- moved under the decision that armed it: a new hotplug burst, a synthetic
+-- output appearing, an evaluation that decided the panel stays on. The
+-- generation counter is the same mechanism the settle and verify timers use;
+-- a timer that finds its generation stale returns without doing anything.
+local function cancel_panel_off()
+    panel_off_generation = panel_off_generation + 1
+end
+
+local function panel_off_now(reason, generation)
+    if generation ~= panel_off_generation then
+        return
+    end
+    -- Re-read rather than trust what stage one saw. In the gap the cable can
+    -- have been pulled, the external can have failed its modeset and dropped
+    -- to zero pixels, or the keep-internal marker can have appeared. In any of
+    -- those the panel is the only screen left, so it stays on and this does
+    -- nothing.
+    local state = present()
+    if #state.external == 0 or keep_internal() then
+        return
+    end
+    apply(panel_rules(), reason .. " (panel off)", "panel")
+    schedule_verify(policy.panel_off_verify_ms)
+end
+
+local function schedule_panel_off(reason)
+    panel_off_generation = panel_off_generation + 1
+    local generation = panel_off_generation
+    hl.timer(function()
+        panel_off_now(reason, generation)
+    end, { timeout = policy.panel_off_delay_ms, type = "oneshot" })
+end
 
 function M.evaluate(reason, at_load)
     local state = present()
@@ -526,8 +622,25 @@ function M.evaluate(reason, at_load)
     -- screen stays black. A 1 s verify puts the panel-enable rule in the queue
     -- in time. This is a mitigation for a race that could not be reproduced
     -- deterministically, not a proof it cannot happen.
+    local panel_off = externals_present and not keep_internal()
     schedule_verify(sysfs_only and math.min(1000, policy.verify_ms) or nil)
-    apply(desired(state, externals_present), reason)
+    apply(lit_rules(state, panel_off), reason, "lit")
+
+    if not panel_off then
+        cancel_panel_off()
+        return
+    end
+    -- At load there is nothing on screen to lose: no output enabled, no
+    -- workspace, no window to move off the panel. There is only one modeset,
+    -- so there is nothing for a second one to collide with, and splitting them
+    -- here would instead light the panel for the length of the delay on every
+    -- docked boot -- the blink this module already went to some trouble to
+    -- remove. The split is for the running compositor only.
+    if at_load then
+        apply(panel_rules(), reason .. " (panel off)", "panel")
+        return
+    end
+    schedule_panel_off(reason)
 end
 
 -- The safety net. Whatever the policy decided, a session with no real output
@@ -569,6 +682,11 @@ local settle_generation = 0
 local settle_since = nil
 
 local function schedule(reason, delay_ms)
+    -- An event means the world moved. A panel-off armed by the previous
+    -- evaluation was decided against a state that no longer holds, and letting
+    -- it fire behind the new evaluation is how the panel would go off just as
+    -- the external it was making way for went away.
+    cancel_panel_off()
     local now = os.time()
     settle_since = settle_since or now
     settle_generation = settle_generation + 1
@@ -602,11 +720,24 @@ hl.on("monitor.added", function(monitor)
             hl.dispatch(hl.dsp.dpms({ action = "enable", monitor = name }))
         end
     end
-    -- An arriving external waits; anything else, including the compositor's
-    -- FALLBACK, is the panel's cue to come back and is answered fast.
+    -- An arriving external waits. Anything else is the panel's cue to come
+    -- back, and how fast depends on what arrived.
+    --
+    -- A synthetic output is not a screen. It is the compositor saying it has
+    -- run out of them, which is the one state this module exists to get out
+    -- of, and it is not a state a settle window can improve: the window is
+    -- there to absorb a cable that is not quite seated, and no amount of
+    -- waiting turns FALLBACK into a display. Waiting there is what left the
+    -- session dark for the length of the window on every unplug, and on
+    -- 2026-09-09 the compositor never came out of that state at all.
     local delay = policy.settle_removed_ms
-    if name and classify(name) == "external" then
-        delay = policy.settle_added_ms
+    if name then
+        local class = classify(name)
+        if class == "external" then
+            delay = policy.settle_added_ms
+        elseif class == "synthetic" then
+            delay = policy.settle_synthetic_ms
+        end
     end
     schedule("added " .. tostring(name), delay)
 end)
