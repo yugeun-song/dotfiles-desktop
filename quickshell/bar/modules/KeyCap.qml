@@ -63,19 +63,25 @@ Item {
             anchors.centerIn: parent
             spacing: Theme.px(2)
 
-            // Dimmer than the key it modifies, because it is the qualifier and
-            // not the thing that happened. Same family, same size and the same
-            // weight: opacity alone carries that difference, and letting the
-            // weight carry it too made the symbol read as a different typeface
-            // sitting next to the letter.
+            // As dark and as heavy as the key it modifies. It was drawn at
+            // 55% to say it is the qualifier rather than the thing that
+            // happened, which next to a letter read as a lighter typeface
+            // instead.
+            //
+            // One weight above the letter, and that is what makes them equal
+            // rather than what makes them differ: Inter draws the modifier
+            // marks out of thinner strokes than it draws a stem, so DemiBold
+            // beside DemiBold still looks like two weights. Bold beside
+            // DemiBold matches. The order is what says which one is the
+            // qualifier.
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root.mods !== ""
                 text: root.mods
                 font.family: Theme.uiFont
                 font.pixelSize: Theme.px(17)
-                font.weight: Font.DemiBold
-                color: Qt.rgba(root.ink.r, root.ink.g, root.ink.b, 0.55)
+                font.weight: Font.Bold
+                color: root.ink
             }
 
             Text {
