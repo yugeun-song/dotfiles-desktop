@@ -165,6 +165,11 @@ Item {
         // same box: only the colour differs. A heavier weight was the first
         // attempt and it changed the glyph heights enough that the two lines
         // did not sit level, which is the one thing a caption must not do.
+        //
+        // Past the limit even the colour stops differing. Half opacity is what
+        // makes a label quieter than its number, and a label that stays quiet
+        // while the number turns red reads as a smaller, lighter word beside
+        // it rather than as one warning. Below the limit it goes back.
         Text {
             anchors.verticalCenter: parent.verticalCenter
             width: Theme.statusCaptionWidth
@@ -175,7 +180,8 @@ Item {
             font.family: Theme.uiFont
             font.pixelSize: Theme.statusCaptionSize
             font.weight: root.alert ? Font.Bold : Font.Medium
-            color: Qt.rgba(root.glyphColor.r, root.glyphColor.g, root.glyphColor.b, 0.50)
+            color: root.alert ? root.glyphColor
+                              : Qt.rgba(root.glyphColor.r, root.glyphColor.g, root.glyphColor.b, 0.50)
         }
 
         // Left-aligned inside a fixed width, not right-aligned. Right kept the
