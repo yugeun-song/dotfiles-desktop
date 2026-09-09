@@ -461,34 +461,25 @@ local function keep_internal()
     return policy.keep_internal or exists(KEEP_INTERNAL_FILE)
 end
 
--- The rules are split in two, and which half a rule lands in is decided by one
--- question: does applying it take a screen away?
+-- The rules are split by one question: does applying it take a screen away?
 --
--- Everything that lights an output is safe in any order and at any time. It is
--- additive; the worst an early one does is show two screens for a moment.
--- Darkening the built-in panel is not that. It is the only rule this module
--- emits that can leave the session with nothing to draw on, and on this
--- machine it also frees a CRTC, which makes the driver reconsider the
--- connector the externals are using. Emitted in the same batch as the rule
--- that lights an external, the two modesets reach the driver together and the
--- compositor passes through a state with no enabled output: it builds its
--- FALLBACK there, and on 2026-09-09 it stopped in there and did not come out.
--- The journal recorded the whole thing -- a wl_output added, one removed 2.4 s
--- later (this delay, settle_added_ms), the last one removed, FALLBACK created
--- and destroyed, and then no event of any kind for thirteen minutes while the
--- process stayed alive and its clients stayed connected. The kernel logged
--- nothing at all in that window, so nothing was stuck below the compositor.
+-- Lighting an output is additive and safe in any order. Darkening the panel is
+-- not: it is the only rule here that can leave the session with nothing to
+-- draw on, and on this machine it also frees a CRTC, which makes the driver
+-- reconsider the connector the externals are on. Sent in the same batch as the
+-- rule lighting an external, the two modesets arrive as one commit and the
+-- compositor passes through a state with no enabled output. On 2026-09-09 it
+-- stopped there and stayed for thirteen minutes, alive with its clients still
+-- connected; the kernel logged nothing, so nothing was stuck below it.
 --
 -- So they go out separately, and the panel goes second.
 
 -- Everything that lights a screen. Never a disabled rule.
 --
--- When the panel is to be turned off this emits no rule for it at all, rather
--- than an enabled one: a rule is remembered until it is replaced, so silence
--- here leaves whatever the panel's last rule said in force. That is what makes
--- the two stages idempotent together -- a reload while docked runs stage one,
--- which says nothing about the panel, and then stage two, which turns it off
--- again, and the panel never blinks on in between.
+-- With the panel to be turned off this emits no rule for it at all rather than
+-- an enabled one: a rule stands until it is replaced, so silence leaves the
+-- panel's last rule in force. That is what keeps the two stages idempotent
+-- together, and what stops the panel blinking on between them on a reload.
 local function lit_rules(state, panel_off)
     local rules = {}
     for i, name in ipairs(state.external) do
