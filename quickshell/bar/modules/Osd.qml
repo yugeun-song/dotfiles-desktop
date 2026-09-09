@@ -151,7 +151,11 @@ Scope {
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.icon
                         font.family: Theme.iconFont
-                        font.pixelSize: Theme.px(17)
+                        // Larger than the text beside it, and larger than it
+                        // looks like it needs: the brightness sun draws well
+                        // inside its em box, so asking for the readout's size
+                        // produced a glyph half the height of the number.
+                        font.pixelSize: Theme.px(24)
                         // The bar's foreground, not the caller's accent. A
                         // brightness step and a volume step are the same kind
                         // of thing and were arriving in two different colours,

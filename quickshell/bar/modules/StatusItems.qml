@@ -175,7 +175,10 @@ Row {
     StatusItem {
         unknown: Bt.unknown
         icon: Bt.icon()
-        iconScale: Theme.statusIconBoostMore
+        // One step below the wifi arcs beside it. The Bluetooth mark fills
+        // more of its em box than they fill theirs, so the same factor made it
+        // the largest glyph in the group.
+        iconScale: Theme.statusIconBoost
         accent: Bt.connectedCount > 0 ? Theme.fg : Theme.muted
         // Not bluetoothctl directly: it puts the connected device in its
         // prompt and points argument-less commands at it, so it opens scoped
