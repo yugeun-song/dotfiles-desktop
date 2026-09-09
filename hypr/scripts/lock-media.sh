@@ -52,7 +52,9 @@ case "$MODE" in
         artist=${line#*||}
         [[ -n "$title" ]] || exit 0
         if [[ -n "$artist" && "$artist" != "$title" ]]; then
-            printf '%s\n' "$(escape "$title")  <span alpha='60%%'>$(escape "$artist")</span>"
+            # One percent sign, not two: this string is printf's argument and
+            # not its format, so nothing in it is expanded.
+            printf '%s\n' "$(escape "$title")  <span alpha='60%'>$(escape "$artist")</span>"
         else
             escape "$title"; printf '\n'
         fi
@@ -70,13 +72,20 @@ case "$MODE" in
         fi
         ;;
 
-    # Cover art. LOCAL FILES ONLY: mpris:artUrl is chosen by the player, and
-    # for a browser that means by the page. Fetching it would give any open
-    # tab a beacon that fires while the machine is locked and unattended, and
-    # a way to reach the local network. Theme.localArt refuses the same.
+    # Cover art. LOCAL FILES ONLY, and stricter than the bar on purpose.
     #
-    # A file:// URL is still checked: resolved past symlinks, under a
-    # directory a player would use, capped, and actually an image.
+    # mpris:artUrl is chosen by the player, and for a browser that means by the
+    # page. Theme.localArt lets a few known cover-art CDNs through over TLS
+    # because a bar with a grey square where the album should be is a bar that
+    # lost an argument with itself. Here that trade does not hold: a request
+    # leaving this machine while the screen is locked says the machine is up
+    # and nobody is at it, which is exactly what should not be announced. So
+    # the lock screen fetches nothing and shows art only when the player put a
+    # file on disk.
+    #
+    # The file:// URL is checked as well as accepted: resolved past symlinks,
+    # required to be a regular file under a directory a player would use,
+    # size-capped, and required to actually be an image.
     --art)
         url=$(playerctl --player="$PLAYER" metadata mpris:artUrl 2>/dev/null) || exit 0
         [[ "$url" == file://* ]] || exit 0
