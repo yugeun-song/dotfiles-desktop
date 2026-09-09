@@ -11,7 +11,9 @@ Singleton {
     // holds a PipeWire capture stream open and burns CPU for nothing.
     property bool active: false
 
-    readonly property int barCount: 12
+    // Has to match bars in cava.conf: cava folds the spectrum into this many
+    // bands and this is how many the reader expects per frame.
+    readonly property int barCount: 22
     readonly property bool demo: Quickshell.env("BAR_VIZ_DEMO") === "1"
 
     property var levels: []

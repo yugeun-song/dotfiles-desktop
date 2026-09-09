@@ -186,10 +186,11 @@ Scope {
                             implicitHeight: text.implicitHeight + card.pad * 2
                             height: implicitHeight
                             radius: Theme.notifRadius
-                            color: Theme.bgAlt
-                            border.width: Theme.notifBorder
+                            color: Theme.surfaceBg
+                            border.width: slot.modelData.critical ? Theme.notifBorder
+                                                                  : Theme.surfaceBorder
                             border.color: slot.modelData.critical ? Theme.accentRed
-                                                                  : Theme.accentQuiet
+                                                                  : Theme.surfaceLine
 
                             // Arrives from the edge it will later leave by.
                             // Without this it appears instantly and the exit
@@ -280,7 +281,7 @@ Scope {
                                     text: slot.modelData.body
                                     font.family: Theme.uiFont
                                     font.pixelSize: Theme.notifBodySize
-                                    color: Theme.accentQuiet
+                                    color: Theme.surfaceDim
                                     lineHeight: 1.28
                                     wrapMode: Text.Wrap
                                     maximumLineCount: 3
@@ -299,7 +300,7 @@ Scope {
                                     font.pixelSize: Theme.notifLabelSize
                                     font.weight: Font.DemiBold
                                     font.letterSpacing: Theme.notifTracking
-                                    color: Theme.muted
+                                    color: Theme.surfaceFaint
                                     topPadding: Theme.px(7)
                                 }
                             }
@@ -338,9 +339,17 @@ Scope {
                                     y: life.height - height
                                     radius: Math.max(0, card.radius - card.border.width)
 
-                                    // The border's expression, not a copy of
-                                    // the colours it resolves to.
-                                    color: card.border.color
+                                    // Bright, and not the border's colour any
+                                    // more. It used to take that expression so
+                                    // the two could not drift apart, and then
+                                    // the border became a hairline at a tenth
+                                    // opacity -- which is right for an edge and
+                                    // invisible for the one thing on the toast
+                                    // that is meant to be watched. Urgent keeps
+                                    // its accent; everything else is the bar's
+                                    // foreground at full strength.
+                                    color: slot.modelData.critical ? Theme.accentRed
+                                                                   : Theme.surfaceText
                                 }
 
                                 NumberAnimation {

@@ -22,7 +22,10 @@ Singleton {
     // EN inside the same hangul input method.
     readonly property bool hangul: root.present && !root.method.startsWith("keyboard") && root.state === "2"
 
-    readonly property string label: root.hangul ? "한" : "EN"
+    // KR and EN, not 한 and EN. A hangul syllable next to a latin pair is two
+    // scripts in one readout, and it renders at a different height and weight
+    // from everything else on the bar because it comes from a different font.
+    readonly property string label: root.hangul ? "KR" : "EN"
 
     // fcitx5-remote -t flips between converting and passthrough. Restart goes
     // through D-Bus because that is what the tray's own Restart does; killing

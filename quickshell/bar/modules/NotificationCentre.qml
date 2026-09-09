@@ -185,9 +185,9 @@ Scope {
                         return Math.min(card.chrome + list.contentHeight, card.cap);
                     }
                     radius: Theme.centreRadius
-                    color: Theme.bgAlt
-                    border.width: Theme.notifBorder
-                    border.color: Theme.accentQuiet
+                    color: Theme.surfaceBg
+                    border.width: Theme.surfaceBorder
+                    border.color: Theme.surfaceLine
 
                     Behavior on height {
                         NumberAnimation {
@@ -225,7 +225,7 @@ Scope {
                             font.pixelSize: Theme.notifLabelSize
                             font.weight: Font.DemiBold
                             font.letterSpacing: Theme.notifTracking
-                            color: Theme.muted
+                            color: Theme.surfaceFaint
                         }
 
                         // The only control left on this panel, so it is drawn at
@@ -238,7 +238,7 @@ Scope {
                             text: Theme.iconClearAll
                             font.family: Theme.iconFont
                             font.pixelSize: Theme.px(28)
-                            color: sweep.containsMouse ? Theme.accentRed : Theme.muted
+                            color: sweep.containsMouse ? Theme.accentRed : Theme.surfaceFaint
 
                             MouseArea {
                                 id: sweep
@@ -259,7 +259,7 @@ Scope {
                         text: "Nothing yet"
                         font.family: Theme.uiFont
                         font.pixelSize: Theme.textSize
-                        color: Theme.muted
+                        color: Theme.surfaceFaint
                     }
 
                     ListView {
@@ -331,9 +331,10 @@ Scope {
                                 height: implicitHeight
                                 radius: Theme.notifRowRadius
                                 color: hover.containsMouse ? Qt.lighter(Theme.bg, 1.5) : Theme.bg
-                                border.width: Theme.notifBorder
+                                border.width: slot.modelData.critical ? Theme.notifBorder
+                                                                      : Theme.surfaceBorder
                                 border.color: slot.modelData.critical ? Theme.accentRed
-                                                                      : Theme.muted
+                                                                      : Theme.surfaceLine
 
                                 opacity: Math.max(0, 1 - row.x / (row.width * 0.7))
 
@@ -399,15 +400,20 @@ Scope {
                                             font.pixelSize: Theme.notifLabelSize
                                             font.weight: Font.DemiBold
                                             font.letterSpacing: Theme.notifTracking
+                                            // The application's name, which is
+                                            // a label and not a state: the bar
+                                            // foreground, dimmed, like every
+                                            // other label here. Urgent keeps
+                                            // its accent.
                                             color: slot.modelData.critical ? Theme.accentRed
-                                                                           : Theme.accentTeal
+                                                                           : Theme.surfaceDim
                                         }
 
                                         Text {
                                             text: root.stamp(slot.modelData.at)
                                             font.family: Theme.uiFont
                                             font.pixelSize: Theme.notifLabelSize
-                                            color: Theme.muted
+                                            color: Theme.surfaceFaint
                                         }
                                     }
 
@@ -432,7 +438,7 @@ Scope {
                                         text: slot.modelData.body
                                         font.family: Theme.uiFont
                                         font.pixelSize: Theme.notifBodySize
-                                        color: Theme.accentQuiet
+                                        color: Theme.surfaceDim
                                         lineHeight: 1.28
                                         wrapMode: Text.Wrap
                                         textFormat: Text.StyledText
@@ -462,8 +468,12 @@ Scope {
                                                 font.pixelSize: Theme.notifLabelSize
                                                 font.weight: Font.DemiBold
                                                 font.letterSpacing: Theme.notifTracking
+                                                // An action is a target, so it
+                                                // brightens under the pointer
+                                                // rather than wearing a colour
+                                                // to say it is one.
                                                 color: press.containsMouse ? Theme.fg
-                                                                           : Theme.accentTeal
+                                                                           : Theme.surfaceDim
 
                                                 Behavior on color {
                                                     ColorAnimation {

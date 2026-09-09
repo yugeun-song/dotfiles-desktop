@@ -74,7 +74,12 @@ Scope {
 
             color: "transparent"
             exclusiveZone: 0
-            exclusionMode: ExclusionMode.Ignore
+            // Auto, not Ignore. Ignore was supposed to measure from the screen
+            // edge, so the margin below added the bar's height to clear it --
+            // but the bar's exclusive zone was applied as well and the card
+            // landed twice as far down as intended. Auto starts below whatever
+            // the bar claimed, so the margin is only the gap.
+            exclusionMode: ExclusionMode.Auto
             focusable: false
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
@@ -87,11 +92,10 @@ Scope {
                 top: true
             }
 
-            // Clear of the bar rather than under it. The exclusive zone is
-            // ignored above, so this margin is measured from the screen edge
-            // and has to account for the bar itself.
+            // A gap under the bar, not the bar's height: Auto has already
+            // placed this below it.
             margins {
-                top: Theme.barHeight + Theme.px(4)
+                top: Theme.px(6)
             }
 
             // Nothing here accepts input; the mask keeps clicks going through
@@ -114,7 +118,9 @@ Scope {
                 implicitWidth: Theme.px(210)
                 implicitHeight: Theme.px(44)
                 radius: Theme.px(12)
-                color: Theme.bgAlt
+                color: Theme.surfaceBg
+                border.width: Theme.surfaceBorder
+                border.color: Theme.surfaceLine
                 opacity: card.shown ? 1 : 0
 
                 // Sliding down out of the bar reads as "the bar said this",
@@ -146,7 +152,11 @@ Scope {
                         text: root.icon
                         font.family: Theme.iconFont
                         font.pixelSize: Theme.px(17)
-                        color: root.accent
+                        // The bar's foreground, not the caller's accent. A
+                        // brightness step and a volume step are the same kind
+                        // of thing and were arriving in two different colours,
+                        // neither of which the bar wears.
+                        color: Theme.surfaceText
                     }
 
                     // The bar is the point of this widget: a number alone
@@ -156,7 +166,7 @@ Scope {
                         width: Theme.px(118)
                         height: Theme.px(6)
                         radius: height / 2
-                        color: Qt.rgba(1, 1, 1, 0.12)
+                        color: Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.15)
 
                         Rectangle {
                             anchors.left: parent.left
@@ -164,7 +174,7 @@ Scope {
                             width: Math.max(height, parent.width * root.value / 100)
                             height: parent.height
                             radius: height / 2
-                            color: root.accent
+                            color: Theme.surfaceText
 
                             Behavior on width {
                                 NumberAnimation {
@@ -183,7 +193,7 @@ Scope {
                         font.family: Theme.uiFont
                         font.pixelSize: Theme.px(13)
                         font.weight: Font.DemiBold
-                        color: Theme.fg
+                        color: Theme.surfaceText
                     }
                 }
             }

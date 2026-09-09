@@ -46,13 +46,41 @@ Singleton {
     readonly property real baseScale: 1.12
     readonly property int referenceHeight: 1440
 
-    // Hyprland hands quickshell logical pixels, so fractional output scaling is
-    // already applied. What is left to react to is the logical resolution: a
-    // bar sized for 1440 rows looks oversized on a 1200-row panel.
+    // How wide a logical pixel actually is, in millimetres.
+    //
+    // Hyprland hands quickshell logical pixels with fractional scaling already
+    // applied, so a logical pixel is not a fixed size: it is one physical
+    // pixel on the 27-inch panel this was designed against and 1.5 of them on
+    // the laptop's 2880x1800 at scale 1.5. Sizing from the logical resolution
+    // alone therefore got the laptop backwards -- fewer rows read as "smaller
+    // screen, shrink", when the truth is that every logical pixel there is
+    // physically two thirds the size and the bar needed to grow.
+    readonly property real referenceLogicalMm: 0.235   // 2560x1440 at 27 inches
+
+    readonly property real logicalMm: {
+        const s = root.referenceScreen;
+        const density = s?.physicalPixelDensity ?? 0;   // physical px per mm
+        if (!density)
+            return root.referenceLogicalMm;
+        return (s.devicePixelRatio > 0 ? s.devicePixelRatio : 1) / density;
+    }
+
+    // Two corrections, both deliberately partial.
+    //
+    // Density: a logical pixel two thirds the size wants two thirds more of
+    // them, but a 14-inch screen is also read from closer than a 27-inch one,
+    // and correcting in full makes a laptop bar that looks enormous. The
+    // square root splits the difference, which lands the laptop about 15%
+    // larger than the monitor rather than 50%.
+    //
+    // Resolution: what is left of the old rule, weakened, so that a genuinely
+    // short panel still gets a slightly shorter bar.
+    readonly property real densityFactor: Math.pow(root.referenceLogicalMm / root.logicalMm, 0.5)
+
     readonly property real autoScale: {
         const height = root.referenceScreen?.height ?? root.referenceHeight;
-        const ratio = height / root.referenceHeight;
-        return Math.max(0.82, Math.min(1.45, root.baseScale * Math.pow(ratio, 0.7)));
+        const rows = Math.pow(height / root.referenceHeight, 0.35);
+        return Math.max(0.85, Math.min(1.60, root.baseScale * rows * root.densityFactor));
     }
 
     readonly property real scaleOverride: Number(Quickshell.env("BAR_SCALE") ?? 0)
@@ -88,11 +116,14 @@ Singleton {
     // ---------------------------------------------------------------------
     // The menu bar.
     //
-    // 26 is the macOS menu bar at this scale: text sitting on one surface,
-    // with the height set by the text rather than by pills drawn around it.
+    // The height is the one number here that is not solved from the text: the
+    // text sizes are what they are and this is the room around them. 26 was
+    // the macOS menu bar at this scale and read as tight against glyphs this
+    // size, so it carries a little more.
+    //
     // The name stays barHeight because every other surface measures from it.
     // ---------------------------------------------------------------------
-    readonly property int barHeight:   root.px(26)
+    readonly property int barHeight:   root.px(33)
 
     // One size, two weights. The app name is set apart by weight alone, which
     // is what macOS does.
@@ -104,47 +135,153 @@ Singleton {
     // A hover highlight wider than its text, so it reads as a target.
     readonly property int menuItemPadX:  root.px(8)
     readonly property int menuItemRadius: root.px(6)
-    // Status glyphs are smaller than the bar's old pill icons: at iconSize
-    // they crowd a 26-unit bar and read as buttons rather than as indicators.
-    readonly property int statusIconSize: root.px(16)
+    readonly property int statusIconSize: root.px(17)
+    // Some Nerd Font glyphs draw a lot smaller than their em box: the wifi
+    // arcs, the bell and the weather symbols all sit well inside theirs while
+    // the Bluetooth mark fills its own. Asking for one size therefore does not
+    // produce one size on screen, so the small ones are asked for larger. The
+    // factor is measured off a render, not derived.
+    readonly property real statusIconBoost: 1.22
+    // And a second step for the ones that sit further in still. The wifi arcs,
+    // the Bluetooth mark and the weather glyphs all draw noticeably smaller
+    // than the bell at the same size, so they are asked for larger again.
+    // Both factors are measured off a render, not derived.
+    readonly property real statusIconBoostMore: 1.32
+    // A third step for the weather set, which draws smaller again -- a cloud
+    // with a sun behind it has to fit two shapes in the box one shape gets.
+    readonly property real statusIconBoostWeather: 1.40
 
-    // The workspace dots. The active one is drawn as a bar rather than a
-    // larger dot, so it is found by shape and not by comparing sizes; the
-    // cell holds the wider measurement either way so the row never reflows.
-    readonly property int dotSize:        Math.max(3, root.px(5))
-    readonly property int dotActiveWidth: root.px(14)
-    readonly property int dotGap:         root.px(5)
+    // The box every word and every glyph on the bar is drawn in, and centred
+    // within. One height for all of them, so nothing is centred against its
+    // own font's ascent and descent: Inter and the Nerd Font disagree about
+    // where the middle of a line is, and a row of items each trusting its own
+    // answer is a row that does not line up. Tall enough for the largest glyph
+    // the bar asks for, which is a boosted one.
+    readonly property int barLineHeight: Math.round(root.statusIconSize * root.statusIconBoostWeather)
+    // Between a glyph and the number it belongs to. Wider than it looks like
+    // it needs to be: the battery gauge ends in a terminal nub that reaches
+    // further right than the outline does, so a gap sized against the outline
+    // leaves the number touching it.
+    readonly property int statusGlyphGap: root.px(9)
+    // What the hover highlight leaves above and below itself. Derived rather
+    // than fixed, so the bar keeps the same proportion of breathing room at
+    // every height instead of looking tight when the bar grows.
+    readonly property int barInset: Math.max(2, Math.round(root.barHeight * 0.14))
 
-    // Translucent, and blurred by the compositor (hypr/config/rules.lua), so
-    // this alpha decides how much wallpaper survives the blur. Below about
-    // 0.5 the hairline stops separating the bar from a bright wallpaper.
-    readonly property color menuBarBg: Qt.rgba(root.bg.r, root.bg.g, root.bg.b, 0.62)
+    // A caption beside a value: a small dim word, then the number. Stacked was
+    // the reference's form and it is the wrong one at this bar height -- two
+    // lines inside 26 units left both too small to read at a glance.
+    // The caption is the same size as the value and only dimmer. Smaller as
+    // well as dimmer was the first attempt and it read as a mistake: two sizes
+    // an unnoticeable amount apart look like a font that failed to load rather
+    // than like a label and its reading.
+    readonly property int statusCaptionSize: root.px(12)
+    readonly property int statusValueSize:   root.px(12)
+    readonly property int statusCaptionGap:  root.px(6)
+
+    // The captions are right-aligned inside this, so the gap after the word is
+    // the same for all three. Inter is proportional: CPU, RAM and BAT are all
+    // three letters and none of them is the same width, and U, M and T do not
+    // carry the same right side bearing either. Left-aligned the three gaps
+    // came out visibly different even though the spacing between the items was
+    // identical.
+    readonly property int statusCaptionWidth: Math.ceil(captionMetrics.width)
+
+    TextMetrics {
+        id: captionMetrics
+
+        font.family: root.uiFont
+        font.pixelSize: root.statusCaptionSize
+        font.weight: Font.Medium
+        // The widest of the four the bar uses.
+        text: "CHG"
+    }
+
+    // The workspace numbers. A minimum width so single and double digits keep
+    // the same cell and the row does not reflow crossing from 9 to 10.
+    // A tenth of the bar, which is a tenth of the screen. Not a px() value:
+    // this is a share of the room available rather than a size, so it should
+    // track the screen's width and not the text scale. On this 2560 monitor it
+    // is 256 logical pixels, which is a few dozen characters.
+    readonly property int appNameWidth: Math.round((root.referenceScreen?.width ?? 1920) * 0.10)
+    readonly property int workspaceTextSize: root.px(12)
+    readonly property int workspaceMinWidth: root.px(19)
+
+    // Opaque. It was translucent over a compositor blur for a while, and a
+    // menu bar you can see the wallpaper through is a menu bar whose contents
+    // change contrast as the wallpaper does. A flat surface is also one less
+    // thing for the compositor to redraw.
+    readonly property color menuBarBg: root.bg
     readonly property color menuBarLine: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.10)
     readonly property color menuHover:   Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
 
     // ---------------------------------------------------------------------
-    // The island: the surface hanging below the centre of the bar.
+    // Floating surfaces: the tooltip, the menus, the toasts, the overlays.
+    //
+    // One look for all of them, and the island is the one that set it --
+    // near-black rather than the palette's blue-grey, generously rounded, and
+    // separated from the desktop by a hairline instead of a coloured border.
+    // Before this each surface had picked its own: the tooltip was beige with
+    // dark text, the toasts were bgAlt with an accent border, the menus were
+    // bgAlt with none, and nothing looked like it came from the same shell.
+    //
+    // Not pure black. The island is, because it is imitating a notch; a menu
+    // that happens to open over a black wallpaper still has to be findable,
+    // and this is dark enough to read as unlit without disappearing.
     // ---------------------------------------------------------------------
-    readonly property int islandRadius: root.px(16)
-    readonly property int islandCollapsedWidth:  root.px(168)
-    readonly property int islandCollapsedHeight: root.px(22)
-    // What is left when nothing is playing: a handle, not an empty panel.
-    readonly property int islandHandleWidth:     root.px(58)
-    readonly property int islandCollapsedArt:    root.px(15)
-    readonly property int islandExpandedWidth:   root.px(468)
-    readonly property int islandExpandedHeight:  root.px(158)
-    readonly property int islandPad:  root.px(14)
-    readonly property int islandGap:  root.px(12)
-    // Pure black, not the palette background: it should disappear into the
-    // bezel the way a notch does, and any colour breaks that.
-    readonly property color islandBg: "#000000"
-    readonly property int islandArtSize: root.px(56)
-    readonly property int islandTitleSize: root.px(14)
-    readonly property int islandSubSize:   root.px(12)
-    // Opens slower than it closes: a snap open reads as a popup, and a slow
-    // close gets in the way of a pointer that has already left.
-    readonly property int islandOpenMs:  200
-    readonly property int islandCloseMs: 160
+    // The bar's own colours, not a set of their own. A tooltip is the bar
+    // answering a question about something on it, and a menu is the bar
+    // opening; both looked like a different program's window while they had
+    // their own near-black and pure white. The island keeps its own black
+    // because it is imitating a notch, which is the one surface here that is
+    // not the bar speaking.
+    readonly property color surfaceBg:    root.bg
+    readonly property color surfaceLine:  root.menuBarLine
+    readonly property color surfaceText:  root.fg
+    readonly property color surfaceDim:   Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.78)
+    readonly property color surfaceFaint: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.52)
+    readonly property color surfaceHover: root.menuHover
+    readonly property int surfaceRadius:  root.px(16)
+    readonly property int surfaceBorder:  Math.max(1, root.px(1))
+
+    // ---------------------------------------------------------------------
+    // The media chip in the bar, and the player it opens.
+    // ---------------------------------------------------------------------
+    // The chip is bar type at bar size; only its width is its own, capped so a
+    // long title cannot reach the groups either side of it.
+    readonly property int mediaChipWidth: Math.round((root.referenceScreen?.width ?? 1920) * 0.20)
+
+    // Wide and shallow. The card holds three rows of a player, and at a
+    // squarer ratio the rows had to be spread to fill it -- which is what put
+    // more space above and below the content than beside it.
+    readonly property int mediaCardWidth:  root.px(540)
+    // No height token: a popup is as tall as its contents plus the same pad it
+    // carries at the sides, so the four margins are equal by construction
+    // rather than by a number that has to be re-solved whenever a row changes.
+    // Shared with the calendar, which is built the same way.
+    readonly property int popupPad: root.px(18)
+    readonly property int mediaGap:        root.px(10)
+
+    readonly property int mediaArtSize:   root.px(52)
+    readonly property int mediaTitleSize: root.px(15)
+    readonly property int mediaSubSize:   root.px(12)
+    readonly property int mediaTimeSize:  root.px(11)
+    readonly property int mediaProgressHeight: root.px(14)
+
+    // Graded rather than uniform: play-pause largest, skip either side of it,
+    // shuffle and repeat smallest at the ends.
+    readonly property int mediaControlMain: root.px(22)
+    readonly property int mediaControlSkip: root.px(18)
+    readonly property int mediaControlEdge: root.px(14)
+
+    // The month, opened from the clock. The gap between the heading and the
+    // grid is what gives this popup its width, the way the card's width token
+    // does for the player: both are meant to be wider than they are tall.
+    readonly property int calendarGap:         root.px(38)
+    readonly property int calendarCellSize:    root.px(22)
+    readonly property int calendarMonthSize:   root.px(20)
+    readonly property int calendarDaySize:     root.px(13)
+    readonly property int calendarWeekdaySize: root.px(11)
 
     readonly property int chipWidth:   root.px(27)
     readonly property int chipSpacing: root.px(3)
@@ -153,9 +290,13 @@ Singleton {
     readonly property int mediaPadding:   root.px(12)
     readonly property int mediaItemGap:   root.px(7)
 
-    readonly property int vizBarWidth:   Math.max(2, root.px(4))
+    // Twenty-two bands rather than twelve, drawn thinner. The meter is a
+    // little wider for it, not twice as wide: what the extra bands buy is
+    // resolution, and a bar that grew with them would have been a different
+    // widget.
+    readonly property int vizBarWidth:   Math.max(2, root.px(3))
     readonly property int vizBarSpacing: Math.max(1, root.px(2))
-    readonly property int vizPadding:    root.px(5)
+    readonly property int vizPadding:    root.px(6)
 
     readonly property int tooltipRadius:  root.px(10)
     readonly property int tooltipPadX:    root.px(12)
@@ -240,6 +381,9 @@ Singleton {
     // from the colour rather than from which pill is wearing it. Deeper than
     // the accents beside it on purpose: at 58% lightness it is the darkest
     // face in the group and does not read as one more hue in the sequence.
+    // No longer drawn with: the bar has one alert colour now and it is
+    // accentRed, shared with the calendar's Sunday. Kept because the palette
+    // is a record of where these values came from.
     readonly property color accentAlert:   "#ef3963"
 
     readonly property color beige: "#ecf0c1"
@@ -319,6 +463,12 @@ Singleton {
     readonly property string iconPrev:      String.fromCodePoint(0xF04AE)
     readonly property string iconStop:      String.fromCodePoint(0xF04DB)
     readonly property string iconMusic:     String.fromCodePoint(0xF001)
+    // Read out of the font's own cmap rather than guessed: md-shuffle,
+    // md-repeat and md-repeat_once. U+F04E1, which this file already carries
+    // as iconSwap, is md-swap_horizontal and is not a shuffle.
+    readonly property string iconShuffle:   String.fromCodePoint(0xF049D)
+    readonly property string iconRepeat:    String.fromCodePoint(0xF0456)
+    readonly property string iconRepeatOne: String.fromCodePoint(0xF0458)
     readonly property string iconCapsLock:  String.fromCodePoint(0xF033E)
     readonly property string iconKeyboard:  String.fromCodePoint(0xF030C)
     readonly property string iconCheck:     String.fromCodePoint(0xF012C)
@@ -463,34 +613,47 @@ Singleton {
         }
     }
 
+    // Solid glyphs, not outlines.
+    //
+    // These were Material Design's md-weather_* set, which draws the sky as
+    // thin strokes: at 16 pixels on a bar a drizzle and a downpour were the
+    // same grey smudge. Font Awesome's cloud family is filled, so the
+    // silhouette carries the reading and the drops below it are what differ.
+    //
+    // Every code point was read out of the font's own cmap, and the name is
+    // written beside it: membership says a glyph exists, never which glyph.
+    // The two clear-sky ones stay Material because Font Awesome's only sun
+    // here is fa-sun_o, which is an outline.
     function weatherIcon(code: int, day: bool): string {
         switch (true) {
+        // Clear.
         case code === 0:
-            return String.fromCodePoint(day ? 0xF0599 : 0xF0594);
+            return String.fromCodePoint(day ? 0xF0599   // md-weather_sunny
+                                            : 0xF0594); // md-weather_night
+        // Some cloud, sun or moon still showing.
         case code === 1 || code === 2:
-            return String.fromCodePoint(day ? 0xF0595 : 0xF067E);
-        case code === 3:
-            return String.fromCodePoint(0xF0590);
-        case code === 45 || code === 48:
-            return String.fromCodePoint(0xF0591);
-        case code >= 51 && code <= 57:
-            return String.fromCodePoint(0xF0597);
-        case code >= 61 && code <= 65:
-            return String.fromCodePoint(0xF0596);
+            return String.fromCodePoint(day ? 0x0EEF0   // fa-cloud_sun
+                                            : 0x0EEEF); // fa-cloud_moon
+        // Overcast, and fog, which is a lid on the sky either way.
+        case code === 3 || code === 45 || code === 48:
+            return String.fromCodePoint(0x0F0C2);       // fa-cloud
+        // Drizzle, and rain that is not heavy.
+        case (code >= 51 && code <= 57) || (code >= 61 && code <= 63):
+            return String.fromCodePoint(0x0EF1C);       // fa-cloud_rain
+        // Heavy rain and showers.
+        case code === 65 || (code >= 80 && code <= 82):
+            return String.fromCodePoint(0x0EF1D);       // fa-cloud_showers_heavy
+        // Freezing rain and sleet: rain and ice in the same fall.
         case code === 66 || code === 67:
-            return String.fromCodePoint(0xF0F31);
-        case code >= 71 && code <= 77:
-            return String.fromCodePoint(0xF0598);
-        case code >= 80 && code <= 82:
-            return String.fromCodePoint(0xF0596);
-        case code === 85 || code === 86:
-            return String.fromCodePoint(0xF0598);
-        case code === 95:
-            return String.fromCodePoint(0xF0593);
-        case code === 96 || code === 99:
-            return String.fromCodePoint(0xF0592);
+            return String.fromCodePoint(0x0EF1A);       // fa-cloud_meatball
+        // Snow.
+        case (code >= 71 && code <= 77) || code === 85 || code === 86:
+            return String.fromCodePoint(0xF0598);       // md-weather_snowy
+        // Storm, with or without hail.
+        case code >= 95:
+            return String.fromCodePoint(0x0EF2C);       // fa-cloud_bolt
         default:
-            return String.fromCodePoint(0xF0590);
+            return String.fromCodePoint(0x0F0C2);       // fa-cloud
         }
     }
 
@@ -565,10 +728,6 @@ Singleton {
 
     readonly property int batteryLowPercent: 10
 
-    function batteryColor(percent: int): color {
-        return percent <= root.batteryLowPercent ? root.accentAlert : root.accentGreen;
-    }
-
     // Window classes do not always match an icon name. Try the class as
     // given, then lower case, then the trailing component of a reverse-DNS id
     // such as org.kde.dolphin. Returns "" when nothing in the theme matches.
@@ -626,27 +785,44 @@ Singleton {
         return value.length > limit ? value.slice(0, limit - 1) + "…" : value;
     }
 
-    // Cover art is only ever loaded from a local file.
+    // Cover art: a local file, or one of a few known cover-art hosts over TLS.
     //
     // mpris:artUrl is chosen by the player, and for a browser that means by
-    // the page. An Image handed an http URL fetches it, which turns any open
-    // tab into a beacon running out of the shell and a way to reach addresses
-    // on the local network. The same refusal WindowChip made for window
-    // titles. A remote URL returns empty and the surface keeps its
-    // placeholder. hypr/scripts/lock-media.sh enforces this too.
+    // the page. Fetching it as given would turn any open tab into a beacon
+    // running out of the shell and a way to reach an address on the local
+    // network. But refusing every remote URL cost the thing itself: Spotify
+    // publishes https://i.scdn.co/... and nothing else, so the island showed a
+    // grey square for the one player most likely to be running.
+    //
+    // So the scheme and the host are both checked. https only, and the host
+    // has to be one this file names -- a CDN that serves cover art and nothing
+    // else, to a machine already talking to that service. An arbitrary host,
+    // a private address, a plain-http URL and a data: blob are all still
+    // refused, which is the part that mattered.
+    readonly property var artHosts: [
+        "i.scdn.co",                      // Spotify
+        "i.ytimg.com",                    // YouTube, through a browser's MPRIS
+        "yt3.ggpht.com",                  // YouTube channel art
+        "lastfm.freetls.fastly.net",      // Last.fm, which several players use
+        "coverartarchive.org"             // MusicBrainz
+    ]
+
     function localArt(url: string): string {
-        return url && url.startsWith("file://") ? url : "";
+        if (!url)
+            return "";
+        if (url.startsWith("file://"))
+            return url;
+        if (!url.startsWith("https://"))
+            return "";
+        // The authority is everything before the first slash; userinfo is
+        // dropped and the port ignored, so "evil.example@i.scdn.co" and
+        // "i.scdn.co.evil.example" both fail the exact match below.
+        const authority = url.slice(8).split("/")[0];
+        const host = authority.split("@").pop().split(":")[0].toLowerCase();
+        return root.artHosts.indexOf(host) !== -1 ? url : "";
     }
 
-    // Load pills keep their own hue until the value is genuinely worth
-    // noticing, so colour means "busy" rather than "this is the CPU one".
-    readonly property real loadHighFraction: 0.90
-
-    function loadColor(fraction: real, base: color): color {
-        if (fraction >= root.loadHighFraction)
-            return root.accentAlert;
-        if (fraction >= 0.65)
-            return root.accentOrange;
-        return base;
-    }
+    // Where a load stops being ordinary. One threshold: see the note at the
+    // CPU item in StatusItems for why the middle band went.
+    readonly property real loadAlertFraction: 0.90
 }

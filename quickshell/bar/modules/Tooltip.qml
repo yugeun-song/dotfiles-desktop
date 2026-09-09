@@ -84,7 +84,9 @@ Item {
                 implicitWidth: label.implicitWidth + Theme.tooltipPadX * 2
                 implicitHeight: label.implicitHeight + Theme.tooltipPadY * 2
                 radius: Theme.tooltipRadius
-                color: Theme.beige
+                color: Theme.surfaceBg
+                border.width: Theme.surfaceBorder
+                border.color: Theme.surfaceLine
 
                 Text {
                     id: label
@@ -97,7 +99,7 @@ Item {
                     font.family: Theme.uiFont
                     font.pixelSize: Theme.textSize
                     font.weight: Font.Medium
-                    color: Theme.ink
+                    color: Theme.surfaceText
                 }
             }
         }

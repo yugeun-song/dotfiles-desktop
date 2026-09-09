@@ -203,7 +203,9 @@ Scope {
                 implicitWidth: column.implicitWidth + Theme.px(48)
                 implicitHeight: column.implicitHeight + Theme.px(40)
                 radius: Theme.px(18)
-                color: Theme.bgAlt
+                color: Theme.surfaceBg
+                border.width: Theme.surfaceBorder
+                border.color: Theme.surfaceLine
 
                 MouseArea {
                     anchors.fill: parent

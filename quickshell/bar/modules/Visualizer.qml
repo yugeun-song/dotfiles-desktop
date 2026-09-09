@@ -6,18 +6,29 @@ Rectangle {
 
     property color barColor: Theme.ink
 
+    // The well's height, settable because this is drawn on two surfaces of
+    // very different sizes: a pill, which it was written for, and the island's
+    // collapsed tab, which is smaller than a pill and had the well filling it
+    // edge to edge with nothing left as margin.
+    property int wellHeight: Theme.pillHeight - Theme.px(7)
+
     readonly property int barWidth: Theme.vizBarWidth
     readonly property int barSpacing: Theme.vizBarSpacing
     readonly property int wellPadding: Theme.vizPadding
-    readonly property int maxHeight: Theme.pillHeight - Theme.px(9)
+    readonly property int maxHeight: root.wellHeight - Theme.px(2)
 
     implicitWidth: Cava.barCount * root.barWidth + (Cava.barCount - 1) * root.barSpacing + root.wellPadding * 2
-    implicitHeight: Theme.pillHeight - Theme.px(7)
+    implicitHeight: root.wellHeight
     radius: Theme.px(5)
 
-    // A slightly darker well so the bars read as their own element rather than
-    // as marks floating on the pill.
-    color: Qt.rgba(root.barColor.r, root.barColor.g, root.barColor.b, 0.22)
+    // A well behind the bars, so they read as their own element rather than as
+    // marks floating on whatever is under them. Wanted on the bar, where the
+    // meter sits among words; not on the player card, where it is the only
+    // thing in its corner and the well would be a box around nothing.
+    property bool showWell: true
+
+    color: root.showWell ? Qt.rgba(root.barColor.r, root.barColor.g, root.barColor.b, 0.22)
+                         : "transparent"
 
     Row {
         anchors.centerIn: parent

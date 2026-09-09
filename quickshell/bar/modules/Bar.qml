@@ -67,9 +67,34 @@ PanelWindow {
             color: Theme.menuBarLine
         }
 
-        AppTitle {
+        // The left group, in order of how fixed each part is: the system
+        // badge, then the workspaces, then the name of whatever has focus.
+        // The two that never change width come first, so the one that does
+        // cannot move them.
+        Row {
             anchors.left: parent.left
             anchors.leftMargin: Theme.edgeMargin
+            anchors.verticalCenter: parent.verticalCenter
+            spacing: Theme.menuTitleGap
+
+            SystemBadge {
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            Workspaces {
+                anchors.verticalCenter: parent.verticalCenter
+            }
+
+            AppTitle {
+                anchors.verticalCenter: parent.verticalCenter
+            }
+        }
+
+        // What is playing, in the middle of the bar. Centred on the screen
+        // rather than between the two groups, so it does not move when either
+        // of them changes width.
+        MediaChip {
+            anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
         }
 

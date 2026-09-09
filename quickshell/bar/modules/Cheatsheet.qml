@@ -242,9 +242,9 @@ Scope {
                     width: Math.min(parent.width - Theme.px(64), Theme.px(1560))
                     height: Math.min(parent.height - Theme.px(64), Theme.px(960))
                     radius: Theme.px(18)
-                    color: Theme.bgAlt
+                    color: Theme.surfaceBg
                     border.width: 1
-                    border.color: Theme.accentQuiet
+                    border.color: Theme.surfaceLine
 
                     // Clicks on the card must not reach the dimmer behind it,
                     // or reading the sheet would close it.
@@ -273,7 +273,7 @@ Scope {
                         text: "Esc to close"
                         font.family: Theme.uiFont
                         font.pixelSize: Theme.px(14)
-                        color: Theme.muted
+                        color: Theme.surfaceFaint
                     }
 
                     // The header row, and the rule under it. Uppercase mono,
@@ -310,7 +310,7 @@ Scope {
                                         font.family: Theme.uiFont
                                         font.pixelSize: Theme.px(13)
                                         font.letterSpacing: Theme.px(2)
-                                        color: Theme.accentTeal
+                                        color: Theme.surfaceText
                                     }
 
                                     Text {
@@ -322,7 +322,7 @@ Scope {
                                         font.family: Theme.uiFont
                                         font.pixelSize: Theme.px(13)
                                         font.letterSpacing: Theme.px(2)
-                                        color: Theme.accentTeal
+                                        color: Theme.surfaceText
                                     }
                                 }
                             }
@@ -332,7 +332,7 @@ Scope {
                             anchors.bottom: parent.bottom
                             width: parent.width
                             height: 1
-                            color: Theme.accentQuiet
+                            color: Theme.surfaceDim
                         }
                     }
 
@@ -412,7 +412,7 @@ Scope {
                                                 text: row.modelData.chord
                                                 font.family: Theme.uiFont
                                                 font.pixelSize: Theme.px(15)
-                                                color: Theme.beige
+                                                color: Theme.surfaceText
                                                 elide: Text.ElideRight
                                                 // The gaps in a chord are runs
                                                 // of spaces, and AutoText would
@@ -440,7 +440,7 @@ Scope {
                                                 anchors.bottom: parent.bottom
                                                 width: parent.width
                                                 height: 1
-                                                color: Theme.muted
+                                                color: Theme.surfaceFaint
                                                 opacity: 0.28
                                             }
                                         }

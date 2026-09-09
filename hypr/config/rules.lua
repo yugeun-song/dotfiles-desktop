@@ -26,12 +26,9 @@ hl.window_rule({ match = { class = "^$", title = "^quickshell$" }, no_focus = tr
 -- selecting for.
 hl.layer_rule({ match = { namespace = "^(quickshell:launcher|quickshell:powermenu)$" }, blur = true })
 
--- The menu bar, which is translucent now rather than an opaque slab. Its alpha
--- is chosen against a blurred wash; without this a busy wallpaper reads
--- straight through and the status glyphs lose their contrast. Safe here for
--- the reason the readouts below are not: the bar's rectangle is exactly what
--- it draws, full width with square corners.
-hl.layer_rule({ match = { namespace = "^(quickshell)$" }, blur = true })
+-- The menu bar is opaque, so there is nothing behind it to blur and blurring
+-- it would only cost a pass.
+hl.layer_rule({ match = { namespace = "^(quickshell)$" }, blur = false })
 
 -- No blur on the readouts. Blur is applied to the layer's rectangle, not to
 -- the rounded card inside it, so each corner showed a lighter square poking

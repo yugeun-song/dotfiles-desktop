@@ -216,8 +216,10 @@ Scope {
                 anchors.topMargin: Math.round(parent.height * 0.09)
                 width: Theme.px(560)
                 implicitHeight: body.implicitHeight + Theme.px(20)
-                radius: Theme.px(16)
-                color: Theme.bgAlt
+                radius: Theme.surfaceRadius
+                color: Theme.surfaceBg
+                border.width: Theme.surfaceBorder
+                border.color: Theme.surfaceLine
 
                 MouseArea {
                     anchors.fill: parent

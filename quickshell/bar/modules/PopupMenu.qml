@@ -111,7 +111,9 @@ Item {
                 implicitWidth: root.menuWidth
                 implicitHeight: column.implicitHeight + Theme.px(14)
                 radius: Theme.tooltipRadius
-                color: Theme.bgAlt
+                color: Theme.surfaceBg
+                border.width: Theme.surfaceBorder
+                border.color: Theme.surfaceLine
 
                 Column {
                     id: column

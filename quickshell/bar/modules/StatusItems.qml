@@ -12,11 +12,27 @@ import qs.services
 //
 // The clock and weather moved here from the left end, which on a menu bar
 // belongs to the application.
+//
+// No tray. There was one, briefly, on the argument that in a menu bar the
+// status group IS the tray. That is true in general and was wrong here: this
+// machine registers exactly two items, fcitx5 and Spotify, and the bar already
+// carries both -- the input method as the item below, and the player in the
+// island, with transport controls a tray icon does not have. Two icons that
+// duplicate what is beside them, one of which does not even answer a click.
+// Restore modules/TrayItems.qml from git if an application ever turns up that
+// has no other way to be reached.
 Row {
     id: root
 
     readonly property string hyprScripts: (Quickshell.env("XDG_CONFIG_HOME") ?? `${Quickshell.env("HOME")}/.config`) + "/hypr/scripts"
     readonly property var terminal: [root.hyprScripts + "/terminal.sh", "-e"]
+
+    // One colour for every reading that has left its range, and it is the one
+    // the calendar marks Sunday with. Written once so the three readouts
+    // cannot drift apart.
+    function alerting(over: bool): color {
+        return over ? Theme.accentRed : Theme.fg;
+    }
 
     spacing: Theme.statusItemGap
 
@@ -41,17 +57,12 @@ Row {
         return "UTC" + sign + h + (m === 0 ? "" : ":" + (m < 10 ? "0" : "") + m);
     }
 
-    WorkspaceDots {
-        anchors.verticalCenter: parent.verticalCenter
-    }
-
     StatusItem {
         visible: CapsLock.active
         unknown: Theme.stale(CapsLock.asOf, 0)
         icon: Theme.iconCapsLock
-        // No label. The glyph and the accent say it; "CAPS LOCK" spelled out
-        // was a pill's way of filling a chip that had room for it.
-        accent: Theme.accentRed
+        // The glyph alone. It is only ever drawn while caps lock is on, so its
+        // presence is the whole reading and a colour behind it adds nothing.
         tooltip: "Caps Lock is on"
     }
 
@@ -60,10 +71,11 @@ Row {
     StatusItem {
         visible: Ime.present
         unknown: Theme.stale(Ime.asOf, 0)
+        // The word is the whole readout. It was a filled pill in Hangul for a
+        // while, on the microphone analogy; an input method is not a thing
+        // that is switched on, it is a thing that is set to one of two values,
+        // and both values are already written out.
         label: Ime.label
-        // Hangul takes an accent and Latin does not, so the state that changes
-        // what typing does is the state that changes colour.
-        accent: Ime.hangul ? Theme.accentSaffron : Theme.fg
         tooltip: `Input     ${Ime.hangul ? "Hangul" : "Latin"}\nEngine    ${Ime.method}\nClick for input method actions`
         // No language toggle in the menu, still. The menu opens under the
         // pointer, so the next click lands on the first entry and clicking
@@ -94,8 +106,11 @@ Row {
         visible: Alarms.hasAlarm
         unknown: Theme.stale(Alarms.asOf, 0)
         icon: Alarms.ringing ? Theme.iconAlarmRing : Theme.iconAlarm
-        label: Alarms.ringing ? Theme.shorten(Alarms.ringing.label, 16) : Alarms.countdown
-        accent: Alarms.ringing ? Theme.accentRed : Theme.fg
+        // The countdown is in the tooltip. On the bar the glyph says an alarm
+        // is set, and the fill says one is going off now.
+        label: Alarms.ringing ? Theme.shorten(Alarms.ringing.label, 16) : ""
+        active: Alarms.ringing
+        activeFill: Theme.accentRed
         tooltip: {
             if (Alarms.ringing)
                 return `Ringing   ${Alarms.ringing.label}\nSet for   ${Alarms.ringing.at} ${Alarms.timezone}\nClick to dismiss`;
@@ -125,6 +140,7 @@ Row {
     StatusItem {
         unknown: Net.unknown
         icon: Net.preferWired ? Theme.iconEthernet : Net.wifiIcon()
+        iconScale: Theme.statusIconBoostMore
         accent: Net.preferWired || Net.wifiConnected ? Theme.fg : Theme.muted
         command: root.terminal.concat([root.hyprScripts + "/launch.sh", "nmtui"])
         tooltip: {
@@ -159,6 +175,7 @@ Row {
     StatusItem {
         unknown: Bt.unknown
         icon: Bt.icon()
+        iconScale: Theme.statusIconBoostMore
         accent: Bt.connectedCount > 0 ? Theme.fg : Theme.muted
         // Not bluetoothctl directly: it puts the connected device in its
         // prompt and points argument-less commands at it, so it opens scoped
@@ -199,20 +216,30 @@ Row {
     // /proc is on screen while it is still the thing that just happened.
     StatusItem {
         unknown: Theme.stale(Resources.cpuAsOf, 5000)
-        icon: Theme.iconCpu
+        // Caption over value, no glyph: the reference draws its load readouts
+        // this way, and it is the form that lets a number stay on the bar
+        // permanently without taking a word's worth of room.
+        caption: "CPU"
         label: `${Resources.cpuPercent}%`
         labelWidth: Theme.percentWidth
-        accent: Theme.loadColor(Resources.cpuUsage, Theme.fg)
+        // One threshold, not two. A middle band in orange meant the readouts
+        // were coloured most of the time on a machine that is usually busy,
+        // and a colour that is usually on says nothing. Red at the ceiling
+        // only, and the same red the calendar marks Sunday with, so the shell
+        // has one colour for "look at this" rather than one per widget.
+        alert: Resources.cpuUsage >= Theme.loadAlertFraction
+        accent: root.alerting(Resources.cpuUsage >= Theme.loadAlertFraction)
         command: root.terminal.concat([root.hyprScripts + "/launch.sh", "btop", "htop", "top"])
         tooltip: `CPU       ${Resources.cpuPercent}% busy\nSampled   every 1s from /proc/stat\nClick to open btop`
     }
 
     StatusItem {
         unknown: Theme.stale(Resources.memAsOf, 5000)
-        icon: Theme.iconMemory
+        caption: "RAM"
         label: `${Resources.memPercent}%`
         labelWidth: Theme.percentWidth
-        accent: Theme.loadColor(Resources.memUsage, Theme.fg)
+        alert: Resources.memUsage >= Theme.loadAlertFraction
+        accent: root.alerting(Resources.memUsage >= Theme.loadAlertFraction)
         command: root.terminal.concat([root.hyprScripts + "/launch.sh", "btop", "htop", "top"])
         tooltip: `Memory    ${Resources.memUsedGb.toFixed(1)} of ${Resources.memTotalGb.toFixed(1)} GB\nIn use    ${Resources.memPercent}%\nSource    MemAvailable in /proc/meminfo\nClick to open btop`
     }
@@ -224,17 +251,20 @@ Row {
         // a readout that vanishes instead reads as a machine that never had one.
         visible: Power.present || Power.unknown !== ""
         unknown: Power.unknown
-        iconComponent: BatteryGauge {
-            percent: Power.percent
-            charging: Power.charging
-            // On a pill the gauge was drawn in ink against a coloured face.
-            // Here there is no face, so it takes the colour every other glyph
-            // on the bar has, and goes red on the same threshold they do.
-            strokeColor: Power.percent <= Theme.batteryLowPercent ? Theme.accentAlert : Theme.fg
-        }
+        // A word, like the two readouts before it, rather than a drawn gauge.
+        // The gauge said the level twice -- once as a fill and once as the
+        // number beside it -- and the three readouts now read as one group
+        // instead of two words and a picture.
+        //
+        // Charging is the caption's job: it is the one battery state that is
+        // not a level, and spelling it changes nothing else about the item.
+        caption: Power.charging ? "CHG" : "BAT"
         label: `${Power.percent}%`
         labelWidth: Theme.percentWidth
-        accent: Power.percent <= Theme.batteryLowPercent ? Theme.accentAlert : Theme.fg
+        // Red under the low mark and nothing otherwise. Charging was green for
+        // a while, which spent a colour on a state the caption already spells.
+        alert: Power.percent <= Theme.batteryLowPercent
+        accent: root.alerting(Power.percent <= Theme.batteryLowPercent)
         tooltip: {
             const lines = [`Charge    ${Power.percent}%`, `State     ${Power.stateLabel()}`];
             const remaining = Power.charging ? Power.humanTime(Power.secondsToFull) : Power.humanTime(Power.secondsToEmpty);
@@ -252,9 +282,13 @@ Row {
 
     StatusItem {
         icon: Theme.iconBell
-        label: Notifications.unread > 0 ? `${Notifications.unread}` : ""
-        labelWidth: Notifications.unread > 0 ? Theme.countWidth : 0
-        accent: Notifications.unread > 0 ? Theme.accentRose : Theme.muted
+        iconScale: Theme.statusIconBoost
+        // No count and no state in the colour. The bell is a door to the
+        // history, and a door is there whether or not anything came through
+        // it; dimming it when the list was read made it look disabled. The
+        // toast already interrupted if there was anything worth interrupting
+        // for, and the count is in the tooltip.
+        accent: Theme.fg
         tooltip: Notifications.history.length === 0
                  ? "No notifications yet\nClick to open the history"
                  : `Unread    ${Notifications.unread}\nKept      ${Notifications.history.length}\nClick to open the history`
@@ -271,9 +305,14 @@ Row {
         visible: Weather.ready
         unknown: Weather.unknown || Theme.stale(Weather.asOf, 3600000)
         icon: Theme.weatherIcon(Weather.code, Weather.day)
-        label: `${Weather.temp}°`
-        // The place name is gone from the bar. It never changes on a machine
-        // that sits on one desk, and a menu bar has no room for a constant.
+        iconScale: Theme.statusIconBoostWeather
+        // Sky, place and temperature, which is what this readout has always
+        // said. It was cut to the glyph alone for a while on the argument that
+        // a menu bar carries no words; the place is the part that makes the
+        // number mean something, and everything else here is a machine reading
+        // where this one is not.
+        label: Weather.place !== "" ? `${Weather.place}, ${Weather.temp}°`
+                                    : `${Weather.temp}°`
         tooltip: {
             const lines = [`Sky       ${Theme.weatherText(Weather.code)}`];
             lines.push(Weather.feels > -999
@@ -294,10 +333,19 @@ Row {
     // Last, at the outer edge, which is where a menu bar's clock is. No glyph:
     // it is the only item here that needs no saying what it is.
     StatusItem {
-        label: Qt.formatDateTime(clock.date, "ddd HH:mm")
-        tooltip: `${Qt.formatDateTime(clock.date, "dddd, d MMMM yyyy")}
-Time      ${Qt.formatDateTime(clock.date, "HH:mm")}
-Week      ${Qt.formatDateTime(clock.date, "'W'ww")}
-Zone      ${Qt.formatDateTime(clock.date, "t")}, ${root.zoneLabel(clock.date)}`
+        id: clockItem
+
+        // Weekday, day, month, time -- the order a menu bar uses. Day before
+        // month, which is what hyprlock already does, so the two never
+        // disagree about which number is which.
+        label: Qt.formatDateTime(clock.date, "ddd d MMM  HH:mm")
+        // No tooltip. Hovering opens the month instead, which answers every
+        // question the tooltip did and several it could not.
+        tooltip: ""
+
+        CalendarPopup {
+            anchorItem: clockItem
+            anchorHovered: clockItem.hovered
+        }
     }
 }
