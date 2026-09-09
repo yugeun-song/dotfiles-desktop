@@ -73,38 +73,48 @@ will not go away is `unlock`'s job.
 
 ## The bar
 
-A menu bar, in the macOS sense: two groups and nothing in the middle.
+A menu bar, in the macOS sense: two groups and what is playing between them.
 
 ```
-left     arch badge, the focused window's application name
-right    workspaces, caps lock, input method, alarm, network, bluetooth,
+left     arch badge, the ten workspaces, the focused window's application
+centre   what is playing, in the bar's own type
+right    input method, caps lock, alarm, network, bluetooth,
          cpu, memory, battery, notifications, weather, clock
-centre   nothing -- that is where the island hangs
 ```
 
 No `File / Edit / View` after the application name. Wayland has no global menu
-protocol, so a bar can only show what an application exported over D-Bus,
-which Qt and KDE applications do and Chrome, Firefox and the terminals do not.
+protocol, so a bar can only show what an application exported over D-Bus, which
+Qt and KDE applications do and Chrome, Firefox and the terminals do not.
 
-Status items are monochrome glyphs rather than coloured chips. An accent means
-the reading wants attention -- caps lock on, a load over its ceiling, a low
-battery, unread notifications -- and nothing else takes colour.
+Status items are glyphs and short readouts, not coloured chips. Colour appears
+only past a limit -- CPU and memory at 90%, the battery at 10% -- and it is the
+one red the calendar marks Sunday with. Everything else is the foreground.
 
-Every dimension derives from one number, `Theme.scale`, which is itself
-derived from the logical height of the screen the bar is drawn on. Set
-`BAR_SCALE` to override it.
+The workspaces are the ten the current one falls in, so the row is the same
+width whatever is open. Scrolling it walks them; the indicator slides and
+stretches, faster ahead than behind.
 
-### The island
+Every dimension derives from one number, `Theme.scale`, which is derived from
+how large a logical pixel physically is on the screen the bar is drawn on --
+the panel's pixel density divided by the scale the compositor applies. Sizing
+from the logical resolution alone got a 1.5x laptop backwards. Set `BAR_SCALE`
+to override it.
 
-A surface hanging below the centre of the bar, on its own layer so the bar's
-exclusive zone stays the height of the bar. Collapsed it is album art and a
-waveform, or a bare handle with nothing playing. Hovering opens it onto two
-tabs: the player and the week under `Nook`, the StatusNotifierItem icons under
-`Tray`.
+### What hovering opens
 
-Cover art is loaded from local files only, here and on the lock screen.
-`mpris:artUrl` is chosen by the player, and for a browser that means by the
-page; fetching it would make any open tab a beacon running out of the shell.
+The chip in the centre opens the player: art, title, a draggable position bar,
+and the transport. The clock opens the month.
+
+Both are anchored popups rather than layer surfaces. A layer surface is placed
+after every other surface's exclusive zone whatever its exclusion mode, so
+nothing can be drawn over the bar; the chip is part of the bar's own window and
+only the cards float. `services/Media.qml` holds the hover state, because
+neither surface can see the other's pointer.
+
+Cover art is loaded from local files and from a short list of cover-art hosts
+over TLS, and from nowhere else. `mpris:artUrl` is chosen by the player, and
+for a browser that means by the page, so fetching it as given would make any
+open tab a beacon running out of the shell.
 
 The bar is also the notification server. Toasts stack under its right edge and
 everything is kept behind `SUPER + N`. A toast dwells five seconds, twenty at
