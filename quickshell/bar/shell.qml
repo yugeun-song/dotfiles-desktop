@@ -14,6 +14,12 @@ ShellRoot {
         Bar {}
     }
 
+    // One island, not one per screen, and for the same reason as the overlays
+    // below rather than the bar above: it follows the focused monitor. Two
+    // would both be watching the same player and the same tray, and the one on
+    // the screen you are not looking at would still be animating.
+    Island {}
+
     Launcher {}
 
     PowerMenu {}

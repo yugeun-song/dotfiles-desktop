@@ -84,7 +84,67 @@ Singleton {
     // the left one reads as too tight: there is nothing beyond it to
     // balance against.
     readonly property int edgeMarginRight: root.px(18)
-    readonly property int barHeight:   root.pillHeight + root.pillMargin * 2
+
+    // ---------------------------------------------------------------------
+    // The menu bar.
+    //
+    // 26 is the macOS menu bar at this scale: text sitting on one surface,
+    // with the height set by the text rather than by pills drawn around it.
+    // The name stays barHeight because every other surface measures from it.
+    // ---------------------------------------------------------------------
+    readonly property int barHeight:   root.px(26)
+
+    // One size, two weights. The app name is set apart by weight alone, which
+    // is what macOS does.
+    readonly property int menuBarTextSize: root.px(13)
+    // The right side is denser because a glyph carries its own padding and a
+    // word does not.
+    readonly property int menuTitleGap:  root.px(16)
+    readonly property int statusItemGap: root.px(9)
+    // A hover highlight wider than its text, so it reads as a target.
+    readonly property int menuItemPadX:  root.px(8)
+    readonly property int menuItemRadius: root.px(6)
+    // Status glyphs are smaller than the bar's old pill icons: at iconSize
+    // they crowd a 26-unit bar and read as buttons rather than as indicators.
+    readonly property int statusIconSize: root.px(16)
+
+    // The workspace dots. The active one is drawn as a bar rather than a
+    // larger dot, so it is found by shape and not by comparing sizes; the
+    // cell holds the wider measurement either way so the row never reflows.
+    readonly property int dotSize:        Math.max(3, root.px(5))
+    readonly property int dotActiveWidth: root.px(14)
+    readonly property int dotGap:         root.px(5)
+
+    // Translucent, and blurred by the compositor (hypr/config/rules.lua), so
+    // this alpha decides how much wallpaper survives the blur. Below about
+    // 0.5 the hairline stops separating the bar from a bright wallpaper.
+    readonly property color menuBarBg: Qt.rgba(root.bg.r, root.bg.g, root.bg.b, 0.62)
+    readonly property color menuBarLine: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.10)
+    readonly property color menuHover:   Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
+
+    // ---------------------------------------------------------------------
+    // The island: the surface hanging below the centre of the bar.
+    // ---------------------------------------------------------------------
+    readonly property int islandRadius: root.px(16)
+    readonly property int islandCollapsedWidth:  root.px(168)
+    readonly property int islandCollapsedHeight: root.px(22)
+    // What is left when nothing is playing: a handle, not an empty panel.
+    readonly property int islandHandleWidth:     root.px(58)
+    readonly property int islandCollapsedArt:    root.px(15)
+    readonly property int islandExpandedWidth:   root.px(468)
+    readonly property int islandExpandedHeight:  root.px(158)
+    readonly property int islandPad:  root.px(14)
+    readonly property int islandGap:  root.px(12)
+    // Pure black, not the palette background: it should disappear into the
+    // bezel the way a notch does, and any colour breaks that.
+    readonly property color islandBg: "#000000"
+    readonly property int islandArtSize: root.px(56)
+    readonly property int islandTitleSize: root.px(14)
+    readonly property int islandSubSize:   root.px(12)
+    // Opens slower than it closes: a snap open reads as a popup, and a slow
+    // close gets in the way of a pointer that has already left.
+    readonly property int islandOpenMs:  200
+    readonly property int islandCloseMs: 160
 
     readonly property int chipWidth:   root.px(27)
     readonly property int chipSpacing: root.px(3)
@@ -564,6 +624,18 @@ Singleton {
 
     function shorten(value: string, limit: int): string {
         return value.length > limit ? value.slice(0, limit - 1) + "…" : value;
+    }
+
+    // Cover art is only ever loaded from a local file.
+    //
+    // mpris:artUrl is chosen by the player, and for a browser that means by
+    // the page. An Image handed an http URL fetches it, which turns any open
+    // tab into a beacon running out of the shell and a way to reach addresses
+    // on the local network. The same refusal WindowChip made for window
+    // titles. A remote URL returns empty and the surface keeps its
+    // placeholder. hypr/scripts/lock-media.sh enforces this too.
+    function localArt(url: string): string {
+        return url && url.startsWith("file://") ? url : "";
     }
 
     // Load pills keep their own hue until the value is genuinely worth

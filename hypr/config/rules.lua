@@ -25,13 +25,19 @@ hl.window_rule({ match = { class = "^$", title = "^quickshell$" }, no_focus = tr
 -- Screen sharing selectors must never be captured by the share they are
 -- selecting for.
 hl.layer_rule({ match = { namespace = "^(quickshell:launcher|quickshell:powermenu)$" }, blur = true })
-hl.layer_rule({ match = { namespace = "^(quickshell)$" }, blur = false })
 
--- No blur on the readout. Blur is applied to the layer's rectangle, not to
--- the rounded card drawn inside it, so each corner showed a lighter square
--- poking out from behind the radius. The two overlays above cover the whole
--- screen and have no corners to give themselves away.
-hl.layer_rule({ match = { namespace = "^(quickshell:osd|quickshell:tooltip|quickshell:menu)$" }, blur = false })
+-- The menu bar, which is translucent now rather than an opaque slab. Its alpha
+-- is chosen against a blurred wash; without this a busy wallpaper reads
+-- straight through and the status glyphs lose their contrast. Safe here for
+-- the reason the readouts below are not: the bar's rectangle is exactly what
+-- it draws, full width with square corners.
+hl.layer_rule({ match = { namespace = "^(quickshell)$" }, blur = true })
+
+-- No blur on the readouts. Blur is applied to the layer's rectangle, not to
+-- the rounded card inside it, so each corner showed a lighter square poking
+-- out from behind the radius. The island is here for a second reason: it is
+-- drawn pure black so it reads as a notch, and blur takes that away.
+hl.layer_rule({ match = { namespace = "^(quickshell:osd|quickshell:tooltip|quickshell:menu|quickshell:island)$" }, blur = false })
 
 -- No idle inhibit from a fullscreen terminal; only from actual media.
 hl.window_rule({ match = { class = "^(mpv|vlc)$" }, idle_inhibit = "fullscreen" })
