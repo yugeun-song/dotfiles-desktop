@@ -73,16 +73,38 @@ will not go away is `unlock`'s job.
 
 ## The bar
 
+A menu bar, in the macOS sense: two groups and nothing in the middle.
+
 ```
-left     arch badge, workspace numbers with a sliding indicator
-centre   windows on the focused workspace, then the media pill
-right    input method, caps lock, alarm, weather, network,
-         bluetooth, battery, cpu, memory
+left     arch badge, the focused window's application name
+right    workspaces, caps lock, input method, alarm, network, bluetooth,
+         cpu, memory, battery, notifications, weather, clock
+centre   nothing -- that is where the island hangs
 ```
+
+No `File / Edit / View` after the application name. Wayland has no global menu
+protocol, so a bar can only show what an application exported over D-Bus,
+which Qt and KDE applications do and Chrome, Firefox and the terminals do not.
+
+Status items are monochrome glyphs rather than coloured chips. An accent means
+the reading wants attention -- caps lock on, a load over its ceiling, a low
+battery, unread notifications -- and nothing else takes colour.
 
 Every dimension derives from one number, `Theme.scale`, which is itself
 derived from the logical height of the screen the bar is drawn on. Set
 `BAR_SCALE` to override it.
+
+### The island
+
+A surface hanging below the centre of the bar, on its own layer so the bar's
+exclusive zone stays the height of the bar. Collapsed it is album art and a
+waveform, or a bare handle with nothing playing. Hovering opens it onto two
+tabs: the player and the week under `Nook`, the StatusNotifierItem icons under
+`Tray`.
+
+Cover art is loaded from local files only, here and on the lock screen.
+`mpris:artUrl` is chosen by the player, and for a browser that means by the
+page; fetching it would make any open tab a beacon running out of the shell.
 
 The bar is also the notification server. Toasts stack under its right edge and
 everything is kept behind `SUPER + N`. A toast dwells five seconds, twenty at
