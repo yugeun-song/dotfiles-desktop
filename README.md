@@ -16,6 +16,7 @@ bin/              commands on $PATH: bar, unlock
 fontconfig/       font chain: Inter for latin, Pretendard for Hangul
 gtk/              GTK 3 and 4 settings
 kde/              Qt and KDE colours, so file dialogs match the bar
+tuigreet/         the greeter's appearance, installed only when greetd runs it
 fcitx5/           Korean input configuration
 theme/            design notes for the colour system
 ```

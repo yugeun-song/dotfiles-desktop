@@ -1,0 +1,164 @@
+# tuigreet appearance.
+#
+# This is a file rather than flags on greetd's command line because of a defect
+# in 0.11.1: once tuigreet loads any config file it ignores every
+# background-related flag it was passed, even when the file says nothing about
+# backgrounds. The animation can only be chosen from here, so --background on
+# the greetd command line would be read, accepted, and quietly discarded.
+#
+# Every colour below is a name rather than a hex value, and that is not a
+# preference. tuigreet emits 24-bit SGR for a hex value, and the text console
+# throws it away: rgb_foreground() in drivers/tty/vt/vt.c reduces each channel
+# to one bit by comparing it against half the brightest channel, leaving three
+# bits of hue and one of intensity. #7AA2F7 arrives as bright cyan, and #7DCFFF
+# lands in the same bucket, so two different colours become one and nothing
+# reports an error. Names are emitted as indexed SGR, which the console looks
+# up in its palette and draws exactly, so what is asked for is what appears.
+#
+# The palette is the console's own sixteen colours, and this machine programs
+# them on the boot line: vt.default_red / _grn / _blu carry kitty's spaceduck
+# values, slot for slot. So a name here draws the same colour the terminal
+# draws, and the greeter and the shell are the one theme rather than two.
+#
+# The ANSI names do not describe those colours. Slot 5, which every library
+# calls magenta, holds #F2CE00; slot 3, called yellow, holds a lilac. Read the
+# hex in each comment below, not the word in front of it.
+
+[display]
+# The clock is the one thing on this screen that shows the machine is awake and
+# that its time is sane, before anyone types a password into it.
+show_time = true
+
+# Written out because the default of this one key depends on whether the table
+# it lives in exists at all. With no [display] table show_title is false; with
+# the table present but the key absent it is true. So the machine's name is on
+# this screen today only as a side effect of the line above, and deleting that
+# line would take the hostname with it without saying so. Verified with
+# --dump-config against an empty file and a file containing only "[display]".
+show_title = true
+
+# Fixed rather than left to the locale. The default is rendered through
+# chrono's format_localized, so under a Korean locale it asks for month and
+# weekday names in Hangul, and VT1 has no glyphs for them: there is no FONT= in
+# /etc/vconsole.conf, so the console uses the kernel's built-in 8x16 set. The
+# locale is en_US today and the default is ASCII, so this is not a present
+# fault; it is the one that arrives with the locale change after a reinstall.
+time_format = "%Y-%m-%d %H:%M"
+
+# Off. It shares the clock's row and costs no height, and charge state before
+# login does have some value on a machine that gets force powered off as often
+# as this one does (see the graphics hang). But it renders as a bare percentage
+# alone in the top-left corner of an otherwise empty screen, which reads as a
+# stray artefact rather than as a reading, and the same figure is on the bar a
+# second after login.
+battery = false
+
+[secret]
+# The default is "hidden", which draws nothing at all as a password is typed:
+# no mask, no cursor movement, no change in the field. That ambiguity has
+# already cost this account once. Keystrokes were not reaching hyprlock, three
+# Enters looked like three wrong passwords, and pam_faillock locked the
+# account. With no feedback there is no way to tell a dead keyboard from a
+# wrong password. The mask character stays at its default asterisk.
+mode = "characters"
+
+[user_menu]
+# Offers the accounts the system already has instead of asking for a name to be
+# typed, which is what keeps this file free of any particular username. It
+# reads them itself, so the same file works unchanged on another machine.
+#
+# It is on its own on purpose: combined with remember it hits an upstream bug
+# that creates the session twice (apognu/tuigreet issue 216).
+enabled = true
+
+[theme]
+# White for what is typed into and what asks for it, the palette's green and
+# yellow for everything else. The figure after each hex is the contrast against
+# the black container.
+#
+# Names, not hex values, and that is not a preference: tuigreet emits 24-bit
+# SGR for a hex value and the text console throws it away. rgb_foreground() in
+# drivers/tty/vt/vt.c reduces each channel to one bit, so two different colours
+# arrive as one and nothing reports an error. Names are emitted as indexed SGR,
+# which the console looks up in the palette the boot line set.
+container = "black"     # slot 0,  #000000          the box takes the ground's
+                        # own colour, so it reads as a frame and not a panel
+border    = "green"     # slot 2,  #5CCC96  10.53:1
+title     = "green"     # slot 2,  #5CCC96  10.53:1  the frame and its name are
+                        # one object and are coloured as one
+time      = "white"     # slot 15, #F0F1CE  18.18:1
+text      = "white"     # slot 15, #F0F1CE  18.18:1
+prompt    = "white"     # slot 15, #F0F1CE  18.18:1  Username: and Password:
+input     = "white"     # slot 15, #F0F1CE  18.18:1  what has been typed,
+                        # including the password mask. The label and the field
+                        # are the only place anything is entered, so they are
+                        # the brightest thing on the screen and the only white
+                        # ones: an ambiguous field has already cost this
+                        # account once, see [secret].
+action    = "green"     # slot 2,  #5CCC96  10.53:1  the bottom bar is
+                        # reference material and should not compete
+button    = "magenta"   # slot 5,  #F2CE00  13.60:1  yellow, despite the name.
+                        # The F-key badges are the only part of that bar worth
+                        # finding quickly
+greet     = "green"     # slot 2,  #5CCC96  10.53:1  inert while no greeting is
+                        # set; kept so adding one needs no colour work
+
+[background]
+kind = "matrix"
+
+[background.matrix]
+# Green body, warm head. The animation paints three fixed bands per drop: the
+# leading cell, the third of the trail behind it, then the rest. So the ramp is
+# cream into yellow into green, with green holding two thirds of every trail
+# and therefore most of the screen.
+#
+# Three stops is the ceiling, and the mid tone is yellow rather than something
+# between yellow and green because the console palette has no such colour to
+# name. Hex would reach one, and the console would quantise it back away.
+#
+# These names are the reason the console palette is set at all. Left to the
+# kernel they would be #00AA00 and #55FF55, which belong to nothing else on
+# this machine.
+#
+# An unrecognised name here discards all three and silently restores the hex
+# defaults, bringing the console's quantisation back with them, so a typo is
+# not a visible error.
+head_color   = "white"     # slot 15, #F0F1CE  18.18:1  one cell per drop
+bright_color = "magenta"   # slot 5,  #F2CE00  13.60:1  yellow, despite the
+                           # name; the third of the trail behind the head
+dim_color    = "green"     # slot 2,  #5CCC96  10.53:1  the remaining two
+                           # thirds, which is what the screen reads as
+
+[layout]
+# width is deliberately absent, which means 80. The title needs
+# 21 + len(hostname) columns before it truncates, silently, into a
+# plausible-looking wrong machine name, and the hostname this file meets after
+# a reinstall is not known here.
+#
+# The two below are the defaults, written out to pin the geometry if an
+# upstream default ever moves, and so that [layout] has a body: a width line
+# appended to the end of this file would otherwise land inside
+# [layout.widgets], where it is an unknown key and is dropped in silence.
+container_padding = 1
+prompt_padding    = 1
+
+[layout.widgets]
+# The clock stays at the top. Bottom was tried and put it on the last row,
+# immediately above the action bar, where it reads as one more thing in that
+# bar rather than as the state of the machine. The enum is default, top, bottom
+# and hidden; there is no position that puts it under the box, which is what
+# would actually have been wanted.
+time_position = "top"
+
+[layout.widgets.status_bar]
+# These hide a badge, not a key: F2 and F4 still do what they did. Removing the
+# advertisement is all a config file can do about either.
+#
+# F2 opens a menu that runs an arbitrary command in place of a session, which
+# undoes the narrowing of --sessions to /etc/greetd/sessions. F4 switches the
+# animation live and rebuilds it with build_default(), which calls
+# kind.default_spec() and therefore throws away every colour in this file and
+# drops back to the hard-coded hex ones: the 24-bit path this file exists to
+# avoid. Neither belongs advertised on a machine standing locked.
+show_command    = false
+show_background = false

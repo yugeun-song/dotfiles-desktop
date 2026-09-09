@@ -5,12 +5,14 @@
 # Files are copied, not linked, so nothing here runs until this is re-run.
 # `install.sh --check` names what is behind and exits 1.
 #
-# One file needs privileges: the font chain, which lives under /etc because it
-# belongs to the system rather than to a user. It used to be printed as two
-# commands to run afterwards, and it was never run, so the machine kept the
-# font configuration of the dotfiles this repository replaced. It is installed
-# here now, and the privilege for it is asked for once at the start rather than
-# in the middle.
+# Two files need privileges, both under /etc because they belong to the system
+# rather than to a user: the font chain, and the greeter's appearance. They
+# used to be printed as commands to run afterwards, and they were never run, so
+# the machine kept the configuration of the dotfiles this repository replaced.
+# They are installed here now, and the privilege is asked for once at the start
+# rather than in the middle.
+#
+# The greeter one is conditional: see greeter_is_tuigreet.
 #
 set -euo pipefail
 
@@ -18,6 +20,7 @@ SRC="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 FONTCONF=/etc/fonts/local.conf
+GREETERCONF=/etc/tuigreet/config.toml
 
 # Asked for before anything is written, so a password prompt never appears
 # halfway through with links already made and the rest still to do. Refreshed
@@ -37,13 +40,38 @@ case "${1:-}" in
     *)       echo "usage: ${0##*/} [--check]" >&2; exit 2 ;;
 esac
 
+# Whether this machine's greeter is the one tuigreet/config.toml describes.
+#
+# Asked rather than assumed, because that file is only correct for tuigreet:
+# its colour names, its animation and its widget layout mean nothing to any
+# other greeter, and writing it where something else reads its configuration
+# would be worse than leaving the appearance alone. greetd names the greeter it
+# runs on one line, and that line is the answer.
+#
+# Three things have to hold: greetd configured, the command it runs being
+# tuigreet, and tuigreet actually installed. Any of them missing and the file
+# is skipped with a word about why.
+greeter_is_tuigreet() {
+    [[ -r /etc/greetd/config.toml ]] || return 1
+    grep -qE '^[[:space:]]*command[[:space:]]*=.*\btuigreet\b' /etc/greetd/config.toml || return 1
+    command -v tuigreet >/dev/null 2>&1
+}
+
 acquire_sudo() {
-    if [[ -f "$FONTCONF" ]] && cmp -s "$SRC/fontconfig/local.conf" "$FONTCONF"; then
-        echo "font chain already installed at $FONTCONF"
+    local want=0
+    if [[ ! -f "$FONTCONF" ]] || ! cmp -s "$SRC/fontconfig/local.conf" "$FONTCONF"; then
+        want=1
+    fi
+    if greeter_is_tuigreet \
+       && { [[ ! -f "$GREETERCONF" ]] || ! cmp -s "$SRC/tuigreet/config.toml" "$GREETERCONF"; }; then
+        want=1
+    fi
+    if (( ! want )); then
+        echo "system files already installed"
         return 0
     fi
     if ! command -v sudo >/dev/null 2>&1; then
-        echo "sudo is not installed, so $FONTCONF cannot be written" >&2
+        echo "sudo is not installed, so the system files cannot be written" >&2
         return 0
     fi
     if sudo -v 2>/dev/null; then
@@ -51,7 +79,7 @@ acquire_sudo() {
         ( while true; do sudo -n true 2>/dev/null; sleep 50; done ) &
         SUDO_KEEPALIVE=$!
     else
-        echo "no sudo, so $FONTCONF is left alone" >&2
+        echo "no sudo, so the system files are left alone" >&2
     fi
 }
 
@@ -441,6 +469,13 @@ if (( CHECK )); then
     if [[ ! -f "$FONTCONF" ]] || ! cmp -s "$SRC/fontconfig/local.conf" "$FONTCONF"; then
         echo "DRIFT   $FONTCONF is behind $SRC/fontconfig/local.conf"; DRIFT=1
     fi
+    if greeter_is_tuigreet; then
+        if [[ ! -f "$GREETERCONF" ]] || ! cmp -s "$SRC/tuigreet/config.toml" "$GREETERCONF"; then
+            echo "DRIFT   $GREETERCONF is behind $SRC/tuigreet/config.toml"; DRIFT=1
+        fi
+    else
+        echo "skip    $GREETERCONF: this machine's greeter is not tuigreet"
+    fi
     (( DRIFT )) && { echo; echo "run ./install.sh to apply"; exit 1; }
     echo "everything installed is current"
     exit 0
@@ -465,4 +500,28 @@ else
     echo "the font chain was not installed. it is a system file:" >&2
     echo "  sudo install -Dm644 $SRC/fontconfig/local.conf $FONTCONF" >&2
     echo "  sudo fc-cache -f" >&2
+fi
+
+# The greeter's appearance. Only for tuigreet, and only when tuigreet is what
+# greetd runs; see greeter_is_tuigreet.
+if ! greeter_is_tuigreet; then
+    echo "greeter: not tuigreet, so $GREETERCONF is left alone"
+elif [[ -f "$GREETERCONF" ]] && cmp -s "$SRC/tuigreet/config.toml" "$GREETERCONF"; then
+    echo "greeter: already current"
+elif (( SUDO_OK )); then
+    if [[ -f "$GREETERCONF" ]]; then
+        sudo cp -a "$GREETERCONF" "$GREETERCONF.bak-$STAMP" \
+            && echo "kept existing greeter config at $GREETERCONF.bak-$STAMP"
+    fi
+    if sudo install -Dm644 "$SRC/tuigreet/config.toml" "$GREETERCONF"; then
+        echo "installed $GREETERCONF"
+        # Nothing to reload: greetd starts a fresh tuigreet for every login, so
+        # the next one reads this. A greeter already on screen keeps the old
+        # colours until it is replaced.
+    else
+        echo "could not write $GREETERCONF" >&2
+    fi
+else
+    echo "the greeter config was not installed. it is a system file:" >&2
+    echo "  sudo install -Dm644 $SRC/tuigreet/config.toml $GREETERCONF" >&2
 fi
