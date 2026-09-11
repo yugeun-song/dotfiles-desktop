@@ -221,11 +221,15 @@ Singleton {
 
     // The workspace numbers. A minimum width so single and double digits keep
     // the same cell and the row does not reflow crossing from 9 to 10.
-    // A tenth of the bar, which is a tenth of the screen. Not a px() value:
-    // this is a share of the room available rather than a size, so it should
-    // track the screen's width and not the text scale. On this 2560 monitor it
-    // is 256 logical pixels, which is a few dozen characters.
-    readonly property int appNameWidth: Math.round((root.referenceScreen?.width ?? 1920) * 0.10)
+    // How much of a window's name gets shown, which is a number of characters
+    // and therefore a px() value after all. A share of the screen was the rule
+    // here and it cut the laptop twice over: the panel is narrower, so a tenth
+    // of it is less, while the name inside it is set larger. The same title
+    // that fit the monitor with room to spare came within a few pixels of
+    // eliding. The share survives as a ceiling, so a genuinely narrow bar is
+    // still not mostly a window name.
+    readonly property int appNameWidth: Math.min(
+        Math.round((root.referenceScreen?.width ?? 1920) * 0.16), root.px(228))
     readonly property int workspaceTextSize: root.px(12)
     readonly property int workspaceMinWidth: root.px(19)
 
