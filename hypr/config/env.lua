@@ -36,11 +36,14 @@ hl.env("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
 -- that misses this shows a keyboard that cannot type Hangul at all.
 hl.env("XMODIFIERS", "@im=fcitx")
 hl.env("QT_IM_MODULE", "fcitx")
--- wayland, not fcitx. GTK4 speaks text-input-v3 to the compositor, and naming
--- the fcitx immodule here puts the legacy path in front of it: the two then
--- both claim the preedit and Hangul composition breaks in GTK applications
--- while working everywhere else.
-hl.env("GTK_IM_MODULE", "wayland")
+-- GTK is deliberately named nowhere. GDK already answers this per backend,
+-- reporting gtk-im-module=wayland on a Wayland display and nothing on X11, so
+-- GTK3 and GTK4 both reach text-input-v3 natively and fall back to the fcitx5
+-- immodule under XWayland. Naming a module here replaces that answer with a
+-- fixed one: fcitx puts the legacy path in front of text-input-v3 and the two
+-- then both claim the preedit, and wayland makes GTK3 load im-wayland.so on an
+-- X11 display, where im_module_init dereferences a NULL wl_display and kills
+-- every XWayland GTK client that focuses a text field.
 hl.env("SDL_IM_MODULE", "fcitx")
 hl.env("GLFW_IM_MODULE", "ibus")
 -- For anything that reads neither the toolkit variables nor XMODIFIERS, which
