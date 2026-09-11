@@ -188,6 +188,15 @@ Scope {
 
             color: "transparent"
             focusable: true
+
+            // The same reason the launcher and the notification centre give:
+            // a surface anchored to all four edges is handed an exclusive zone
+            // of zero, and zero means "place me clear of what is already
+            // reserved". So the compositor pushed this one down by the height
+            // of the bar and took the same height off it, which centred the
+            // card against the wrong rectangle and cost the bottom row of the
+            // table. It was missing here alone.
+            exclusionMode: ExclusionMode.Ignore
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
             WlrLayershell.namespace: "quickshell:cheatsheet"
