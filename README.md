@@ -97,9 +97,11 @@ stretches, faster ahead than behind.
 
 Every dimension derives from one number, `Theme.scale`, which is derived from
 how large a logical pixel physically is on the screen the bar is drawn on --
-the panel's pixel density divided by the scale the compositor applies. Sizing
-from the logical resolution alone got a 1.5x laptop backwards. Set `BAR_SCALE`
-to override it.
+the millimetres the panel reports over the logical pixels across it, so the
+compositor's scale is already inside the answer and must not be applied again.
+Sizing from the logical resolution alone got a 1.5x laptop backwards, and so
+did multiplying that density by `devicePixelRatio`, which Qt rounds up to the
+next integer. Set `BAR_SCALE` to override it.
 
 ### What hovering opens
 

@@ -57,25 +57,47 @@ Singleton {
     // physically two thirds the size and the bar needed to grow.
     readonly property real referenceLogicalMm: 0.235   // 2560x1440 at 27 inches
 
+    // physicalPixelDensity is already counted in logical pixels, not physical
+    // ones: Qt measures the logical geometry the compositor hands it against
+    // the millimetres the EDID reports, so on the laptop it is 1920/302mm and
+    // not 2880/302mm. The compositor's scale is therefore already inside it and
+    // the reciprocal is the whole answer.
+    //
+    // It was multiplied by devicePixelRatio for a while, which applied that
+    // scale a second time and turned the correction upside down: the laptop
+    // measured 0.31mm against the monitor's 0.23 and was told to shrink, so the
+    // bar came out 30 units where the monitor got 37 and the comment above
+    // described the opposite of what the code did. devicePixelRatio is the
+    // wrong number to reach for in any case -- Qt rounds a fractional scale up
+    // to the next integer, and reports 2 for this panel's 1.5.
     readonly property real logicalMm: {
-        const s = root.referenceScreen;
-        const density = s?.physicalPixelDensity ?? 0;   // physical px per mm
+        const density = root.referenceScreen?.physicalPixelDensity ?? 0;   // logical px per mm
         if (!density)
             return root.referenceLogicalMm;
-        return (s.devicePixelRatio > 0 ? s.devicePixelRatio : 1) / density;
+        return 1 / density;
     }
 
     // Two corrections, both deliberately partial.
     //
     // Density: a logical pixel two thirds the size wants two thirds more of
-    // them, but a 14-inch screen is also read from closer than a 27-inch one,
-    // and correcting in full makes a laptop bar that looks enormous. The
-    // square root splits the difference, which lands the laptop about 15%
-    // larger than the monitor rather than 50%.
+    // them, but a 14-inch panel is also read from closer than a 27-inch one,
+    // and the second effect very nearly cancels the first. Correcting in full
+    // gave the laptop a bar half again the monitor's; the square root still
+    // gave it 42 units against the monitor's 37, on the smaller of the two
+    // screens, which read as oversized. A tenth lands it at 36, and 36 is the
+    // size both were looked at to choose.
+    //
+    // What a light touch costs is that the compositor's scale stops being
+    // invisible. At the square root the same panel gave nearly the same
+    // physical bar whether it ran at 1.5 or at 2; here the two differ by about
+    // a fifth. That is a trade worth making on a machine whose scale is set
+    // once in monitor_settings.lua and not touched again.
     //
     // Resolution: what is left of the old rule, weakened, so that a genuinely
     // short panel still gets a slightly shorter bar.
-    readonly property real densityFactor: Math.pow(root.referenceLogicalMm / root.logicalMm, 0.5)
+    readonly property real densityExponent: 0.10
+    readonly property real densityFactor:
+        Math.pow(root.referenceLogicalMm / root.logicalMm, root.densityExponent)
 
     readonly property real autoScale: {
         const height = root.referenceScreen?.height ?? root.referenceHeight;
