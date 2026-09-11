@@ -72,6 +72,8 @@ PanelWindow {
         // The two that never change width come first, so the one that does
         // cannot move them.
         Row {
+            id: leftGroup
+
             anchors.left: parent.left
             anchors.leftMargin: Theme.edgeMargin
             anchors.verticalCenter: parent.verticalCenter
@@ -93,12 +95,27 @@ PanelWindow {
         // What is playing, in the middle of the bar. Centred on the screen
         // rather than between the two groups, so it does not move when either
         // of them changes width.
+        //
+        // Still centred on the screen; only how wide it may grow is answered
+        // from the groups. Because the centre is the screen's and not the
+        // groups', the room is twice the distance from it to whichever group
+        // reaches further in -- the room between the two is not symmetric about
+        // that centre, and a chip given all of it would run under the nearer
+        // one. Reading their widths cannot loop back: neither group is laid out
+        // against the chip.
         MediaChip {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter
+
+            room: Math.max(0, parent.width
+                              - 2 * Math.max(Theme.edgeMargin + leftGroup.width,
+                                             Theme.edgeMarginRight + statusGroup.width)
+                              - 2 * Theme.groupGap)
         }
 
         StatusItems {
+            id: statusGroup
+
             anchors.right: parent.right
             anchors.rightMargin: Theme.edgeMarginRight
             anchors.verticalCenter: parent.verticalCenter

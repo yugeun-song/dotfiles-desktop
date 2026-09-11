@@ -103,6 +103,12 @@ Sizing from the logical resolution alone got a 1.5x laptop backwards, and so
 did multiplying that density by `devicePixelRatio`, which Qt rounds up to the
 next integer. Set `BAR_SCALE` to override it.
 
+The centre chip is the one thing measured against the groups rather than the
+screen: it stays centred on the screen, but a 1920 panel does not leave a fifth
+of its width free between status items drawn at laptop scale, so the chip is
+capped by the room they are not using and drops its meter, then its title,
+before it will overlap them.
+
 ### What hovering opens
 
 The chip in the centre opens the player: art, title, a draggable position bar,
