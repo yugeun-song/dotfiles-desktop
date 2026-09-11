@@ -133,14 +133,21 @@ Scope {
                     readonly property int chrome: Theme.centrePad + header.height
                                                 + Theme.px(10) + Theme.centrePad
 
-                    // How much of the screen this may take. It is a panel over
-                    // work in progress, not a page, so it gets a share of what
-                    // the bar leaves rather than all of it. 45% is high enough
-                    // to hold six or seven notifications on this screen and low
-                    // enough that the window behind it is still the thing being
-                    // used.
-                    readonly property int limit:
-                        Math.round((parent.height - Theme.barHeight) * 0.45)
+                    // How many notifications this is meant to show at once.
+                    // Counted in rows rather than taken as a share of the
+                    // screen, because a row is drawn at the bar's scale and a
+                    // share of the screen is not: on the laptop panel the same
+                    // 45% that holds five rows on the monitor held three, so
+                    // the denser screen showed less of the same history.
+                    readonly property int rowTarget: 5
+
+                    // It is a panel over work in progress, not a page, so the
+                    // share of the screen is still here -- as a ceiling now
+                    // rather than as the rule, for the screen short enough that
+                    // five rows would be the whole of it.
+                    readonly property int limit: Math.min(
+                        Math.round((parent.height - Theme.barHeight) * 0.62),
+                        card.chrome + card.rowTarget * card.rowUnit - list.spacing)
 
                     // One row plus the gap under it, at the shape most of them
                     // take: the sender and timestamp line, a summary, one
