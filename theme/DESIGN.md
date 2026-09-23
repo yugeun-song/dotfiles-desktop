@@ -12,7 +12,7 @@ References name files and symbols, not line numbers: those move.
 
 | Then | Now |
 |---|---|
-| Bar was a row of coloured pills | Bar is mostly monochrome (`bg`/`fg`/`muted`); accents survive in OSDs, menus, alerts |
+| Bar was a row of coloured pills | Bar is mostly monochrome (`bg`/`fg`/`muted`); accents survive in menus and alerts; the OSD is monochrome too |
 | Hyprland active border `#5ccc96` (green) | `rgba(ecf0c1ff)`, the bar's `fg`, on purpose (`hypr/config/general.lua`). Pinned-window rule is `fg` + `muted` (`hypr/config/rules.lua`) |
 | hyprlock carried 13 palette literals | hyprlock is black and white only (`rgba(ffffff..)`, `rgba(000000..)`); not a palette consumer |
 | Five `Qt.rgba(1, 1, 1, a)` literals | Four: `PopupMenu.qml` (2), `Launcher.qml`, `PowerMenu.qml`. `Osd.qml`'s is gone |
@@ -80,9 +80,9 @@ and GTK (`error/warning/success_color_breeze`).
 | Role | Job | spaceduck | Source today |
 |---|---|---|---|
 | `accent` | Selection, focus ring, links, launcher row | `#7aa2f7` | `Theme.accentIndigo` |
-| `positive` | OK: connected, charging, check marks, volume OSD | `#9ece6a` | `Theme.accentGreen` |
-| `caution` | Take note: brightness OSD, Hangul state | `#e0af68` | `Theme.accentAmber` |
-| `critical` | Wrong: alerts, caps lock, critical toasts, logout, auth fail | `#f7768e` | `Theme.accentRed`, `Theme.capsLock`, `caps-lock.zsh` |
+| `positive` | OK: connected, charging, check marks | `#9ece6a` | `Theme.accentGreen` |
+| `caution` | Take note: Hangul state | `#e0af68` | `Theme.accentAmber` |
+| `critical` | Wrong: alerts, caps lock, critical toasts, logout, auth fail | `#f7768e` | `Theme.accentRed`, `caps-lock.zsh` |
 
 **Distinction (6).** No meaning; only look different side by side. Which tone
 goes where is a rule and stays in `Theme.qml`.
@@ -109,8 +109,8 @@ mix is this theme's identity; reconciling it is a new theme, not an edit.
 |---|---|---|
 | `red`, `green`, `blue` | `#e33400`, `#5ccc96`, `#00a3cc` | Unreferenced. Delete |
 | `purple` | `#b3a1e6` | Unreferenced; merges into `tone1` |
-| `capsLock` | `#f7768e` | Unreferenced duplicate of `accentRed`, hand-synced with `caps-lock.zsh`. Becomes `critical` + `ink`; the generator writes the file zsh reads, ending the cross-repo sync |
-| `accentTeal` | `#73daca` | Volume OSD, a PowerMenu item. Becomes `positive` |
+| `capsLock` | `#f7768e` | Removed from `Theme.qml`: it was an unreferenced duplicate of `accentRed`. `caps-lock.zsh` still hard-codes the same value; the generator's `critical` + `ink` replaces that cross-repo sync |
+| `accentTeal` | `#73daca` | A PowerMenu item. Becomes `positive` |
 | `accentSaffron` | `#e4bf58` | Added after the survey; `StatusItem` active fill. Role undecided (`caution` is closest) |
 | `accentJade`, `accentAzure`, `accentViolet`, `accentRose` | `#4dcbaa`, `#6a9ae7`, `#a076db`, `#d5729d` | Added after the survey; unreferenced |
 | `accentAlert` | `#ef3963` | Unreferenced; kept in `Theme.qml` as a record |
@@ -390,7 +390,11 @@ a real file and applies a kdeglobals→GTK mapping we do not control.
 rules are written. It declares 78 `*_breeze` names and also references three it
 never declares: `theme_header_background_breeze`,
 `theme_header_background_backdrop_breeze`, `unfocused_insensitive_color_breeze`.
-The template defines all 81. GTK4 Breeze-Dark uses the same set, so one file
+The template defines all 81. kde-gtk-config's generated `colors.css` sets both
+`theme_header_background*` names to the button background, hence `surface`
+below. Neither Breeze nor kde-gtk-config defines
+`unfocused_insensitive_color_breeze`; mapping it to `dim` is this design's
+choice, matching `insensitive_fg_color`. GTK4 Breeze-Dark uses the same set, so one file
 serves both. Core mapping:
 
 | Breeze name | Role |
@@ -597,7 +601,7 @@ and `bg` diverge, and the `fg`-derived faces follow.
 | GTK theme (Breeze-Dark) | Its 4465-line CSS carries sizes, radii, shadows as rules; only colour names are swapped |
 | Icon theme (`breeze-dark`) | Colour baked into thousands of SVG/PNG files |
 | Breeze GTK asset PNGs | Pre-rendered in Breeze blue `#3daee9` (checkbox marks, arrows) |
-| p10k prompt | 223 of 233 colour assignments in `dotfiles-terminal/zsh/p10k.zsh` are 256-colour indexes; 16-255 are fixed. Only the caps-lock segment is bound, because it already had to agree with the bar |
+| p10k prompt | 223 of 233 colour assignments in `dotfiles-terminal/zsh/p10k.zsh` are 256-colour indexes; 16-255 are fixed. Only the caps-lock segment is bound, because it shares the bar's `accentRed` |
 | hyprpicker | Draws no colours of its own, no config |
 | Fonts | Tied across `kde/kdeglobals` `font=` lines, `fontconfig/local.conf`, `gsettings-apply.sh`; left hand-written as an extension point |
 
