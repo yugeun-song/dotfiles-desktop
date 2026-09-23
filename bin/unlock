@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Break out of a stuck lock screen: run from a text console, then return with Ctrl+Alt+F1 (greetd vt).
+# Break out of a stuck lock screen: run from a text console, then return to
+# the graphical session's VT (printed at the end).
 #
 # ext-session-lock keeps the session locked when the locker dies, so killing
 # hyprlock alone leaves a blank locked screen. End hyprlock, then clear the
@@ -34,9 +35,17 @@ if pidof hyprlock >/dev/null 2>&1; then
     pidof hyprlock >/dev/null 2>&1 && pkill -9 -x hyprlock
 fi
 
+back="switch back to the graphical session's VT"
+for s in $(loginctl list-sessions --no-legend 2>/dev/null | awk -v u="$(id -un)" '$3 == u {print $1}'); do
+    [[ "$(loginctl show-session "$s" -p Type --value 2>/dev/null)" == wayland ]] || continue
+    vt=$(loginctl show-session "$s" -p VTNr --value 2>/dev/null)
+    [[ "$vt" =~ ^[1-9][0-9]*$ ]] && back="switch back with Ctrl+Alt+F$vt"
+    break
+done
+
 out=$(hyprctl eval 'hl.clear_crashed_lockscreen()' 2>&1)
 case "$out" in
-    ok*)                    echo "unlock: cleared, switch back with Ctrl+Alt+F2" ;;
+    ok*)                    echo "unlock: cleared, $back" ;;
     *"is not locked"*)      echo "unlock: the session was not locked" ;;
     *"refusing"*)           echo "unlock: a lock client is still alive; run this again" >&2; exit 1 ;;
     *)                      echo "unlock: $out" >&2; exit 1 ;;
