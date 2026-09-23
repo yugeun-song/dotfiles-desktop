@@ -1,12 +1,6 @@
 #!/usr/bin/env bash
-#
-# Picks an entry out of the clipboard history and puts it back on the
-# clipboard.
-#
-# cliphist stores the history; it has no picker of its own. fuzzel is the
-# nicer one when it is there, and a terminal running fzf works everywhere
-# else, which matters because fuzzel arrives as somebody else's dependency
-# and can leave the same way.
+# Clipboard history picker. cliphist has no UI: fuzzel if present (it is only
+# a transitive dependency), else fzf in a terminal.
 set -uo pipefail
 
 if ! command -v cliphist >/dev/null 2>&1; then

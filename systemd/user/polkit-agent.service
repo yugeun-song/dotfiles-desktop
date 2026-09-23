@@ -1,7 +1,5 @@
 # dotfiles-desktop
-# Somewhere for anything asking for privileges to ask. Which agent is present
-# depends on what the machine has; the script picks the first one it finds,
-# and a machine with none simply cannot authenticate, which it reports.
+# Polkit agent; the script runs the first one installed and reports if none.
 [Unit]
 Description=Polkit authentication agent
 PartOf=hyprland-session.target
@@ -13,9 +11,7 @@ StartLimitBurst=5
 [Service]
 Type=simple
 ExecStart=%E/hypr/scripts/polkit-agent.sh
-# always, not on-failure, for the reason in bar.service: systemd counts SIGTERM
-# and exit 0 as success, so on-failure left a unit killed by a stray pkill
-# inactive with nothing failed. The start limit above still bounds it.
+# always, not on-failure: see bar.service.
 Restart=always
 RestartSec=1
 Slice=session.slice

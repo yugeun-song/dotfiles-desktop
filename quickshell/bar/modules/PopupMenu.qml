@@ -4,10 +4,9 @@ import QtQuick
 import Quickshell
 import qs.services
 
-// A small menu anchored to a bar item. Entries are plain objects:
-//   { label, icon, detail, checked, action }
-// `action` is a function called on click. The menu closes first, so an
-// action that opens a window does not fight the menu for focus.
+// Menu anchored to a bar item. Entries: { label, icon, detail, checked,
+// action } or { separator: true }. The menu closes before `action` runs, so a
+// window it opens does not fight the menu for focus.
 Item {
     id: root
 
@@ -19,15 +18,9 @@ Item {
     readonly property int edge: Theme.barAtBottom ? Edges.Top : Edges.Bottom
     readonly property int clearance: Theme.pillMargin + Theme.tooltipGap
 
-    // Measured by a hidden row of Text items rather than by reusing one
-    // TextMetrics in a loop. Assigning metrics.text inside a binding that
-    // also reads metrics.width makes the binding re-enter itself, which Qt
-    // reports as "Binding loop detected for property contentWidth".
-    //
-    // Only the wrapper is hidden. A Column leaves invisible children out of
-    // its implicit size, so the Text items have to stay visible to count.
-    // Nothing imposes a width on them, so each sizes to its own text and no
-    // cycle is possible.
+    // Measured with hidden Text items, not a TextMetrics reused in a loop (that
+    // is a binding loop). Only the wrapper is hidden: a Column ignores
+    // invisible children in its implicit size.
     readonly property int menuWidth: Math.max(root.minimumWidth, Math.ceil(measure.implicitWidth) + Theme.iconSize + Theme.px(56))
 
     Item {
@@ -79,10 +72,8 @@ Item {
         sourceComponent: PopupWindow {
             id: popup
 
-            // grabFocus lets the compositor take the menu away on a click
-            // outside it. Following that back into `open` is what keeps the
-            // pill's tooltip from staying suppressed and the next click from
-            // being spent on toggling `open` back to false.
+            // grabFocus lets the compositor close this on an outside click;
+            // sync that back into `open` or the next click only resets it.
             visible: root.open
             onVisibleChanged: {
                 if (!popup.visible)
@@ -145,14 +136,8 @@ Item {
                                 color: Qt.rgba(1, 1, 1, 0.1)
                             }
 
-                            // Three items on one line, anchored rather than
-                            // laid out in a Row. The name used to sit in a Row
-                            // that spanned the full width while the command
-                            // hung off the right edge as a sibling, so a long
-                            // name simply ran underneath it. Here the command
-                            // owns the right, the icon owns the left, and the
-                            // name gets whatever is left over and is cut short
-                            // when that is not enough.
+                            // Anchored, not a Row: icon left, detail right, the
+                            // label elides in between instead of running under.
                             Text {
                                 id: rowIcon
 

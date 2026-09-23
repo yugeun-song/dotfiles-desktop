@@ -35,16 +35,7 @@ Scope {
         return list.filter(e => e && !e.noDisplay);
     }
 
-    // Ranked. The order is what makes a two or three letter query useful:
-    // a prefix on the name beats initials, initials beat a match buried in a
-    // command line, and a scattered subsequence is the last resort.
-    //
-    // Keywords carry the names nobody writes on the tile. "vscode" appears
-    // nowhere in "Visual Studio Code" or in "code %F"; it is on the Keywords
-    // line, which is what that line is for. The window class is here for the
-    // same reason: it is the name the window itself answers to.
-    // A .desktop field is not always the type the documentation gives:
-    // keywords arrives as a list, which has no toLowerCase.
+    // .desktop fields are not always strings: keywords arrives as a list.
     function lower(value) {
         if (value === undefined || value === null)
             return "";
@@ -62,9 +53,7 @@ Scope {
         return out;
     }
 
-    // Every letter of the needle in order, not necessarily adjacent. This is
-    // what turns "vscd" into Visual Studio Code, and it is last because on
-    // its own it matches far too much.
+    // Needle letters in order, not necessarily adjacent ("vscd").
     function subsequence(haystack, needle) {
         let at = 0;
         for (const ch of needle) {
@@ -76,6 +65,9 @@ Scope {
         return true;
     }
 
+    // Lower is better: name prefix, initials, name substring, then
+    // genericName/keywords/startupClass, then comment/exec, then subsequence.
+    // Keywords catch names absent from the tile ("vscode").
     function score(entry, needle) {
         const name = root.lower(entry.name);
         if (name.startsWith(needle))
@@ -85,12 +77,8 @@ Scope {
         if (name.includes(needle))
             return 2;
 
-        // Everything below searches text that was written for a person to
-        // read, not to be searched. One or two letters match almost every
-        // description on the machine, and the result is the whole menu in
-        // alphabetical order, which looks exactly like a search that is not
-        // running. So the wider fields only open up once the query is long
-        // enough to mean something.
+        // Wider fields only for longer queries; a letter or two matches
+        // nearly every description.
         if (needle.length < 2)
             return -1;
 
@@ -136,23 +124,15 @@ Scope {
         return scored.slice(0, root.maxRows).map(x => x.entry);
     }
 
-    // A .desktop Exec line carries field codes the spec says to strip when
-    // there is nothing to pass. Leaving them in launches an editor with a
-    // literal "%U" as its filename.
     function launch(entry) {
         root.close();
         if (!entry) {
             console.warn("[launcher] nothing selected");
             return;
         }
-        // entry.command comes with the field codes already stripped, but
-        // quickshell builds it without a terminal even for an entry that asks
-        // for one, so btop and friends would start with no tty and exit.
-        //
-        // Apps.open rather than Quickshell.execDetached: everything started
-        // here has to survive `bar --restart`, which is the documented way to
-        // pick up a QML change and used to close whatever the launcher had
-        // opened along with the bar.
+        // entry.command has field codes stripped but ignores Terminal=true,
+        // so wrap it in kitty ourselves. Apps.open so it survives
+        // `bar --restart`.
         const argv = entry.command;
         if (Array.isArray(argv) && argv.length > 0) {
             if (entry.runInTerminal === true)
@@ -161,6 +141,7 @@ Scope {
                 Apps.open(argv);
             return;
         }
+        // Fallback: strip field codes, or an editor opens a literal "%U".
         const exec = (entry.execString ?? "").replace(/%[fFuUdDnNickvm]/g, "").trim();
         if (exec === "") {
             console.warn("[launcher] no usable Exec line for", entry.name);
@@ -176,10 +157,8 @@ Scope {
         active: root.open
 
         PanelWindow {
-            // Without this the overlay lands on whichever screen quickshell
-            // happens to pick, which on this machine is the parked laptop
-            // panel at x=5000 while it is disabled: the window opens
-            // correctly and is simply nowhere you can see it.
+            // Follow the focused monitor; quickshell's default pick can be a
+            // disabled, parked output.
             screen: {
                 const name = Hyprland.focusedMonitor?.name ?? "";
                 const match = Quickshell.screens.find(s => s.name === name);
@@ -257,12 +236,8 @@ Scope {
                             selectedTextColor: Theme.ink
                             clip: true
 
-                            // Seeded once, never bound. Binding text to
-                            // root.query while this handler writes root.query
-                            // makes the two chase each other: the field kept
-                            // showing every letter typed while the query stuck
-                            // on the first one, so the results were always a
-                            // search for "v" under a box reading "vscode".
+                            // Seeded once, never bound: a binding to root.query
+                            // plus onTextChanged writing it back loop and stick.
                             Component.onCompleted: input.text = root.query
 
                             onTextChanged: {
@@ -297,10 +272,7 @@ Scope {
                                 case Qt.Key_Up:
                                     step(-1);
                                     break;
-                                // Ctrl+N and Ctrl+P, so the list can be walked
-                                // without leaving the home row. Without the
-                                // modifier they are ordinary letters and have
-                                // to reach the field.
+                                // Ctrl+N/P step; plain N/P fall through to the field.
                                 case Qt.Key_N:
                                     if (!ctrl)
                                         return;
@@ -329,9 +301,7 @@ Scope {
                         color: Qt.rgba(1, 1, 1, 0.08)
                     }
 
-                    // Named rather than left blank: an empty panel looks like
-                    // a bug, and the two reasons it can be empty need
-                    // different responses from the person looking at it.
+                    // Say why the list is empty; the two causes differ.
                     Text {
                         width: parent.width
                         visible: root.matches.length === 0
@@ -383,8 +353,7 @@ Scope {
 
                                     Text {
                                         text: row.modelData.name ?? ""
-                                        // Read out of a .desktop file, which anything that can write to a
-                                        // data dir controls.
+                                        // Untrusted .desktop content.
                                         textFormat: Text.PlainText
                                         font.family: Theme.uiFont
                                         font.pixelSize: Theme.px(13)

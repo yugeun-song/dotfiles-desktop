@@ -6,12 +6,9 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.services
 
-// The keys as they are pressed, drawn along the bottom of the screen.
-//
-// Every chord is two items rather than one: a slot that holds the width and
-// collapses, and a cap that moves. Animating one item's scale inside a Row
-// leaves its gap behind, so the row would jump when a chord aged out instead of
-// closing up behind it.
+// Pressed keys along the bottom of the screen. Each chord is a slot that owns
+// the width (and collapses) plus a cap that animates: scaling an item inside a
+// Row leaves its gap behind, so the row would jump.
 Scope {
     id: root
 
@@ -28,9 +25,7 @@ Scope {
         PanelWindow {
             color: "transparent"
 
-            // Never focusable, and never in the way. The overlay exists to show
-            // what is being typed somewhere else; taking the keyboard would stop
-            // the very thing it is drawing.
+            // Must never take the keyboard from the window being typed into.
             focusable: false
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.layer: WlrLayer.Overlay
@@ -42,10 +37,8 @@ Scope {
                 right: true
             }
 
-            // The surface reaches the bottom of the screen, and the row is held
-            // off it by restHeight instead. A margin here would put the window
-            // edge under the row, and a cap sliding out would be cut off at
-            // that edge rather than leaving the screen.
+            // No bottom margin (restHeight spaces the row instead), so a cap
+            // falling out leaves the screen rather than clipping at the edge.
             margins {
                 bottom: 0
             }
@@ -54,8 +47,7 @@ Scope {
 
             implicitHeight: Math.max(1, row.implicitHeight + restHeight + Theme.px(24))
 
-            // Nothing to show yet, and nothing to say about it: an empty strip
-            // at the foot of the screen reads as a rendering fault.
+            // Show the feed's failure instead of an empty strip.
             Text {
                 anchors.centerIn: parent
                 visible: KeyFeed.chords.length === 0 && KeyFeed.failure !== ""
@@ -74,13 +66,9 @@ Scope {
                 spacing: Theme.px(10)
 
                 Repeater {
-                    // Same reason as NotificationToasts: push() assigns a whole
-                    // new array, and a Repeater over a plain array rebuilds every
-                    // delegate when that happens. Each cap still on screen
-                    // replayed its three-stage entrance and restarted its dwell,
-                    // so during sustained typing nothing aged out on schedule.
-                    // ScriptModel diffs the list and touches only the row that
-                    // changed.
+                    // ScriptModel diffs by id. A plain array would rebuild every
+                    // delegate on each push, replaying entrances and restarting
+                    // dwell timers so nothing aged out while typing.
                     model: ScriptModel {
                         values: KeyFeed.chords
                         objectProp: "id"
@@ -96,24 +84,16 @@ Scope {
                         width: implicitWidth
                         height: implicitHeight
 
-                        // One way out, taken by the dwell timer. Width collapses
-                        // after the cap has faded so the row closes into the gap
-                        // rather than snapping across it.
+                        // Run by the dwell timer: cap falls out, then the slot
+                        // width collapses so the row closes smoothly.
                         SequentialAnimation {
                             id: leaving
 
-                            // Falls out of the strip rather than dissolving in
-                            // place. A key that fades reads as the drawing
-                            // failing; one that drops reads as the press being
-                            // over, and it leaves in the direction the eye is
-                            // already prepared for by the entrance.
                             ParallelAnimation {
                                 NumberAnimation {
                                     target: chord
                                     property: "y"
-                                    // Past the bottom of the screen, not part
-                                    // of the way: the cap leaves rather than
-                                    // stopping somewhere and vanishing.
+                                    // Fully past the screen edge.
                                     to: chord.height + Theme.px(80)
                                     duration: 340
                                     easing.type: Easing.InCubic
@@ -158,9 +138,7 @@ Scope {
                             spacing: Theme.px(4)
                             transformOrigin: Item.Bottom
 
-                            // Arrives with a small overshoot. A cap that simply
-                            // appears reads as a redraw; one that lands reads as
-                            // a key having been struck.
+                            // Small overshoot so it reads as a keystrike.
                             Component.onCompleted: entering.start()
 
                             SequentialAnimation {

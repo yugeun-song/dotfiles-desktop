@@ -8,28 +8,15 @@
 #   capture.sh region-edit   drag a rectangle, then open swappy to annotate
 #   capture.sh color         pick a colour, hex on the clipboard
 #
-# Every shot goes to the clipboard and to a file, because which one you wanted
-# is only obvious afterwards.
-#
-# Two guards that matter more than they look:
-#
-#   one selection at a time   slurp draws a fullscreen overlay that grabs the
-#                             pointer. Starting a second leaves both waiting
-#                             for a drag that can only reach one of them, and
-#                             the desktop appears frozen.
-#
-#   tools checked up front    a missing grim means an empty file and a silent
-#                             clipboard, which looks exactly like a shot of a
-#                             black screen.
+# Lines 4-10 are the usage text printed by the `*)` case below.
+# Every shot goes to both clipboard and file. Only one slurp/hyprpicker at a
+# time: two overlays both grab the pointer and the desktop looks frozen.
 # ============================================================================
 
 set -uo pipefail
 
-# The selection overlay, in the desktop's own colours. Overridable so a screen
-# recording or a light background can be handled without editing this file.
-#
-# slurp's dimensions readout takes the border colour and a font size of 14 that
-# is compiled into render.c, so the size cannot be set from here at all.
+# Overlay colours, overridable from the environment. slurp draws its size
+# readout in the border colour at a font size compiled into render.c.
 SLURP_FONT="${SLURP_FONT:-CaskaydiaCove Nerd Font}"
 SLURP_BORDER="${SLURP_BORDER:-#ECF0C1ff}"   # foreground, and the readout
 SLURP_FILL="${SLURP_FILL:-#7AA2F733}"       # accent at low alpha, inside the box
@@ -40,9 +27,8 @@ DEST="$(xdg-user-dir PICTURES 2>/dev/null || echo "$HOME/Pictures")/Screenshots"
 STAMP="$(date '+%Y-%m-%d_%H.%M.%S')"
 FILE="$DEST/Screenshot_$STAMP.png"
 
-# notify-send blocks on a D-Bus reply. When no notification server owns
-# org.freedesktop.Notifications it waits forever, and the screenshot waits
-# with it. Detached and time limited, so a missing server costs nothing.
+# Detached and time-limited: notify-send blocks forever without a notification
+# server.
 notify() {
     command -v notify-send >/dev/null 2>&1 || return 0
     ( timeout 2 notify-send "$@" >/dev/null 2>&1 & ) 2>/dev/null
@@ -55,16 +41,8 @@ die() {
     exit 1
 }
 
-# A capture that produced nothing, or produced something that is not an image,
-# is a failure even when grim said otherwise.
-# Cut the chosen region out of a frame that was captured earlier.
-#
-# slurp speaks logical coordinates and grim writes physical pixels. They are the
-# same number only while every output is at scale 1. Rather than assume that,
-# the ratio is measured: the width of the frame that came back over the width of
-# the logical layout the compositor reports. On this machine that is 1 and the
-# arithmetic is a no-op; on a scaled output it is what stops the crop landing in
-# the wrong place.
+# slurp gives logical coordinates, grim physical pixels. The ratio is measured
+# (frame width / logical layout width) instead of assuming scale 1.
 crop_from_frame() {
     local frame="$1" geom="$2" out="$3"
     local x y w h ratio lw
@@ -77,7 +55,6 @@ crop_from_frame() {
 
     [[ "$x$y$w$h" =~ ^[0-9-]+$ ]] || die "could not read the selection: $geom"
 
-    # The logical width of everything, from the compositor rather than guessed.
     lw=$(hyprctl -j monitors 2>/dev/null \
          | jq -r '[.[] | (.x + (.width / .scale))] | max // empty') || lw=""
     if [[ -n "$lw" && "$lw" != "null" ]]; then
@@ -87,8 +64,7 @@ crop_from_frame() {
         ratio=1
     fi
 
-    # Scaled, then rounded outward, so a half pixel never trims the edge off
-    # what was asked for.
+    # Rounded outward so a half pixel never trims the selection.
     read -r x y w h < <(awk -v r="$ratio" -v x="$x" -v y="$y" -v w="$w" -v h="$h" \
         'BEGIN { printf "%d %d %d %d", int(x*r), int(y*r), int(w*r + 0.5), int(h*r + 0.5) }')
 
@@ -120,10 +96,8 @@ finish() {
     local f="$1"
     [[ -s "$f" ]] || die "produced an empty file"
     if command -v wl-copy >/dev/null 2>&1; then
-        # wl-copy stays resident as the clipboard owner and inherits stdio.
-        # Left attached it holds the pipe open, so anything reading this
-        # script's output waits for the clipboard to be replaced, which
-        # looks exactly like a hung screenshot.
+        # wl-copy stays resident as clipboard owner; with stdio attached it
+        # holds this script's output pipe open and callers hang.
         wl-copy --type image/png < "$f" >/dev/null 2>&1 &
         disown 2>/dev/null || true
     fi
@@ -146,29 +120,9 @@ case "$MODE" in
     region|region-edit)
         need grim slurp magick
         selection_running && die "a selection is already in progress"
-        # -c sets the border AND the dimensions text: render.c draws the
-        # "1920x1080" readout with the border colour and a font size of 14 that
-        # is compiled in, so the colour is the only half of its appearance that
-        # can be chosen from here. #ECF0C1 is the desktop foreground, which is
-        # the lightest thing in the palette and the one that stays readable over
-        # whatever happens to be on screen behind the selection.
-        #
-        # -b dims everything outside the selection rather than leaving it at
-        # slurp's default, so the rectangle reads as the subject.
-        #
-        # The screen is photographed BEFORE slurp draws anything. slurp exits
-        # once it has printed the geometry, but exiting is not the compositor
-        # having destroyed its surface and repainted underneath, and grim reads
-        # through wlr-screencopy: read in that window and the shot contains
-        # slurp's own rectangle, a border just inside the region over a
-        # translucent fill. Every region capture taken here has one; it went
-        # unnoticed only because the border was drawn in a dark colour on a dark
-        # desktop. Waiting for the overlay to go is a guess about how long a
-        # frame takes. Taking the picture first is not: the overlay cannot
-        # appear in an image that was captured before it existed.
-        #
-        # It also freezes the screen for the duration of the drag, so an
-        # animation no longer moves between choosing the region and getting it.
+        # The frame is captured BEFORE slurp runs, then cropped. Capturing
+        # after slurp exits races the compositor removing its overlay, and the
+        # shot contains slurp's own rectangle.
         frame=$(mktemp --suffix=.png) || die "could not make a temporary file"
         trap 'rm -f "$frame"' EXIT
         grim "$frame" || die "grim failed"
@@ -183,10 +137,7 @@ case "$MODE" in
             2>/dev/null) || exit 0     # cancelled with Esc, not an error
         [[ -n "$geom" ]] || exit 0
         crop_from_frame "$frame" "$geom" "$FILE"
-        # grim can exit 0 and leave nothing behind: two zero-byte files are in
-        # the screenshots directory from exactly that. A file that is not a PNG
-        # is not a screenshot, and finding out here is better than finding out
-        # when it is opened.
+        # grim can exit 0 and write an empty file.
         verify_image "$FILE"
         if [[ "$MODE" == "region-edit" ]]; then
             need swappy

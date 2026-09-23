@@ -1,14 +1,8 @@
 #!/usr/bin/env bash
-#
-# Runs the first candidate whose program is installed.
+# Runs the first candidate whose first word is installed; notifies if none is.
 #
 #   launch.sh 'dolphin' 'nautilus' 'thunar'
 #   launch.sh 'code' 'codium' 'kitty -e nvim'
-#
-# A candidate is a whole command line; only its first word is tested. This
-# exists so a keybinding on a machine that lacks the preferred program falls
-# through to one it has, and a machine that has none of them says so instead
-# of leaving a key that quietly does nothing.
 set -uo pipefail
 
 if [[ $# -eq 0 ]]; then

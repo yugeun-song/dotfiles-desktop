@@ -5,17 +5,11 @@ import Quickshell
 import Quickshell.Hyprland
 import qs.services
 
-// The focused window's application name.
+// The focused window's application name, last in the left group because it is
+// the only part whose width changes.
 //
-// No File/Edit/View after it. Wayland has no global menu protocol, so a bar
-// can only show what an application exported over D-Bus -- which Qt and KDE
-// applications do and Chrome, Firefox, kitty and foot do not. Menus for a
-// third of what is running is worse than never promising them.
-//
-// Last in the left group, after the badge and the workspaces: those two are
-// fixed points and this is the one thing there whose width is decided by
-// whatever has focus. Ahead of them it moved both every time focus crossed
-// between a short name and a long one.
+// No global menu: Wayland has no protocol for one, and only Qt/KDE apps export
+// menus over D-Bus (Chrome, Firefox, kitty and foot do not).
 Item {
     id: root
 
@@ -27,19 +21,13 @@ Item {
     readonly property string appId: root.focusedWindow?.wayland?.appId
                                     ?? root.focusedWindow?.lastIpcObject?.class ?? ""
     readonly property var entry: root.appId !== "" ? DesktopEntries.heuristicLookup(root.appId) : null
-    // The desktop entry's name is the one a person would recognise -- "Visual
-    // Studio Code" rather than "code-oss". The class is the fallback, and an
-    // empty workspace has neither.
+    // Desktop entry name ("Visual Studio Code", not "code-oss"), else the class.
     readonly property string appName: root.entry?.name ?? root.appId
     readonly property string windowTitle: root.focusedWindow?.title ?? ""
 
-    // Capped, not fixed. Nothing follows it on the bar, so a short name needs
-    // no padding out; a very long one still has to stop before it reaches the
-    // island in the centre.
-    // A pixel of slack past the measurement. TextMetrics reports the ink and
-    // Text needs a shade more than that to lay the same string out, so a width
-    // of exactly ceil(metrics.width) put the elide one pixel short and "kitty"
-    // came out as "kit...".
+    // Capped, not fixed, so a long name stops before the centred media chip.
+    // +2 px: Text needs slightly more than TextMetrics reports, or "kitty"
+    // elides to "kit...".
     implicitWidth: Math.min(Math.ceil(metrics.width) + Theme.px(2), Theme.appNameWidth)
     implicitHeight: Theme.barHeight
 
@@ -52,8 +40,7 @@ Item {
         text: root.appName
     }
 
-    // Set apart by weight alone, which is what macOS does and why it reads as
-    // a title rather than as a heading.
+    // Set apart by weight alone.
     Text {
         id: name
 
@@ -65,8 +52,7 @@ Item {
         visible: root.appName !== ""
         elide: Text.ElideRight
         text: root.appName
-        // The class and the desktop entry name are both strings this machine
-        // did not choose. Nothing here ever wanted markup.
+        // Foreign strings; never interpret as markup.
         textFormat: Text.PlainText
         font.family: Theme.uiFont
         font.pixelSize: Theme.menuBarTextSize

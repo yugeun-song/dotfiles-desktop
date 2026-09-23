@@ -22,11 +22,8 @@ STATE_FILE="$STATE_DIR/alarms.json"
 
 mkdir -p "$STATE_DIR"
 
-# write() is atomic in its final mv and in nothing before it, and the bar runs
-# reap on a timer while a person may be adding an alarm by hand. Two of those
-# overlapping read the same file and the second mv wins, losing whatever the
-# first wrote. The lock covers the seed below as well, since that is a write
-# too. The timeout is so a stuck holder cannot pin the bar's reap forever.
+# Serialise read-modify-write: the bar's reap and a manual add would otherwise
+# race and lose one write. Covers the seed below too; timeout avoids a stuck holder.
 exec 9>"$STATE_DIR/.alarms.lock"
 flock -w 5 9 || { echo "alarm.sh: could not lock $STATE_DIR/.alarms.lock" >&2; exit 1; }
 
@@ -36,14 +33,13 @@ write() {
     local tmp
     tmp=$(mktemp "$STATE_DIR/.alarms.XXXXXX") || return 1
     cat > "$tmp" || { rm -f "$tmp"; return 1; }
-    # A jq that fails upstream sends nothing down the pipe, and an empty file
-    # moved into place would erase every alarm without a word.
+    # A failed upstream jq yields empty input; never move that into place.
     jq -e . "$tmp" > /dev/null 2>&1 || { rm -f "$tmp"; return 1; }
     mv "$tmp" "$STATE_FILE"
 }
 
 next_epoch_for() {
-    # Interpret HH:MM as the next occurrence, today if it is still ahead.
+    # Next occurrence of HH:MM, today if still ahead.
     local at="$1" today epoch now
     now=$(date +%s)
     today=$(date -d "today $at" +%s 2>/dev/null) || return 1
@@ -77,8 +73,7 @@ cmd_add() {
        --argjson epoch "$epoch" --argjson daily "$daily" \
        '. + [{id: $id, at: $at, label: $label, epoch: $epoch, daily: $daily, fired: false}]' \
        "$STATE_FILE" | write || { echo "could not save alarm" >&2; return 1; }
-    # Day before month, the order every human-readable date in this repository
-    # uses. File names keep the sortable one; this is not a file name.
+    # Day before month, the repo's human-readable date order.
     echo "added $at ($(date -d "@$epoch" '+%-d %b %Y %H:%M')) $label"
 }
 
@@ -118,8 +113,7 @@ cmd_remove() {
     local id="${1:-}"
     [[ -n "$id" ]] || { echo "usage: alarm.sh remove <id>" >&2; return 2; }
 
-    # The id is matched by prefix, so a short one can cover the whole list.
-    # Refuse anything but a single hit rather than deleting more than asked.
+    # Prefix match: refuse unless exactly one alarm matches.
     local matches
     matches=$(jq --arg id "$id" '[.[] | select(.id | startswith($id))] | length' "$STATE_FILE") || return 1
     if [[ "$matches" == 0 ]]; then
@@ -136,12 +130,9 @@ cmd_remove() {
     echo "removed $id"
 }
 
-# Called by the bar after an alarm rings: repeating alarms roll forward, one-off
-# alarms are dropped. A daily alarm missed while the machine was off is days
-# behind, so it has to be stepped until it lands ahead of now, not by one day.
-# Only a one-off inside the bar's 300s ring window is dropped: one that went
-# past while the bar was down never rang, and deleting it here would lose it
-# with nothing shown to the user.
+# Run by the bar: daily alarms step forward until past now (may be days behind).
+# One-offs are dropped only inside the bar's 300 s ring window; older ones never
+# rang, so they are kept and marked fired instead of silently lost.
 cmd_reap() {
     local now
     now=$(date +%s)

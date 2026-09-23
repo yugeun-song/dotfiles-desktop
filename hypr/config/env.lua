@@ -1,78 +1,47 @@
--- Environment for the session.
---
--- These are set here rather than in a shell profile because they have to
--- reach every client the compositor spawns, including ones started from a
--- launcher that never sources a shell rc.
+-- Session environment. Set here, not in a shell profile, so it reaches
+-- clients started from a launcher that never sources a shell rc.
+-- Keep /etc/environment free of these: two sources for one variable drift.
 
--- Toolkits need to be told to use Wayland; several still default to X11 and
--- then run through XWayland with worse input and scaling.
+-- Several toolkits still default to X11 and then run under XWayland.
 hl.env("QT_QPA_PLATFORM", "wayland;xcb")
 
--- Moved here from /etc/environment, which was dropped because it set
--- QT_QPA_PLATFORM and LIBVA_DRIVER_NAME a second time and two sources for one
--- variable disagree the first time either changes.
---
--- QT_QUICK_BACKEND used to be set to "vulkan" here. It is not the name Qt 6
--- reads: the scenegraph takes QSG_RHI_BACKEND, and Qt logged the unknown value
--- and fell back at every launch, so the bar has always drawn on the default
--- OpenGL RHI. The line is gone rather than renamed. Vulkan on a machine whose
--- principal fault is xe driver hangs is a real behaviour change and belongs in
--- a deliberate experiment, not in a typo correction.
+-- Qt 6 reads QSG_RHI_BACKEND, not QT_QUICK_BACKEND; the bar runs on the
+-- default OpenGL RHI. Switching to Vulkan on xe is a deliberate experiment.
 hl.env("GDK_BACKEND", "wayland,x11")
 hl.env("SDL_VIDEODRIVER", "wayland")
 hl.env("CLUTTER_BACKEND", "wayland")
 hl.env("MOZ_ENABLE_WAYLAND", "1")
 
--- Qt applications otherwise draw their own title bars on top of the
--- compositor's decorations.
--- Without a platform theme plugin Qt never reads kdeglobals, and a KDE
--- application draws in its own default light palette on a dark desktop.
--- kde selects KDEPlasmaPlatformTheme6.so from plasma-integration.
+-- "kde" loads KDEPlasmaPlatformTheme6.so (plasma-integration); without a
+-- platform theme Qt never reads kdeglobals and KDE apps draw light.
+-- Disabling window decoration stops Qt drawing its own title bars.
 hl.env("QT_QPA_PLATFORMTHEME", "kde")
 hl.env("QT_WAYLAND_DISABLE_WINDOWDECORATION", "1")
 hl.env("QT_AUTO_SCREEN_SCALE_FACTOR", "1")
 
--- Korean input. fcitx5 has to be named for each toolkit separately; a client
--- that misses this shows a keyboard that cannot type Hangul at all.
+-- fcitx5 must be named per toolkit, or that toolkit cannot type Hangul.
 hl.env("XMODIFIERS", "@im=fcitx")
 hl.env("QT_IM_MODULE", "fcitx")
--- GTK is deliberately named nowhere. GDK already answers this per backend,
--- reporting gtk-im-module=wayland on a Wayland display and nothing on X11, so
--- GTK3 and GTK4 both reach text-input-v3 natively and fall back to the fcitx5
--- immodule under XWayland. Naming a module here replaces that answer with a
--- fixed one: fcitx puts the legacy path in front of text-input-v3 and the two
--- then both claim the preedit, and wayland makes GTK3 load im-wayland.so on an
--- X11 display, where im_module_init dereferences a NULL wl_display and kills
--- every XWayland GTK client that focuses a text field.
+-- GTK_IM_MODULE stays unset on purpose. GDK picks per backend: text-input-v3
+-- on Wayland, the fcitx5 immodule under XWayland. =fcitx makes both paths
+-- claim the preedit; =wayland makes GTK3 load im-wayland.so on X11, where it
+-- dereferences a NULL wl_display and crashes on the first text field.
 hl.env("SDL_IM_MODULE", "fcitx")
 hl.env("GLFW_IM_MODULE", "ibus")
--- For anything that reads neither the toolkit variables nor XMODIFIERS, which
--- in practice means games and a long tail of single-purpose programs.
+-- For programs that read neither toolkit variables nor XMODIFIERS (games etc.).
 hl.env("INPUT_METHOD", "fcitx")
 
 hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
 hl.env("XDG_SESSION_TYPE", "wayland")
 hl.env("XDG_SESSION_DESKTOP", "Hyprland")
 
--- The pointer, named once.
---
--- Four consumers read this and each reads it from somewhere different:
--- XCURSOR_* for XCursor clients, HYPRCURSOR_* for Hyprland's own format, and
--- gsettings for GTK. Naming the size in three files is how the pointer ends up
--- changing size as it crosses from a GTK window to anything else, which is
--- exactly what it was doing. scripts/gsettings-apply.sh reads these variables
--- out of the environment rather than carrying its own copy, so this block is
--- the only place either value is written.
---
--- HYPRCURSOR_THEME names an XCursor theme on purpose. No hyprcursor-format
--- theme is installed, so Hyprland does not find one and falls back to XCursor,
--- which is the same set of images the other clients are using. Leaving it unset
--- would have Hyprland pick its own default instead, and the pointer would
--- differ between the compositor's own surfaces and everything else.
--- Built by theme/cursor/tint-cursors.py from Oxygen_White in the bar's sky
--- blue, into ~/.local/share/icons. If that build ever fails the name resolves
--- to nothing and every client falls back to its own default, which is visible
--- immediately rather than silently wrong.
+-- The pointer, named only here. XCursor clients, Hyprland and GTK (via
+-- scripts/gsettings-apply.sh, which reads these variables) must agree or the
+-- pointer changes size between windows.
+-- HYPRCURSOR_THEME names an XCursor theme on purpose: no hyprcursor theme is
+-- installed, so Hyprland falls back to the same XCursor images.
+-- Spaceduck-Sky is built by theme/cursor/tint-cursors.py into
+-- ~/.local/share/icons; if missing, every client visibly uses its default.
 local cursor_theme = "Spaceduck-Sky"
 local cursor_size = "24"
 
@@ -81,7 +50,6 @@ hl.env("XCURSOR_SIZE", cursor_size)
 hl.env("HYPRCURSOR_THEME", cursor_theme)
 hl.env("HYPRCURSOR_SIZE", cursor_size)
 
--- Intel Lunar Lake uses the xe driver, not i915. VA-API lives in a different
--- package there and the wrong driver name silently disables hardware video
--- decoding rather than erroring.
+-- Lunar Lake runs xe; a wrong VA-API driver name silently disables hardware
+-- decoding instead of erroring.
 hl.env("LIBVA_DRIVER_NAME", "iHD")

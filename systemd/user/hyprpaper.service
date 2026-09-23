@@ -1,13 +1,8 @@
 # dotfiles-desktop
-# The wallpaper. A separate program rather than something the bar draws, so a
-# bar restart leaves the desktop looking like a desktop.
-#
-# hyprpaper comes up with no image: its configuration cannot name the file,
-# for the reason written in hypr/hyprpaper.conf. wallpaper.sh --reload hands
-# it the path over IPC, waiting for the socket first. It runs after every
-# start, so a hyprpaper that crashed and came back gets its image back too,
-# which the old autostart only did on the next login. The leading dash keeps
-# a missing image from failing the unit.
+# The wallpaper, separate from the bar so a bar restart keeps it. hyprpaper.conf
+# cannot name the image (see there); wallpaper.sh --reload sends it over IPC
+# after every start, crash restarts included. The dash keeps a missing image
+# from failing the unit.
 [Unit]
 Description=Wallpaper
 PartOf=hyprland-session.target
@@ -22,9 +17,7 @@ Type=simple
 WorkingDirectory=%h
 ExecStart=/usr/bin/hyprpaper
 ExecStartPost=-%E/hypr/scripts/wallpaper.sh --reload
-# always, not on-failure, for the reason in bar.service: systemd counts SIGTERM
-# and exit 0 as success, so on-failure left a unit killed by a stray pkill
-# inactive with nothing failed. The start limit above still bounds it.
+# always, not on-failure: see bar.service.
 Restart=always
 RestartSec=1
 Slice=session.slice

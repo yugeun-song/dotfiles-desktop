@@ -5,13 +5,8 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Pipewire
 
-// Output volume of the default sink.
-//
-// This service only observes. The volume keys are bound in Hyprland straight
-// to wpctl, so they keep working when this shell is not running, and every
-// change lands here regardless of who made it: a key press, a mixer, or an
-// application setting its own stream. Driving the keys from here instead
-// would mean volume changed by anything else passed unremarked.
+// Default sink volume. Observe-only for the keys: Hyprland binds them to wpctl
+// so they work without the shell, and changes from any source show up here.
 Singleton {
     id: root
 
@@ -19,19 +14,13 @@ Singleton {
     readonly property var audio: root.sink?.audio ?? null
     readonly property bool present: root.audio !== null
 
-    // The audio object exists before Pipewire has said anything about it, and
-    // until the node is bound `volume` reads its default of 0. present answers
-    // "is there a sink", known answers "has it been read"; folding the two
-    // published a confident 0% for a sink that was playing at 24, and that
-    // fake reading was what consumed `seeded` below, so the first real value
-    // arrived looking like a change and raised the OSD that flag exists to
-    // prevent. Reproduced against live Pipewire: -1, then 0, then 24.
+    // present = a sink exists; known = it has been read. Until the node binds,
+    // volume reads a default 0, which would consume `seeded` and make the
+    // first real value raise the OSD.
     readonly property bool known: root.present && (root.sink?.ready ?? false)
 
-    // -1 for unread, and never a number that was not measured. Clamped here
-    // rather than at the display: Pipewire allows a node past 1.0 -- the
-    // volume keys pass -l 1.0, an external mixer need not -- and Osd.qml caps
-    // whatever it is handed, so 150 reached the screen as a settled 100.
+    // -1 until read. Capped at 100 although Pipewire allows more; the keys
+    // limit to 1.0 but a mixer need not.
     readonly property int percent: root.known
                                    ? Math.min(100, Math.round(root.audio.volume * 100))
                                    : -1
@@ -39,14 +28,12 @@ Singleton {
 
     signal changed
 
-    // Binding to a node's audio properties requires holding the object;
-    // without the tracker `volume` and `muted` never leave their defaults.
+    // Without the tracker, volume and muted never leave their defaults.
     PwObjectTracker {
         objects: root.sink ? [root.sink] : []
     }
 
-    // The first value that arrives is the current state, not a change. Firing
-    // then would greet every login with an OSD nobody asked for.
+    // The first value is state, not a change; no OSD at login.
     property bool seeded: false
 
     onPercentChanged: {
@@ -59,10 +46,7 @@ Singleton {
         root.changed();
     }
 
-    // known as well as seeded. muted has no sentinel to fall back on, so it
-    // reads false while the sink is unbound; firing on it alone showed the OSD
-    // with a percentage nobody had read yet. Nothing is lost by waiting: the
-    // reading lands a moment later and raises the OSD with the number in it.
+    // muted has no sentinel and reads false while unbound, so also require known.
     onMutedChanged: {
         if (root.seeded && root.known)
             root.changed();
@@ -70,12 +54,9 @@ Singleton {
 
     // ---- writing --------------------------------------------------------
     //
-    // Used by the bar, not by the keys. Pipewire is the fast path; wpctl is
-    // there for the case where there is nothing here to write to -- no sink at
-    // all, which is what a machine with a bare ALSA setup looks like, or a
-    // sink whose properties have not arrived. The second case is why these
-    // branch on `known` rather than on the object: an unbound node hands back
-    // its defaults, so toggleMute would invert a `muted` nobody had read.
+    // For the bar, not the keys. Writes go through Pipewire once known, else
+    // wpctl: an unbound node returns defaults, so toggleMute would invert an
+    // unread value.
 
     function set(value) {
         const clamped = Math.max(0, Math.min(100, Math.round(value)));

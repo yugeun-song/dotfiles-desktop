@@ -1,18 +1,12 @@
--- Hyprland configuration. Standalone: nothing outside this directory is
--- required, and no other dotfile project needs to be installed first.
---
--- Load order matters. Environment before anything that spawns a process,
--- settings before rules, rules before binds, and the shell last so it starts
--- against a configured compositor rather than a half-built one.
+-- Hyprland configuration; needs nothing outside this directory.
+-- Load order matters: env before anything spawns, and execs last so the
+-- session starts against a fully configured compositor.
 
 HOME = os.getenv("HOME")
 
--- The directory this file lives in, not a fixed path. `require` resolves
--- against ~/.config/hypr regardless of where the config actually is, so a
--- copy under a repository silently loaded nothing at all and still reported
--- "config ok". Locating ourselves and reading by absolute path removes that
--- whole class of failure, and makes `--verify-config` meaningful from any
--- checkout.
+-- This file's own directory, not a fixed path: `require` always resolves
+-- against ~/.config/hypr, so a checkout elsewhere would load nothing and still
+-- pass --verify-config.
 CONFIG = debug.getinfo(1, "S").source:sub(2):match("(.*)/[^/]*$") or (HOME .. "/.config/hypr")
 
 function file_exists(path)
@@ -24,8 +18,7 @@ function file_exists(path)
     return true
 end
 
--- Runs a config module and names the broken one. Without this a typo in any
--- file produces one opaque error and no hint which file it came from.
+-- Names the failing module; otherwise a typo gives one opaque error.
 function load_module(name)
     local path = CONFIG .. "/config/" .. name .. ".lua"
     if not file_exists(path) then
@@ -42,9 +35,7 @@ function load_module(name)
         return
     end
 
-    -- The notification is for a running session, where there is no terminal
-    -- to read. The re-raise is for --verify-config, which is the only thing
-    -- that catches a broken module before it is loaded for real.
+    -- Notify for a running session (no terminal); re-raise for --verify-config.
     pcall(function()
         hl.notification.create({
             text = "hypr: config/" .. name .. ".lua failed: " .. tostring(runtime_err),
@@ -56,15 +47,13 @@ end
 
 load_module("env")
 load_module("general")
--- After general, which registers the catch-all monitor rule, and before
--- keybinds, which binds the lid switch to functions this module defines.
+-- After general (catch-all monitor rule), before keybinds (lid binds use it).
 load_module("monitors")
 load_module("rules")
 load_module("keybinds")
 load_module("execs")
 
--- A machine-specific file that never travels with the repository: monitor
--- pins, a work VPN bind, anything local.
+-- Machine-local overrides; lives only in the installed config, never in the repo.
 local override = CONFIG .. "/local.lua"
 if file_exists(override) then
     local chunk = loadfile(override)

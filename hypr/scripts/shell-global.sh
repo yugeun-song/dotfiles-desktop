@@ -1,16 +1,8 @@
 #!/usr/bin/env bash
+# Fires a quickshell global shortcut:  shell-global.sh launcher|powerMenu
 #
-# Fires one of the shell's global shortcuts.
-#
-#   shell-global.sh launcher
-#   shell-global.sh powerMenu
-#
-# Binding hl.dsp.global directly works from a press binding, but a release
-# binding delivers the shortcut as a release, and a toggle written to act on
-# the press edge then sees nothing at all. Going through hyprctl produces a
-# full press and release, which is what "Super on its own opens the launcher"
-# needs: that binding has to be on release, because a press binding carrying
-# SUPER fires at the start of every Super combination.
+# A release bind (needed for bare Super) delivers hl.dsp.global as a release
+# only, which press-edge toggles ignore; hyprctl dispatch sends press+release.
 set -uo pipefail
 
 name="${1:-}"

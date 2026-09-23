@@ -1,12 +1,8 @@
 import QtQuick
 import qs.services
 
-// The system glyph at the far left, in the place and with the role the Apple
-// menu has: the things you do to the machine rather than to a document.
-//
-// Two entries, which are the two that are always available and always mean the
-// same thing. Everything else about power lives in the power menu, which has a
-// key of its own and does not need a second door here.
+// The system glyph at the far left, in the Apple menu's role. Only lock and
+// sign out; the rest of power lives in the power menu, which has its own key.
 Item {
     id: root
 
@@ -37,11 +33,9 @@ Item {
         verticalAlignment: Text.AlignVCenter
         text: String.fromCodePoint(0xF08C7)
         font.family: Theme.iconFont
-        // The glyph's ink fills 0.64 of its em box, so this lands the drawing
-        // at the height asked for rather than at the size set.
+        // The glyph's ink fills 0.64 of its em box.
         font.pixelSize: Math.round(Theme.menuBarTextSize / 0.64)
-        // Monochrome, like every other glyph on this bar. It was sky blue on
-        // the old bar, which in a menu bar reads as a status light.
+        // Monochrome: a coloured badge reads as a status light.
         color: Theme.fg
     }
 
@@ -63,20 +57,17 @@ Item {
             {
                 label: "Lock",
                 icon: Theme.iconLock,
-                // Through loginctl, never hyprlock directly. The reason is in
-                // PowerMenu.qml: lock.sh turns the input method off first, and
-                // hyprlock binds no text-input protocol, so a lock that skips
-                // that step eats every keystroke composed in Hangul and walks
-                // the account into pam_faillock.
+                // Never hyprlock directly: lock.sh must switch the IME off
+                // first, or Hangul-composed keystrokes trip pam_faillock.
+                // See PowerMenu.qml and hypr/scripts/lock.sh.
                 detail: "loginctl lock-session",
                 action: () => Apps.open(["loginctl", "lock-session"])
             },
             {
                 label: "Sign out",
                 icon: Theme.iconLogout,
-                // In Lua syntax: hyprctl wraps what follows "dispatch" as
-                // hl.dispatch(<that>), and a bare "exit" evaluates to nil and
-                // is refused with no message reaching here.
+                // Lua call syntax: hyprctl wraps it in hl.dispatch(...); a bare
+                // "exit" evaluates to nil and is refused silently.
                 detail: "end the session",
                 action: () => Apps.open(["hyprctl", "dispatch", "hl.dsp.exit()"])
             }

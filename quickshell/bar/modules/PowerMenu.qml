@@ -7,13 +7,9 @@ import Quickshell.Io
 import Quickshell.Hyprland
 import qs.services
 
-// A session dialog in the shape Ctrl+Alt+Del gives you on Windows: lock,
-// sign out, sleep, restart, shut down.
-//
-// Every entry is checked against the system before it is offered. Showing a
-// Lock button on a machine without a locker installed would be worse than not
-// showing it, because the failure arrives only after the click, by which time
-// the screen is expected to already be locked.
+// Session dialog: lock, sign out, sleep, restart, shut down. An entry is
+// offered only if its binary exists; a Lock that fails after the click is
+// worse than none.
 Scope {
     id: root
 
@@ -33,14 +29,9 @@ Scope {
             label: "Lock",
             icon: Theme.iconLock,
             accent: Theme.accentIndigo,
-            // Not hyprlock directly. Every other way of locking this machine
-            // goes loginctl -> hypridle's lock_cmd -> hypr/scripts/lock.sh,
-            // and that script turns the input method off first. hyprlock reads
-            // wl_keyboard and binds no text-input protocol, so with fcitx5 in
-            // Hangul the keys are composed somewhere it never sees: the field
-            // stays empty, three Enters look like three wrong passwords, and
-            // pam_faillock locks the account. Calling hyprlock from here
-            // skipped that and made this button the one way to hit it.
+            // Not hyprlock directly: loginctl -> hypridle lock_cmd -> lock.sh,
+            // which turns fcitx5 off first. hyprlock binds no text-input, so in
+            // Hangul mode keys never reach it and pam_faillock trips.
             command: ["loginctl", "lock-session"],
             probe: "hyprlock"
         },
@@ -49,10 +40,8 @@ Scope {
             label: "Sign out",
             icon: Theme.iconLogout,
             accent: Theme.accentSky,
-            // In Lua syntax. hyprctl wraps whatever follows "dispatch" as
-            // hl.dispatch(<that>), so a bare "exit" is a valid Lua expression
-            // that evaluates to nil and is refused. The failure is silent from
-            // here: the menu closes and the session stays.
+            // Lua syntax: hyprctl wraps this as hl.dispatch(<arg>), so a bare
+            // "exit" evaluates to nil and is silently refused.
             command: ["hyprctl", "dispatch", "hl.dsp.exit()"],
             probe: "hyprctl"
         },
@@ -61,20 +50,11 @@ Scope {
             label: "Sleep",
             icon: Theme.iconSleep,
             accent: Theme.accentTeal,
-            // Locks here rather than trusting hypridle's before_sleep_cmd to do
-            // it. That command is the only thing standing between Sleep and a
-            // machine that wakes unlocked, and hypridle died twice in one boot.
-            // lock.sh holds hyprlock in the foreground, so it is detached and
-            // waited on; if the lock never appears the session is not suspended.
-            //
-            // Through app-scope.sh, and here the cgroup it escapes is a
-            // security question: setsid alone stays in bar.service's group, so
-            // quickshell being restarted while this lock was up would have
-            // taken the lock screen with it and left the session unlocked.
-            // Every other route to the lock runs from hypridle's unit.
-            // Backgrounded, because lock.sh does not return while hyprlock is
-            // up. setsid stays as the fallback if the wrapper is missing --
-            // worse containment beats no lock at all.
+            // Locks itself instead of relying on hypridle's before_sleep_cmd,
+            // and suspends only once hyprlock is up. app-scope.sh moves the lock
+            // out of bar.service's cgroup, so restarting the bar cannot kill it;
+            // setsid is the weaker fallback. Backgrounded: lock.sh blocks while
+            // hyprlock runs.
             command: ["sh", "-c",
                 "l=\"$HOME/.config/hypr/scripts/lock.sh\"; " +
                 "s=\"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar/scripts/app-scope.sh\"; " +
@@ -103,8 +83,7 @@ Scope {
         }
     ]
 
-    // Which of the above are actually usable here. Populated once at startup
-    // rather than per open, so the dialog never waits on a process.
+    // Probed once at startup so opening never waits on a process.
     property var available: ({})
 
     Component.onCompleted: probe.running = true
@@ -139,10 +118,7 @@ Scope {
         action.running = true;
     }
 
-    // The probe says the binary exists, which is not the same as the action
-    // being allowed: polkit can refuse a suspend, and hyprlock exits non-zero
-    // when the session is already locked. Detaching the command threw that
-    // away, so a refused Lock closed the dialog and left nothing behind.
+    // Not detached, so a refusal (e.g. polkit denying suspend) is logged.
     Process {
         id: action
 
@@ -160,10 +136,8 @@ Scope {
         PanelWindow {
             id: overlay
 
-            // Without this the overlay lands on whichever screen quickshell
-            // happens to pick, which on this machine is the parked laptop
-            // panel at x=5000 while it is disabled: the window opens
-            // correctly and is simply nowhere you can see it.
+            // Pinned to the focused screen: quickshell's default pick can be a
+            // disabled, parked output.
             screen: {
                 const name = Hyprland.focusedMonitor?.name ?? "";
                 const match = Quickshell.screens.find(s => s.name === name);
@@ -194,8 +168,7 @@ Scope {
                 }
             }
 
-            // The dialog itself swallows clicks so the backdrop handler above
-            // does not close it when a button is missed by a pixel.
+            // Swallows clicks so a near miss does not hit the backdrop.
             Rectangle {
                 id: dialog
 
@@ -336,10 +309,7 @@ Scope {
     GlobalShortcut {
         name: "powerMenu"
         description: "Session dialog: lock, sign out, sleep, restart, shut down"
-        // pressed is a property, so onPressed fires on the change to true and
-        // again on the change back to false. Toggling in both directions
-        // opens and closes in one keypress, which looks exactly like a
-        // keybinding that does nothing.
+        // onPressed fires on both edges of `pressed`; toggle on press only.
 
         onPressed: {
 

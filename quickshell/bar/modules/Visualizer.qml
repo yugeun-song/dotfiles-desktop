@@ -6,10 +6,7 @@ Rectangle {
 
     property color barColor: Theme.ink
 
-    // The well's height, settable because this is drawn on two surfaces of
-    // very different sizes: a pill, which it was written for, and the island's
-    // collapsed tab, which is smaller than a pill and had the well filling it
-    // edge to edge with nothing left as margin.
+    // Settable: drawn both in the bar's media chip and on the player card.
     property int wellHeight: Theme.pillHeight - Theme.px(7)
 
     readonly property int barWidth: Theme.vizBarWidth
@@ -21,10 +18,8 @@ Rectangle {
     implicitHeight: root.wellHeight
     radius: Theme.px(5)
 
-    // A well behind the bars, so they read as their own element rather than as
-    // marks floating on whatever is under them. Wanted on the bar, where the
-    // meter sits among words; not on the player card, where it is the only
-    // thing in its corner and the well would be a box around nothing.
+    // A backing well so the bars read as one element among the bar's words;
+    // off on the player card, where it would box nothing.
     property bool showWell: true
 
     color: root.showWell ? Qt.rgba(root.barColor.r, root.barColor.g, root.barColor.b, 0.22)
@@ -51,12 +46,9 @@ Rectangle {
                 anchors.verticalCenter: parent.verticalCenter
                 opacity: 0.65 + bar.level * 0.35
 
-                // No Behavior on height. cava delivers 30 frames a second and a
-                // 70 ms animation between them is never finished before the next
-                // one starts, so every bar stays permanently in transit and the
-                // whole bar repaints at the monitor's rate instead of the feed's.
-                // The glide it was providing comes from cava's own smoothing now,
-                // which costs no extra frames: noise_reduction in cava.conf.
+                // No Behavior on height: at cava's 30 fps an animation never
+                // settles and forces repaints at the monitor rate. Smoothing
+                // comes from noise_reduction in cava.conf instead.
             }
         }
     }

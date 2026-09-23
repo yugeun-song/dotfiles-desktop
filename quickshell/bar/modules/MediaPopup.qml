@@ -4,21 +4,18 @@ import QtQuick
 import Quickshell
 import qs.services
 
-// The player, opened by hovering the chip in the bar.
+// The player card, opened by hovering the media chip.
 //
-// A PopupWindow anchored to the chip rather than a layer surface of its own.
-// A layer surface is placed after other surfaces' exclusive zones whatever its
-// exclusion mode -- measured, not assumed -- so one could never be put where
-// this needs to be. A popup is anchored to an item instead, which is exactly
-// the relationship this has to the chip.
+// A PopupWindow anchored to the chip, not a layer surface: a layer surface is
+// placed after other exclusive zones regardless of exclusion mode (measured),
+// so it could not sit flush against the bar.
 Item {
     id: root
 
     property Item anchorItem: root.parent
 
     readonly property int edge: Theme.barAtBottom ? Edges.Top : Edges.Bottom
-    // The popup hangs from the bar's edge with no gap: it should read as the
-    // bar opening rather than as a card floating under it.
+    // No gap: reads as the bar opening, not a floating card.
     readonly property int clearance: 0
 
     Loader {
@@ -48,8 +45,7 @@ Item {
                 implicitWidth: Theme.mediaCardWidth
                 implicitHeight: player.implicitHeight + Theme.popupPad * 2
                 radius: Theme.surfaceRadius
-                // The bar's own colours. A card the bar opened that is a
-                // different dark reads as a separate window sitting under it.
+                // The bar's colours, or it reads as a separate window.
                 color: Theme.surfaceBg
                 border.width: Theme.surfaceBorder
                 border.color: Theme.surfaceLine

@@ -1,19 +1,9 @@
--- Key bindings.
---
--- Three conventions run through this file.
---
--- Vim keys and arrow keys are always bound together. Muscle memory does not
--- transfer between machines, and a binding that only works one way is a
--- binding you have to think about.
---
--- Anything that opens a program goes through a script with a list of
--- candidates rather than naming one binary, so the key still works on a
--- machine that has the second choice installed and reports itself on a
--- machine that has none of them.
---
--- Nothing here talks to a program that is not in this repository's package
--- list. Bindings that existed only to drive another shell's overlays are
--- gone rather than left pointing at something that will never answer.
+-- Key bindings. Conventions: vim keys and arrows are bound together; apps
+-- launch through launch.sh with a candidate list, so a key works with any
+-- installed alternative and reports when none is; nothing binds to a program
+-- outside this repository's package list.
+-- Hyprland fires EVERY binding on a key, not the first match: never bind one
+-- key twice.
 
 local scripts   = HOME .. "/.config/hypr/scripts"
 local terminal  = scripts .. "/terminal.sh"
@@ -47,23 +37,14 @@ hl.bind("CTRL + SHIFT + Escape", hl.dsp.exec_cmd(app.tasks), { description = "Ta
 hl.bind("CTRL + SUPER + SHIFT + ALT + W", hl.dsp.exec_cmd(app.office), { description = "Office" })
 
 --##! Shell surfaces
--- Super on its own. This has to be a release binding: pressing Super is what
--- makes the SUPER modifier active, so on press the mask is still empty and a
--- press binding carrying SUPER cannot match its own key. Measured here, the
--- release fires for a lone tap and stays silent both for Super held with
--- another key and for a long press, which is exactly the wanted meaning.
---
--- It goes through a script rather than hl.dsp.global because a release
--- binding delivers the shortcut as a release, and a toggle that acts on the
--- press edge would never see it.
+-- Lone Super tap. Must be a release bind: on press the SUPER mask is not set
+-- yet. Fires only for a short tap without another key. Through a script, not
+-- hl.dsp.global, which would deliver a release the press-edge toggle ignores.
 for _, key in ipairs({ "SUPER_L", "SUPER_R" }) do
     hl.bind("SUPER + " .. key, hl.dsp.exec_cmd(shellkey .. " launcher"),
         { release = true, description = "Application launcher" })
 end
--- The power button, now that logind is told to ignore it. The short press is
--- a userspace input event and this is what reads it; the four second
--- hardware override is below any of this and stays the way out of a wedged
--- machine.
+-- Needs logind HandlePowerKey=ignore. The 4 s hardware override still works.
 hl.bind("XF86PowerOff", hl.dsp.global("quickshell:powerMenu"),
     { description = "Session menu" })
 hl.bind("CTRL + ALT + Delete", hl.dsp.global("quickshell:powerMenu"),
@@ -72,23 +53,14 @@ hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd("systemd-cat -t session-start " .. s
     { description = "Restart anything in the session that died" })
 
 --##! Window focus
--- Hyprland's own movefocus wraps: from the leftmost window, left lands on the
--- rightmost. So ask first whether anything is that way, and do nothing if not.
--- Which window to land on is still Hyprland's to decide.
---
--- In here rather than scripts/focus-walk.sh, for the reason the workspace walk
--- below is: the script asked hyprctl and then told hyprctl, and a second press
--- inside that gap stepped from an answer one window old, which is the wrap
--- this exists to prevent. A callback cannot be split that way.
---
--- This API never raises. A filter key it does not know is dropped, a selector
--- it cannot resolve gives an empty list, a rejected dispatcher argument gives
--- nil, and dispatching nil is silent -- each one a key that quietly stops
--- working. Hence the checks below, all of which end in the compositor's own
--- step plus one notification. Wrapping is bad; a dead key is worse.
+-- movefocus wraps at the edge; this vetoes the step when nothing lies that
+-- way and otherwise lets Hyprland pick the target. A Lua callback, not a
+-- hyprctl script, so rapid presses cannot race on a stale answer.
+-- The hl API fails silently (unknown filter keys dropped, bad dispatcher args
+-- return nil, dispatching nil is a no-op), so every failure falls back to the
+-- plain step plus one notification: wrapping beats a dead key.
 
--- A veto, not a target: anything further left counts, diagonals included.
--- Strict, so a window centred exactly on the focused one is not left of it.
+-- Any window whose centre is strictly beyond, diagonals included.
 local beyond = {
     l = function(w, cx, cy) return w.at.x + w.size.x / 2 < cx end,
     r = function(w, cx, cy) return w.at.x + w.size.x / 2 > cx end,
@@ -96,18 +68,14 @@ local beyond = {
     d = function(w, cx, cy) return w.at.y + w.size.y / 2 > cy end,
 }
 
--- Separate from the binding so the pcall there wraps the compositor calls and
--- the arithmetic on what they return, and nothing else.
+-- Separate so the caller's pcall covers exactly the compositor queries.
 local function anything_beyond(dir)
     local active = hl.get_active_window()
-    -- No focused window is not a failure. There is simply nowhere to step from.
     if active == nil then
         return false
     end
 
-    -- The object, not its id: a filter key set to nil is a filter key that is
-    -- not there, and the query then widens to every workspace instead of
-    -- failing. Caught here so it cannot read as somewhere to go.
+    -- A nil filter value drops the key and widens the query to all workspaces.
     local ws = active.workspace
     if ws == nil then
         return false
@@ -117,9 +85,7 @@ local function anything_beyond(dir)
     local cy = active.at.y + active.size.y / 2
     local past = beyond[dir]
 
-    -- hidden is tested here rather than asked for in the filter: it is a window
-    -- field and not a filter field, so the key would be dropped and the query
-    -- would answer as though nothing had been asked.
+    -- hidden is not a filter field (it would be dropped), so test it here.
     local seen_active = false
     for _, w in ipairs(hl.get_windows({ workspace = ws, mapped = true })) do
         if w.address == active.address then
@@ -130,17 +96,15 @@ local function anything_beyond(dir)
         end
     end
 
-    -- A list without the focused window is not a list of this workspace -- the
-    -- shape an unresolvable filter comes back in. Read as an answer it means
-    -- eighteen dead keys, so it is raised onto the fallback below instead.
+    -- Missing focused window means the filter did not resolve; raise so the
+    -- caller falls back instead of every direction key going dead.
     if active.mapped and not seen_active then
         error("the window query did not return the focused window", 0)
     end
     return false
 end
 
--- Once per kind of failure, not once a press: the same break is reached again
--- on the next keystroke. A local, so a reload re-arms it.
+-- Once per failure kind, not per press; reset on reload.
 local walk_warned = {}
 
 local function walk_warn(tag, text)
@@ -154,9 +118,8 @@ local function walk_warn(tag, text)
 end
 
 local function focus_walk(mode, dir)
-    -- Built once at load, so a renamed dispatcher is a call on nil that
-    -- --verify-config catches. A rejected argument is not: it just returns nil,
-    -- and hl.dispatch takes nil silently, so that one is caught here.
+    -- Built at load: a renamed dispatcher fails --verify-config, but a
+    -- rejected argument only returns nil, so check for that here.
     local step
     if mode == "focus" then
         step = hl.dsp.focus({ direction = dir })
@@ -175,8 +138,7 @@ local function focus_walk(mode, dir)
         if ok and not found then
             return
         end
-        -- The check is the fragile half, so one that throws falls through to
-        -- the step: a wrong destination beats a key that stopped working.
+        -- A failed check falls through to the plain step.
         if not ok then
             walk_warn("check", "direction keys lost their edge check and wrap again: "
                 .. tostring(found))
@@ -225,12 +187,8 @@ hl.bind("SUPER + mouse:274", hl.dsp.window.drag(), { mouse = true })
 hl.bind("SUPER + mouse:273", hl.dsp.window.resize(), { mouse = true, description = "Resize window" })
 
 --##! Workspaces
--- The number row and the keypad, and only one binding each.
---
--- Binding the number row a second time by keycode looks harmless and is not.
--- Hyprland fires every binding on a key, so the workspace was switched twice,
--- and with workspace_back_and_forth on the second switch returns to where it
--- started. The key then appears to do nothing at all.
+-- Number row only, one binding per key. A second binding by keycode would
+-- switch twice (and bounce back if workspace_back_and_forth is ever enabled).
 for i = 1, 10 do
     local n = i % 10
     hl.bind("SUPER + " .. n, hl.dsp.focus({ workspace = i }),
@@ -240,35 +198,14 @@ for i = 1, 10 do
 
 end
 
--- The keypad is not bound, and the twenty lines that used to try are gone.
---
--- They read `hl.bind("SUPER + code:" .. numpad_code[i], ...)`, which is the
--- hyprlang spelling. The Lua bind takes a string and does not parse `code:` out
--- of it, so all twenty registered with an empty key AND an empty keycode and
--- could never fire: `hyprctl binds` showed 22 entries with neither field set.
--- Nothing reported it. Passing a table instead is worse -- `bind: bad argument
--- 1: expected string, got table` on every line, and the whole loop is dropped.
---
--- Binding them by keysym is possible but not equivalent: the keypad sends
--- KP_End/KP_Down/... with NumLock off and KP_1/KP_2/... with it on, so it would
--- take both sets and would then fire twice on any layout where they coincide,
--- which is the double-fire this section's comment above warns about.
+-- Keypad digits are not bound. The Lua bind does not parse hyprlang's
+-- "code:NN" (it registers an empty, dead bind), and keysyms differ with NumLock
+-- (KP_End vs KP_1), so both sets would be needed and could double-fire.
 
--- Walking the workspaces by number. The vertical pair jumps five at a time,
--- which is what makes this usable once there are more workspaces than fingers.
---
--- Not Hyprland's own r+n and r-n, because those wrap: left from the first
--- workspace lands on the last one. That is a jump across the whole set at the
--- exact moment the intent was to find out there is nothing further left.
---
--- And not through a script either, which is what this used to be and is no
--- longer in the tree. It asked hyprctl and then told hyprctl, and a wheel flick
--- put a second invocation inside that gap: both read the same workspace, both
--- aimed at the same target, and the pair moved one step. Measured, two "+1"
--- walks from 2 landed on 3. A callback cannot be split that way.
---
--- By number rather than over the workspaces that exist, because an empty one to
--- the right is somewhere to go: Hyprland creates it on arrival.
+-- Clamped walk by number (vertical keys step 5). Not r+n/r-n, which wrap from
+-- the first workspace to the last. A callback rather than a hyprctl script, so
+-- a wheel flick cannot race two steps into one. By number, not over existing
+-- workspaces: Hyprland creates an empty one on arrival.
 local MIN_WORKSPACE = 1
 local MAX_WORKSPACE = 100
 
@@ -279,9 +216,7 @@ local function workspace_walk(mode, step)
             return
         end
 
-        -- A special workspace has a negative id. Stepping from one would land
-        -- on whatever number happens to be next, which is not a step from
-        -- anywhere the user is.
+        -- Special workspaces have negative ids; no step from there.
         local id = active.id
         if id < MIN_WORKSPACE then
             return
@@ -305,8 +240,7 @@ local function workspace_walk(mode, step)
     end
 end
 
--- The sheet reads these descriptions back out of the compositor, and a step
--- reads as a direction there, so the sign is kept even where Lua would drop it.
+-- The cheatsheet shows these descriptions, so keep the "+" sign.
 local function step_label(step)
     if step > 0 then
         return "+" .. step
@@ -334,27 +268,19 @@ hl.bind("SUPER + Page_Down", workspace_walk("focus", 1))
 hl.bind("SUPER + SHIFT + Page_Up", workspace_walk("move", -1))
 hl.bind("SUPER + SHIFT + Page_Down", workspace_walk("move", 1))
 
--- Scroll up goes to the previous workspace. The opposite of the upstream
--- default, and the status bar's own scroll handler matches it; a bar that
--- scrolls the other way from the compositor is worse than neither.
---
--- The same clamped walk the keyboard uses, and for the same reason: a wheel is
--- where the overlapping invocations came from in the first place, because a
--- flick delivers notches faster than a round trip to hyprctl completes.
+-- Scroll up = previous workspace, opposite to upstream; the bar's scroll
+-- handler must match.
 hl.bind("SUPER + mouse_up", workspace_walk("focus", -1),
     { description = "Previous workspace" })
 hl.bind("SUPER + mouse_down", workspace_walk("focus", 1),
     { description = "Next workspace" })
--- The Ctrl pair keeps "r-1" and "r+1". Cycling the open workspaces is what
--- they are for, so wrapping is the behaviour rather than the bug, and it is
--- the deliberate way back to the far end now that nothing else wraps.
+-- Ctrl cycles open workspaces with r-1/r+1; wrapping is intended here, the
+-- one way to reach the far end.
 hl.bind("CTRL + SUPER + mouse_up", hl.dsp.focus({ workspace = "r-1" }),
     { description = "Previous open workspace" })
 hl.bind("CTRL + SUPER + mouse_down", hl.dsp.focus({ workspace = "r+1" }),
     { description = "Next open workspace" })
--- Carrying a window, on the other hand, is a step and not a cycle: dragging a
--- window off the first workspace should stop there rather than fling it to the
--- last one.
+-- Carrying a window is a clamped step, not a cycle.
 hl.bind("SUPER + SHIFT + mouse_up", workspace_walk("move", -1))
 hl.bind("SUPER + SHIFT + mouse_down", workspace_walk("move", 1))
 
@@ -366,8 +292,7 @@ hl.bind("SUPER + ALT + S", hl.dsp.window.move({ workspace = "special:special", f
     { description = "Send window to scratchpad" })
 
 --##! Zoom
--- Clamped here rather than left to the compositor, which will happily zoom
--- to a value you cannot read your way back out of.
+-- Clamped: the compositor accepts a zoom you cannot read your way out of.
 local function zoom_by(step)
     local current = hl.get_config("cursor:zoom_factor")
     local next_value = current + step
@@ -385,10 +310,7 @@ hl.bind("SUPER + KP_Subtract", function() zoom_by(-0.3) end, { repeating = true 
 hl.bind("SUPER + KP_Add", function() zoom_by(0.3) end, { repeating = true })
 
 --##! Help
--- The sheet reads the bindings back out of the compositor rather than keeping
--- its own copy, so this list is whatever is actually bound at the moment it is
--- opened. A binding without a description does not appear; that is what the
--- description field is for.
+-- The cheatsheet reads live bindings; only ones with a description appear.
 hl.bind("SUPER + slash", hl.dsp.global("quickshell:cheatsheet"),
     { description = "Show every key binding" })
 hl.bind("SUPER + SHIFT + slash", hl.dsp.global("quickshell:cheatsheet"))
@@ -406,25 +328,18 @@ hl.bind("SHIFT + Print", hl.dsp.exec_cmd(capture .. " region"),
     { description = "Capture: drag a region" })
 hl.bind("CTRL + Print", hl.dsp.exec_cmd(capture .. " window"),
     { description = "Capture: focused window" })
--- Ctrl + Shift + S as well as Super + Shift + S. It is the shortcut most
--- people arrive with, and the cost is real: an application that uses it for
--- save-as never sees it again, because the compositor takes the key before
--- any window does.
+-- Ctrl+Shift+S too, the common habit. Cost: apps never see it (save-as).
 hl.bind("CTRL + SHIFT + S", hl.dsp.exec_cmd(capture .. " region"),
     { description = "Capture: drag a region" })
 hl.bind("SUPER + SHIFT + S", hl.dsp.exec_cmd(capture .. " region"),
     { description = "Capture: drag a region" })
--- Editing is the exception, not the rule. Nearly every capture here is taken
--- and used as it is, and opening an annotator on each one is a window to close
--- before getting back to whatever the shot was for. This key is the one that
--- opens it, for the times a shot does need marking up.
+-- The only capture that opens the annotator.
 hl.bind("SUPER + SHIFT + ALT + S", hl.dsp.exec_cmd(capture .. " region-edit"),
     { description = "Capture a region and annotate it" })
 hl.bind("SUPER + SHIFT + C", hl.dsp.exec_cmd(capture .. " color"),
     { description = "Capture: pick a colour" })
 
 --##! Clipboard
--- SUPER + V, which is where it was before, rather than somewhere tidier.
 hl.bind("SUPER + V", hl.dsp.exec_cmd(clipboard),
     { description = "Clipboard history" })
 
@@ -441,19 +356,11 @@ hl.bind("SUPER + ALT + M", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE
     { locked = true, description = "Mute microphone" })
 
 --##! Hardware keys
--- locked = true so they still work on the lock screen, repeating so holding
--- a key keeps stepping instead of moving one notch and stopping.
---
--- One binding per key, with the branch inside it. Hyprland runs every binding
--- on a key rather than stopping at the first, so a shell binding plus a
--- guarded fallback moved two steps whenever the guard was wrong -- and it was,
--- because it matched "quickshell" against a process named qs. One binding
--- cannot double-step whatever the guard decides. Do not add a second.
+-- locked: work on the lock screen; repeating: holding keeps stepping.
+-- One binding per key with the branch inside; a second binding double-steps.
 
--- A layer surface, not a process: the compositor already knows, where pgrep
--- cost a fork on the thread that dispatches libinput. Prefix, because the bar
--- surface takes quickshell's default name and a default is not ours to depend
--- on; any shell surface answers the question, which is whether it is loaded.
+-- Shell presence from its layer surfaces, not pgrep (a fork on the input
+-- thread). Prefix match: the bar uses quickshell's default namespace.
 local SHELL_NAMESPACE = "quickshell"
 
 local function shell_is_up()
@@ -465,13 +372,9 @@ local function shell_is_up()
     return false
 end
 
--- brightnessctl writes the internal panel, which monitors.lua switches off with
--- the lid. Without this a bar that died closed would dim a panel nobody can see
--- and leave it near zero. DDC is too slow to stand in at twenty-five presses a
--- second, so on an external the honest fallback is none.
---
--- Brightness.qml's isInternal() copied, not reinvented: the two have to agree
--- or the key means one thing with the bar up and another with it down.
+-- Without the shell, fall back to brightnessctl only on the internal panel;
+-- DDC is too slow for key repeat, so externals get nothing. Must match
+-- isInternal() in quickshell/bar/services/Brightness.qml.
 local INTERNAL_PREFIX = { "eDP", "LVDS", "DSI" }
 
 local function on_internal_panel()
@@ -488,13 +391,9 @@ local function on_internal_panel()
     return false
 end
 
--- Both questions inside pcall: a compositor that cannot answer one must not
--- cost a key that also has to work on the lock screen. Unanswerable falls to
--- brightnessctl, which is what this did before any of it. The dispatchers are
--- checked for nil too, since hl.dsp.* reports a bad argument that way.
---
--- No floor named here. brightnessctl stops at its own, and the one percent
--- Brightness.qml uses is of a maximum that differs per machine.
+-- Queries in pcall so a failing one cannot kill a lock-screen key; unknown
+-- falls to brightnessctl. hl.dsp.* returns nil on a bad argument. No floor
+-- here: brightnessctl has its own.
 local function brightness(shortcut, fallback)
     local to_shell = hl.dsp.global(shortcut)
     local to_panel = hl.dsp.exec_cmd(fallback)
@@ -518,9 +417,8 @@ hl.bind("XF86MonBrightnessDown",
     brightness("quickshell:brightnessDown", "brightnessctl --class backlight -q s 5%-"),
     { locked = true, repeating = true, description = "Brightness down" })
 
--- Volume goes straight to wpctl rather than through the shell. It works with
--- no shell running, and the shell watches Pipewire anyway, so the readout
--- appears for a change made here, by a mixer, or by an application.
+-- Straight to wpctl: works without the shell, which shows the OSD from
+-- PipeWire anyway.
 hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 2%+"),
     { locked = true, repeating = true, description = "Volume up" })
 hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%-"),
@@ -538,36 +436,27 @@ hl.bind("XF86AudioNext", hl.dsp.exec_cmd("playerctl next"), { locked = true })
 hl.bind("XF86AudioPrev", hl.dsp.exec_cmd("playerctl previous"), { locked = true })
 
 --##! Session
--- Not SUPER + L: that is "focus right" above, and losing a directional key to
--- a lock screen is a poor trade.
+-- Not SUPER+L, which is focus right.
 hl.bind("CTRL + ALT + L", hl.dsp.exec_cmd("loginctl lock-session"), { description = "Lock" })
--- The way out of a lock screen that died. Under ext-session-lock a crashed
--- locker leaves the session locked on purpose, which is the right default and
--- also a way to be shut out of a running machine with every window still in
--- it. This is safe to bind: Hyprland refuses it while a lock client is alive
--- ("session is locked with a client, refusing"), so it can only clear a lock
--- that has nothing behind it. locked = true, because the moment it is needed
--- is the moment ordinary bindings are not being delivered.
+-- Escape from a crashed locker (the session stays locked by design). Safe:
+-- Hyprland refuses while a lock client is alive. locked = true, since
+-- ordinary binds are not delivered then.
 hl.bind("CTRL + ALT + SHIFT + U", hl.dsp.exec_cmd("hyprctl eval 'hl.clear_crashed_lockscreen()'"),
     { locked = true, description = "Clear a crashed lock screen" })
 hl.bind("CTRL + SHIFT + ALT + SUPER + Delete", hl.dsp.exec_cmd("systemctl poweroff"),
     { description = "Shut down" })
 
 --##! Lid
--- The panel goes dark, the session does not go to sleep, and the keyboard
--- keeps working. logind is told to ignore the switch in
--- /etc/systemd/logind.conf.d, so this binding is the only thing that answers
--- it. The functions live in config/monitors.lua because the right action
--- depends on which outputs are enabled, and that module is what knows.
+-- Panel off only; no suspend. Requires logind to ignore the lid
+-- (/etc/systemd/logind.conf.d, see README).
 hl.bind("switch:on:Lid Switch", function() MONITORS.lid_close() end,
     { locked = true, description = "Lid: internal panel off" })
 hl.bind("switch:off:Lid Switch", function() MONITORS.lid_open() end,
     { locked = true, description = "Lid: internal panel on" })
 
 --##! Virtual machines
--- A guest that wants the Super key needs the compositor to stop taking it.
--- The escape hatch is bound inside the submap as well, or there would be no
--- way back out.
+-- Passes Super through to a VM guest. The toggle is submap_universal, so it
+-- also works inside the submap as the way back out.
 hl.define_submap("virtual-machine", function()
     hl.bind("SUPER + ALT + F1", function()
         if hl.get_current_submap() == "virtual-machine" then

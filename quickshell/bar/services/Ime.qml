@@ -5,10 +5,8 @@ import Quickshell
 import Quickshell.Io
 import qs.services
 
-// Named Ime, not InputMethod. QtQuick exports a type called InputMethod, and
-// any file importing QtQuick resolves that name to Qt's type instead of this
-// singleton. The failure is silent: the pill renders with an empty label and
-// a stray "Unable to assign [undefined]" in the log.
+// Not "InputMethod": QtQuick exports that name and silently shadows this
+// singleton (empty label, "Unable to assign [undefined]").
 Singleton {
     id: root
 
@@ -17,26 +15,19 @@ Singleton {
 
     readonly property bool present: root.state !== "" && root.state !== "none"
 
-    // A plain keyboard layout is always latin. Otherwise fcitx5 reports state
-    // 2 while it is actively converting, which is what distinguishes 한 from
-    // EN inside the same hangul input method.
+    // Keyboard layouts are always latin; for an IM, state 2 means converting,
+    // which is the only way to tell Hangul from latin within fcitx5-hangul.
     readonly property bool hangul: root.present && !root.method.startsWith("keyboard") && root.state === "2"
 
-    // State 0 with no engine: nothing focused has an input context, so there
-    // is nothing for fcitx5 to compose in and it says so. A video, a viewer,
-    // a browser window before the caret is in a field. The readout is latin,
-    // because that is what the next keystroke does, and the item dims to say
-    // the input method is not in the path rather than not working.
+    // State 0: no focused input context (video, viewer, browser outside a
+    // field). Reads latin and dims; fcitx5 is fine, just not in the path.
     readonly property bool idle: root.state === "0"
 
-    // KR and EN, not 한 and EN. A hangul syllable next to a latin pair is two
-    // scripts in one readout, and it renders at a different height and weight
-    // from everything else on the bar because it comes from a different font.
+    // Latin labels: a Hangul glyph falls back to another font and misaligns.
     readonly property string label: root.hangul ? "KR" : "EN"
 
-    // fcitx5-remote -t flips between converting and passthrough. Restart goes
-    // through D-Bus because that is what the tray's own Restart does; killing
-    // and relaunching the process loses the running input contexts.
+    // Restart over D-Bus like the tray does; kill-and-relaunch loses the
+    // running input contexts.
     function toggle() {
         Quickshell.execDetached(["fcitx5-remote", "-t"]);
     }
@@ -45,10 +36,8 @@ Singleton {
         Quickshell.execDetached(["gdbus", "call", "--session", "--dest", "org.fcitx.Fcitx5", "--object-path", "/controller", "--method", "org.fcitx.Fcitx.Controller1.Restart"]);
     }
 
-    // The one thing here the user leaves open, so it goes through Apps and
-    // outlives a `bar --restart`. The three around it stay on execDetached:
-    // each is done in milliseconds, and a transient unit plus a bus round trip
-    // on the Hangul toggle would buy a lifetime none of them has.
+    // The only long-lived child here, so it goes through Apps; the one-shot
+    // fcitx5-remote/gdbus calls stay on execDetached.
     function configure() {
         Apps.open(["fcitx5-configtool"]);
     }
@@ -57,17 +46,13 @@ Singleton {
         Quickshell.execDetached(["fcitx5-remote", "-r"]);
     }
 
-    // When state and method were last confirmed, which is not the same as when
-    // the helper was last seen alive: the script prints only on a transition,
-    // so silence is its normal condition and liveness says nothing about the
-    // value. Zero means nothing has been accepted, and the pill says so.
+    // When state/method were last confirmed; 0 = unknown. The helper prints
+    // only on change, so silence is normal.
     property double asOf: 0
     property int restarts: 0
 
-    // Backs off rather than retrying at a fixed rate. inputmethod.sh exits 1 at
-    // once when fcitx5-remote is not on PATH -- the state of a fresh install --
-    // and two seconds there is a spawn and a log line every two seconds for the
-    // whole session. Doubling still brings a helper that died once back at once.
+    // Exponential backoff (2 s to 60 s): the helper exits at once when
+    // fcitx5-remote is missing.
     Timer {
         id: supervisor
 
@@ -91,11 +76,8 @@ Singleton {
 
         onRunningChanged: {
             if (!poller.running) {
-                // state is kept, so present stays true and the pill holds its
-                // place saying it cannot read. Clearing it hid the pill, and a
-                // pill that leaves reads as "there is no input method" -- a
-                // different and equally wrong claim to the stale label this was
-                // about avoiding. Dropping the stamp says neither.
+                // Keep state (pill stays), mark it stale; hiding the pill
+                // would claim there is no input method.
                 root.asOf = 0;
                 supervisor.restart();
             }
@@ -103,18 +85,15 @@ Singleton {
 
         stdout: SplitParser {
             onRead: line => {
-                // Any line at all means the helper is alive and talking, so
-                // the supervisor's backoff starts over.
+                // Any output resets the backoff.
                 supervisor.delay = 2000;
                 const raw = line.trim();
-                // The script's no-reading token: fcitx5 did not answer, which
-                // is not the same as it answering that no input method is on.
+                // "-": fcitx5 did not answer (not the same as "no IM").
                 if (raw === "-") {
                     root.asOf = 0;
                     return;
                 }
-                // The engine may be empty and that is a reading: see idle.
-                // The state may not be, because it is the reading.
+                // An empty engine name is valid; an empty state is not.
                 const parts = raw.split("\t");
                 if (parts.length !== 2 || parts[0] === "") {
                     console.warn("[ime] unexpected line:", raw);

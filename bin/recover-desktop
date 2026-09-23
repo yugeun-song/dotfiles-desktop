@@ -1,30 +1,16 @@
 #!/usr/bin/env bash
-# ============================================================================
-# recover-desktop - get a Hyprland session back from a text console
+# Get a Hyprland session back from a text console (Ctrl+Alt+F2, log in, then
+# Ctrl+Alt+F1 back): disabled panel, test-created output, DPMS off, dead
+# service, hung compositor. A stuck lock screen is `unlock`'s job.
 #
-# For the cases where the desktop is still there and cannot be seen or used:
-# a panel left disabled, an output a test created, DPMS off, a service that
-# died, a compositor that stopped answering. Run it from Ctrl+Alt+F2 after
-# logging in there, then Ctrl+Alt+F1 back.
+# Nothing machine-specific: everything is discovered from the uid, the lock
+# file, sysfs connectors and the session target, since a console login has
+# none of the session's environment.
 #
-# Nothing about the machine is written down here. The runtime directory comes
-# from the uid, the compositor from its lock file, the built-in panel from the
-# connector names in sysfs, the services from the session target. That is
-# what makes this usable from a console that has none of the session's
-# environment, and on the next machine this repository is installed on.
-#
-# Usage:
-#   recover-desktop            diagnose, then the safe repairs, in order
+#   recover-desktop            diagnose, then safe repairs (never ends anything)
 #   recover-desktop --status   diagnose only
-#   recover-desktop --logout   end the session cleanly, back to the greeter
-#   recover-desktop --kill     SIGTERM the compositor; the launcher restarts it
-#
-# The default never ends anything. --logout and --kill are the two steps that
-# do, and they are separate flags so they cannot happen by accident.
-#
-# A lock screen that will not go away is a different problem; that is what
-# `unlock` is for.
-# ============================================================================
+#   recover-desktop --logout   ask the compositor to exit, back to the greeter
+#   recover-desktop --kill     SIGTERM, then SIGKILL, the compositor
 
 set -uo pipefail
 
@@ -42,9 +28,7 @@ TARGET=hyprland-session.target
 say()  { printf 'recover: %s\n' "$*"; }
 warn() { printf 'recover: %s\n' "$*" >&2; }
 
-# hyprctl against a compositor that hangs never returns; five seconds is long
-# enough for any answer and short enough to move on to --kill advice. Named,
-# because the diagnosis below reports the number it waited.
+# hyprctl never returns from a hung compositor.
 HC_TIMEOUT=5
 hc() { timeout "$HC_TIMEOUT" hyprctl "$@"; }
 
@@ -55,19 +39,13 @@ done
 # ---------------------------------------------------------------------------
 # Which compositor.
 # ---------------------------------------------------------------------------
-# Hyprland leaves its instance directory behind when it exits and removes only
-# the lock, so a directory with a lock is a live compositor. The lock's first
-# line is that compositor's pid and its second the wayland socket name; both
-# are read from the file rather than asked for, because asking a hung
-# compositor is the one thing that does not work.
+# Only a live instance keeps hyprland.lock (line 1 pid, line 2 wayland socket).
+# Read from the file because a hung compositor cannot be asked.
 lock_pid() { sed -n '1{/^[0-9][0-9]*$/p}' "$RT/hypr/$1/hyprland.lock" 2>/dev/null; }
 lock_display() { sed -n 2p "$RT/hypr/$1/hyprland.lock" 2>/dev/null; }
 
-# A compositor that is itself a wayland client -- a nested one, such as the
-# monitor self-test runs -- has WAYLAND_DISPLAY in its own environment; the
-# session's compositor, started by greetd on a console, has none. That is
-# what tells them apart when both hold a lock. Among candidates of the same
-# kind the newest wins, which is what bin/unlock assumes too.
+# A nested compositor (e.g. monitors-selftest.sh) has WAYLAND_DISPLAY in its
+# environment; the greetd-started session one does not. Newest wins per kind.
 live_instance() {
     local d sig pid env_display newest="" newest_session=""
     if [[ -n "${HYPRLAND_INSTANCE_SIGNATURE:-}" && -e "$RT/hypr/${HYPRLAND_INSTANCE_SIGNATURE}/hyprland.lock" ]]; then
@@ -100,9 +78,7 @@ HL_PID=$(lock_pid "$SIG")
 WL=$(lock_display "$SIG")
 [[ -n "$WL" ]] && export WAYLAND_DISPLAY="$WL"
 
-# Should a future lock file stop carrying the pid: the compositor is asked
-# while it still answers, and failing that the process list is, when it
-# holds exactly one Hyprland of this user's.
+# Fallbacks should the lock file stop carrying the pid.
 if [[ ! "$HL_PID" =~ ^[0-9]+$ ]]; then
     HL_PID=$(hc instances -j 2>/dev/null | jq -r --arg s "$SIG" '.[] | select(.instance == $s) | .pid' 2>/dev/null | head -1)
 fi
@@ -114,18 +90,9 @@ fi
 # ---------------------------------------------------------------------------
 # What a process that is not answering is doing.
 # ---------------------------------------------------------------------------
-# The scheduler state decides whether anything here can work, so it is read
-# before a signal is sent rather than after one fails. R and S are a process
-# running or waiting on its own descriptors -- a compositor wedged in
-# userspace -- and a signal reaches it. D is a process inside a kernel call
-# that refuses interruption: no signal is delivered there, SIGKILL included,
-# and only the call returning or the machine restarting ends it. Telling those
-# two apart is the difference between "send a stronger signal" and "stop
-# trying and reboot", and answering that was the one thing this script could
-# not do on 2026-09-09.
-#
-# stat's second field is the command in parentheses and may contain spaces, so
-# the state is taken from after the last ')' rather than by counting columns.
+# R/S: wedged in userspace, a signal reaches it. D: inside an uninterruptible
+# kernel call, not even SIGKILL is delivered; only a reboot helps.
+# The comm field may contain spaces, so parse after the last ')'.
 proc_state() {
     local line
     line=$(cat "/proc/$1/stat" 2>/dev/null) || return 1
@@ -144,9 +111,8 @@ state_words() {
     esac
 }
 
-# wchan names the kernel function the process is waiting in, which is what
-# says whether the wait is a modeset. Empty for a running process and
-# unreadable on some kernels; both are fine, it is a hint and not a verdict.
+# wchan (e.g. a modeset wait) is a hint only: empty when running, unreadable on
+# some kernels.
 describe_process() {
     local pid="${1:-}" state wchan
     if [[ ! "$pid" =~ ^[0-9]+$ ]] || [[ ! -d "/proc/$pid" ]]; then
@@ -163,9 +129,7 @@ describe_process() {
     return 0
 }
 
-# Polls, because this process is not the compositor's parent and so has
-# nothing to wait(2) on. A zombie counts as gone: it has exited and only its
-# exit status is still held.
+# Polls: not the parent, so no wait(2). A zombie counts as gone.
 gone_within() {
     local seconds="$1" pid="$2" i
     for (( i = 0; i < seconds * 4; i++ )); do
@@ -182,21 +146,15 @@ if [[ "$MODE" == "--kill" ]]; then
         exit 1
     fi
     describe_process "$HL_PID"
-    # Ending the compositor ends the session. greetd sees the session process
-    # exit and puts the greeter back on vt1. Nothing in this repository
-    # relaunches a compositor in place -- there is no start-hyprland, whatever
-    # the comments in this tree say -- so this is a logout with the windows
-    # lost, not a restart.
+    # Ending the compositor ends the session and loses its windows. The session
+    # entry (/etc/greetd/sessions) runs start-hyprland, which relaunches only
+    # after a crash; a clean exit returns to the greeter on vt1.
     say "sending SIGTERM to Hyprland ($HL_PID); the greeter returns on vt1 and this session's windows are lost"
     kill -TERM "$HL_PID" 2>/dev/null || { warn "could not signal $HL_PID"; exit 1; }
     gone_within 5 "$HL_PID" && { say "it exited"; exit 0; }
 
-    # A compositor whose event loop has stopped never reaches its SIGTERM
-    # handler: the handler is a queued event like every other one, and the
-    # queue is the thing that stopped moving. So the polite signal is the one
-    # that cannot work in the case this flag exists for, and escalating is not
-    # an extra -- it is the point. Without it --kill reported success, changed
-    # nothing, and left the only remaining advice being to reboot.
+    # A stalled event loop never runs its SIGTERM handler (it is a queued event),
+    # so escalation is the point of --kill, not an extra.
     warn "still there after 5s; sending SIGKILL"
     kill -KILL "$HL_PID" 2>/dev/null
     gone_within 5 "$HL_PID" && { say "it exited"; exit 0; }
@@ -210,13 +168,8 @@ fi
 # ---------------------------------------------------------------------------
 # Diagnose.
 # ---------------------------------------------------------------------------
-# Everything below this point talks to the compositor, so a compositor that
-# does not answer ends the run here. What it must not do is end it with one
-# line of advice: this branch is the one a wedged session actually reaches,
-# and it used to say only "run --kill", which left the difference between a
-# compositor stuck in its own loop and one stuck in the kernel -- the
-# difference between a signal working and no signal ever working -- for the
-# user to discover by trying.
+# Everything below needs a responsive compositor. A hung one ends the run here,
+# with advice that depends on whether a signal can reach it at all.
 if ! hc version >/dev/null 2>&1; then
     warn "compositor $SIG (pid ${HL_PID:-?}) is not answering hyprctl within ${HC_TIMEOUT}s"
     describe_process "${HL_PID:-}"
@@ -239,9 +192,8 @@ if [[ "$MODE" == "--logout" ]]; then
     exit $?
 fi
 
-# Connector names the kernel has, and which of them are built-in panels. The
-# same classification config/monitors.lua uses, so the two agree on what the
-# panel is.
+# Kernel connectors and built-in panels; same classification as
+# hypr/config/monitors.lua.
 declare -A KERNEL=()
 INTERNAL=()
 for status in /sys/class/drm/card*-*/status; do
@@ -286,8 +238,7 @@ report() {
     fi
 }
 
-# The units are whatever the target wants; that list lives in the target file
-# and nowhere else.
+# The session's units are the target's Wants=, listed only in the target file.
 UNITS=()
 if command -v systemctl >/dev/null 2>&1; then
     read -r -a UNITS <<<"$(systemctl --user show "$TARGET" -p Wants --value 2>/dev/null)"
@@ -299,7 +250,7 @@ report || exit 1
 [[ "$MODE" == "--status" ]] && exit 0
 
 # ---------------------------------------------------------------------------
-# Repair, safest first. Each step is reported; none of them ends anything.
+# Repair, safest first. Nothing here ends the session.
 # ---------------------------------------------------------------------------
 echo
 for name in "${FAKE_OUTPUTS[@]}"; do
@@ -310,10 +261,8 @@ done
 say "DPMS on for every output"
 hc dispatch 'hl.dsp.dpms({ action = "enable" })' >/dev/null 2>&1 || warn "dpms request failed"
 
-# The policy module re-evaluates itself if it is loaded. If it is not -- a
-# config that failed to load, an older configuration -- the panel is asked
-# for directly, and if that leaves nothing lit a reload puts the catch-all
-# rule back on every output.
+# Re-run the monitor policy if loaded; otherwise (config failed to load) ask
+# for the built-in panel by rule. A reload follows if nothing lights up.
 if [[ "$(hc repl 'return MONITORS ~= nil' 2>/dev/null)" == "true" ]]; then
     say "asking config/monitors.lua to re-evaluate"
     hc eval 'MONITORS.evaluate("recover", false)' >/dev/null 2>&1 || warn "evaluate failed"
@@ -329,9 +278,8 @@ sleep 3
 REAL_ENABLED=0
 report >/dev/null 2>&1
 if (( REAL_ENABLED == 0 )); then
-    # A reload clears every rule and re-runs the policy from scratch, which
-    # is the stronger repair only because the policy re-arms its own net at
-    # load. The panel is asked for by rule again afterwards regardless.
+    # A reload clears every rule and re-runs the policy, which re-arms its own
+    # fallback at load. The panel is requested again afterwards regardless.
     say "still no real output enabled; reloading the configuration"
     hc reload >/dev/null 2>&1 || warn "reload failed"
     sleep 3
@@ -347,10 +295,8 @@ if (( REAL_ENABLED == 0 )); then
 fi
 
 if command -v systemctl >/dev/null 2>&1; then
-    # Units read the user manager's environment, not this shell's. After a
-    # compositor was replaced the manager may still name the dead one, and a
-    # bar started against that fails again; the two values that identify the
-    # compositor are pushed first, into the bus and the manager both.
+    # Units read the manager's environment, which may still name a replaced
+    # compositor; push the live one before restarting units.
     say "telling the user manager which compositor this is"
     if command -v dbus-update-activation-environment >/dev/null 2>&1; then
         dbus-update-activation-environment --systemd HYPRLAND_INSTANCE_SIGNATURE WAYLAND_DISPLAY 2>/dev/null \

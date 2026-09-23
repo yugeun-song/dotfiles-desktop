@@ -4,17 +4,13 @@ import QtQuick
 import Quickshell
 import qs.services
 
-// The month, opened by hovering the clock.
-//
-// Same construction as MediaPopup and for the same reason: anchored to the
-// item that opened it, in the bar's own colours, with no gap under the bar.
+// The month, opened by hovering the clock. Built like MediaPopup.
 Item {
     id: root
 
     property Item anchorItem: root.parent
 
-    // Two hover sources -- the clock and the month itself -- and the union
-    // decides, so crossing from one into the other does not close it.
+    // Open while either the clock or the card is hovered.
     property bool anchorHovered: false
     property bool cardHovered: false
 
@@ -33,8 +29,7 @@ Item {
         }
     }
 
-    // A grace period on the way out, so crossing from the clock into the month
-    // does not close it in the frame between the two.
+    // Grace period for crossing from the clock into the card.
     Timer {
         id: hide
 
@@ -66,8 +61,6 @@ Item {
             Rectangle {
                 id: card
 
-                // Contents plus the same pad on every side, which is what
-                // makes the four margins equal without a size to maintain.
                 implicitWidth: month.implicitWidth + Theme.popupPad * 2
                 implicitHeight: month.implicitHeight + Theme.popupPad * 2
                 radius: Theme.surfaceRadius

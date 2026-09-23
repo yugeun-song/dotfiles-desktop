@@ -1,31 +1,15 @@
 #!/usr/bin/env bash
+# Locks with the input method switched to latin first. hyprlock binds no
+# text-input protocol, so with fcitx5 in Hangul the field stays empty, PAM gets
+# nothing, and pam_faillock counts each try.
 #
-# Lock the screen, with the input method out of the way first.
-#
-# hyprlock reads wl_keyboard directly and binds neither zwp_text_input_v3 nor
-# zwp_input_method_v2. fcitx5 is the one holding the grab, through the
-# compositor, and it does not let go for the lock surface. With the input
-# method in Hangul the keys are composed somewhere hyprlock never sees: the
-# field stays empty, PAM is handed nothing, and the log says "conversation
-# failed". That counts as a failure, and pam_faillock locks the account after
-# three of them.
-#
-# A password field is latin anyway, so switching the input method off before
-# the lock appears costs nothing and removes the whole class of problem.
-#
-# Every path that locks this machine arrives here: the key binding calls
-# loginctl lock-session, hypridle answers that signal with lock_cmd, and the
-# power menu calls loginctl too. Nothing should call hyprlock directly.
-#
-# Recovering afterwards, if this ever bites again:
-#   faillock --user "$USER" --reset      needs no root, the tally file is yours
+# Lock paths reach this via `loginctl lock-session` -> hypridle lock_cmd; the
+# power menu's suspend runs it directly. Never call hyprlock directly.
+# Recovery: faillock --user "$USER" --reset   (no root needed)
 
 set -uo pipefail
 
-# fcitx5-remote with no argument reports 0 when fcitx5 is not running, 1 when
-# it is running but inactive, and 2 when it is active. Only 2 is a state worth
-# putting back: restoring 1 with -o would turn Hangul ON for someone who locked
-# in latin mode, which is a surprise waiting on the other side of an unlock.
+# fcitx5-remote: 0 not running, 1 inactive, 2 active. Only 2 is restored.
 state() { fcitx5-remote 2>/dev/null || echo 0; }
 
 was=$(state)
@@ -33,11 +17,7 @@ was=$(state)
 if [[ "$was" == "2" ]]; then
     fcitx5-remote -c >/dev/null 2>&1 || true
 
-    # Verified rather than assumed. -c is asynchronous and there is no reason
-    # to trust that it landed: if it did not, this locks with Hangul still on
-    # and hands the user the exact failure this script exists to prevent. Half
-    # a second in ten steps, then lock regardless, because a screen that does
-    # not lock is worse than one that is awkward to unlock.
+    # -c is asynchronous; wait up to 0.5 s, then lock regardless.
     for _ in $(seq 10); do
         [[ "$(state)" != "2" ]] && break
         sleep 0.05

@@ -1,26 +1,9 @@
 #!/usr/bin/env bash
-#
-# Exercises config/monitors.lua in a nested Hyprland, without touching the
-# real outputs.
-#
-# The nested compositor's one real output is a window on the desktop, named
-# WAYLAND-1. The policy override makes that window the "built-in panel" and
-# every headless output an "external", so docking and undocking are
-# `hyprctl output create` and `remove`, and removing the last external
-# reaches the FALLBACK path for real: the compositor makes its headless
-# FALLBACK output, the policy has to notice, and the panel has to come back.
-#
-# What it checks, in order: the panel is on alone; plugging an external turns
-# it off; unplugging turns it back on and FALLBACK goes away; a burst of
-# plug/unplug settles to one evaluation; a reload while docked does not flip
-# the panel; the keep-internal marker keeps both on; two externals sit left
-# to right with the first at 0x0. The nested log is opened with
-# debug:disable_logs off so the module's own lines can be read afterwards.
-#
-# Run it from a Hyprland session. A window appears for about twenty seconds
-# and two harmless notifications show inside it: the "started without
-# start-hyprland" warning and an overlap notice from the moment a headless
-# output is created at 0x0 before the layout is rearranged.
+# Tests config/monitors.lua in a nested Hyprland without touching real outputs.
+# The nested window (WAYLAND-1) plays the built-in panel and headless outputs
+# play externals, so removing the last one exercises the real FALLBACK path.
+# Run from a Hyprland session; a window shows for ~20 s with two harmless
+# notifications (no start-hyprland, transient overlap at 0x0).
 #
 # Usage: monitors-selftest.sh [config-dir]     (default: the directory above this)
 
@@ -32,8 +15,7 @@ RT="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 for tool in Hyprland hyprctl jq; do
     command -v "$tool" >/dev/null 2>&1 || { printf 'selftest: %s is not installed\n' "$tool" >&2; exit 2; }
 done
-# Without a wayland display to nest in, Hyprland would take the real outputs
-# over as a second DRM compositor, which is not a test of anything.
+# Without a display to nest in, Hyprland would grab the real outputs via DRM.
 [[ -n "${WAYLAND_DISPLAY:-}" && -S "$RT/${WAYLAND_DISPLAY}" ]] || {
     printf 'selftest: no wayland session to nest in (WAYLAND_DISPLAY is not set); run this from the desktop\n' >&2; exit 2; }
 [[ -f "$SRC/hyprland.lua" && -f "$SRC/config/monitors.lua" ]] || {
@@ -52,8 +34,7 @@ trap cleanup EXIT
 
 cp -a "$SRC/hyprland.lua" "$WORK/"
 cp -a "$SRC/config" "$WORK/"
-# No autostart in the nested compositor, for the same reason verify-config.sh
-# empties it: a second copy of every session service is not a test.
+# No autostart: it would start a second copy of every session service.
 printf -- '-- emptied by monitors-selftest.sh\n' > "$WORK/config/execs.lua"
 sed -i '1i MONITOR_POLICY_OVERRIDE = { internal = { "^WAYLAND%-", "^WL%-" }, synthetic = { "^FALLBACK$" }, sysfs = false, settle_removed_ms = 300, settle_added_ms = 300, verify_ms = 1500, panel_off_delay_ms = 200, panel_off_verify_ms = 400 }' "$WORK/hyprland.lua"
 printf 'hl.config({ debug = { disable_logs = false } })\n' >> "$WORK/hyprland.lua"
@@ -109,16 +90,9 @@ sleep 1.2
 expect "docked: panel off" "WAYLAND-1 disabled=true"
 expect "docked: external on" "HEADLESS-1 disabled=false"
 
-# The rule that lights the external and the rule that darkens the panel must
-# leave as two emissions, not one. Together they are two modesets in one
-# commit, and on the machine this repository was written on that is what took
-# the compositor through a state with no enabled output and left it there:
-# eDP-1 released its CRTC, the driver reconsidered the connector HDMI-A-1 was
-# using, the compositor built its FALLBACK and never came out.
-#
-# Read from the module's own log lines rather than from the monitor list,
-# because the end state is identical either way. Only the order it was reached
-# in is what this checks, and only the log records that.
+# Lighting the external and darkening the panel must be separate emissions:
+# both in one commit left the real machine stuck on FALLBACK with no output.
+# Only the module's log shows the order; the end state is the same either way.
 lit=$(since "$m" | grep -c 'monitors: added HEADLESS-1 -> ')
 off=$(since "$m" | grep -c 'monitors: added HEADLESS-1 (panel off) -> WAYLAND-1:off')
 if (( lit == 1 && off == 1 )); then
@@ -129,8 +103,6 @@ else
     FAILED=1
 fi
 
-# And the emission that lit the external must not have carried a disabled rule
-# for the panel with it.
 if since "$m" | grep -q 'monitors: added HEADLESS-1 -> .*WAYLAND-1:off'; then
     echo "FAIL  docked: the panel was darkened in the same emission that lit the external"
     FAILED=1
@@ -196,8 +168,7 @@ n dispatch 'hl.dsp.exit()' >/dev/null 2>&1
 for _ in $(seq 40); do kill -0 "$PID" 2>/dev/null || break; sleep 0.25; done
 kill -0 "$PID" 2>/dev/null && kill "$PID" 2>/dev/null
 PID=""
-# The nested compositor's runtime directory is this test's, and nobody else's
-# to clean. Only once its lock is gone.
+# Remove the nested instance's runtime dir once its lock is gone.
 [[ -e "$RT/hypr/$SIG/hyprland.lock" ]] || rm -rf -- "${RT:?}/hypr/${SIG:?}"
 
 if (( FAILED )); then echo "result: FAILURES"; else echo "result: all checks passed"; fi

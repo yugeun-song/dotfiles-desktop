@@ -1,24 +1,15 @@
 #!/usr/bin/env bash
-# ============================================================================
-# bar - the status bar, by way of its systemd user unit
+# Front end to systemd/user/bar.service, which supervises the bar.
 #
-# The bar is quickshell under systemd/user/bar.service, which is what restarts
-# it after a crash, gives up on a crash loop, and ends it with the session.
-# This script used to be that supervisor. What is left is the front end, so
-# the commands people typed keep working:
-#
-#   bar                 start it, or do nothing if it is running
-#   bar --restart       restart it, which is how a QML change is picked up
+#   bar                 start it (no-op if running)
+#   bar --restart       restart it; picks up QML changes
 #   bar --stop          stop it
-#   bar --status        whether it is running, and the last log lines
+#   bar --status        unit status and last log lines
 #   bar --log           follow its log
 #   bar --once          run quickshell in the foreground, outside the unit
 #
-# --once is for working on the QML: BAR_PREVIEW=bottom bar --once puts a
-# second copy under the live one (see README). quickshell's -n means two
-# copies of one config cannot run, so stop the unit first for a preview of
-# the same config, or use a different BAR_CONFIG_DIR.
-# ============================================================================
+# quickshell -n refuses a second copy of the same config: stop the unit before
+# `bar --once` on it, or point BAR_CONFIG_DIR elsewhere.
 
 set -uo pipefail
 
@@ -31,11 +22,8 @@ runner() {
 }
 
 case "${1:-}" in
-    # reset-failed first. Five starts in two minutes leaves the unit in
-    # start-limit-hit, where systemd refuses start and restart alike -- so the
-    # documented way back was the one thing that could not bring the bar back.
-    # It does nothing to a unit that has not failed. The cost is a zeroed
-    # NRestarts, so --status stops recording quiet crash-loops; --log still does.
+    # reset-failed first: start-limit-hit refuses start and restart alike.
+    # Side effect: NRestarts is zeroed, so crash loops show only in --log.
     "")         systemctl --user reset-failed "$UNIT" 2>/dev/null
                 exec systemctl --user start "$UNIT" ;;
     --restart)  systemctl --user reset-failed "$UNIT" 2>/dev/null

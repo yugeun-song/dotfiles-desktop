@@ -1,81 +1,46 @@
 -- Per-machine output settings, read by config/monitors.lua.
 --
--- Copy this file to monitor_settings.lua beside it and edit. That copy is
--- not part of the repository (.gitignore), because what it holds describes
--- one machine: which panel wants which scale, whether both screens stay on.
--- The values here are the ones in use on the laptop this repository was
--- written on, kept as a worked example; this file itself is never read.
---
--- Everything is optional. A missing file, a file that fails to load, or a
--- field of the wrong type falls back to the default named beside it, and a
--- notification says which. The result is always a working desktop: the
--- built-in panel alone, or the externals with the panel off, at scale 1.
---
--- The compositor does not watch this file. After editing it: hyprctl reload.
+-- Copy to monitor_settings.lua beside it (gitignored) and edit; this file is
+-- never read. Every field is optional: a missing file, a load error or a
+-- wrong-typed field falls back to the default with a notification.
+-- Not watched: after editing run ./install.sh, which mirrors it and reloads.
 return {
-    -- Scale per display. Scale is the one value the policy cannot derive,
-    -- because it depends on how far the screen is from your eyes and not on
-    -- anything the connector reports.
-    --
-    -- `match` is compared with what the display says about itself, "make
-    -- model" as `hyprctl monitors` prints it under description, so the same
-    -- panel on another connector still matches and a different panel on the
-    -- same connector does not. `output` names a connector instead, for the
-    -- times that is the easier thing to know. First entry to match wins.
-    --
-    -- Anything with no entry runs at scale 1, at the highest refresh rate it
-    -- can do, then the largest resolution available at that rate.
+    -- Scale is the one value the policy cannot derive. `match` is a prefix of
+    -- the description `hyprctl monitors` prints ("make model", commas dropped),
+    -- so it follows the panel across connectors; `output` names a connector.
+    -- First match wins. Unlisted outputs get scale 1 at highrr.
     scales = {
-        -- 14 inch 2880x1800 panel. At scale 1 the text is unreadable at
-        -- arm's length; 1.5 makes it an effective 1920x1200.
+        -- 14" 2880x1800 panel; 1.5 gives an effective 1920x1200.
         { match = "Samsung Display Corp. 0x419D", scale = 1.5 },
         -- { output = "HDMI-A-1", scale = 1.25 },
     },
 
-    -- Both screens on when an external is attached, instead of the panel
-    -- going off. Default false. A file named keep-internal beside this one
-    -- means the same and can be added and removed without editing anything;
-    -- either one is enough.
+    -- Keep the panel on beside an external. A keep-internal file beside this
+    -- one does the same without editing; either is enough.
     keep_internal = false,
 
-    -- Milliseconds to let a burst of hotplug events settle before acting.
-    -- An output that went away is answered fast, because the desktop is
-    -- dark until the panel is back (default 400). An output that arrived
-    -- waits, because both screens on is harmless and a link that is still
-    -- training may go away again (default 2000). Whatever is flapping, an
-    -- evaluation is forced after settle_max_ms (default 6000).
+    -- Hotplug settle windows. Removal is answered fast (the desktop is dark
+    -- until the panel returns); arrival waits for link training. A burst that
+    -- keeps flapping is evaluated anyway after settle_max_ms.
     -- settle_removed_ms = 400,
     -- settle_added_ms = 2000,
     -- settle_max_ms = 6000,
 
-    -- Turning the built-in panel off is done on its own, a moment after the
-    -- externals have been lit, and never in the same batch of rules. The two
-    -- are two modesets; sent together they reach the driver as one commit, and
-    -- on the laptop this was written on that took the compositor through a
-    -- state with no enabled output and left it wedged there. This is the gap
-    -- between them, and how soon afterwards the screen is checked to be still
-    -- lit (defaults 700 and 900).
-    --
-    -- Raise the delay if plugging a display still darkens everything; there is
-    -- no benefit to lowering it, because nothing waits on it but the panel
-    -- going off, which nobody is looking at.
+    -- NOT read from this file (load_settings ignores them); change the
+    -- defaults in config/monitors.lua. Panel-off is a separate modeset after
+    -- the externals light, because one combined commit wedged the compositor
+    -- with no enabled output; raise the delay if plugging a display still
+    -- darkens everything. settle_synthetic_ms answers FALLBACK.
     -- panel_off_delay_ms = 700,
     -- panel_off_verify_ms = 900,
-
-    -- How long to wait after the compositor reports a synthetic output --
-    -- its FALLBACK, which it builds when the last real screen goes away.
-    -- That is not a cable that needs to settle, it is the state this module
-    -- exists to leave, so it is answered almost immediately (default 60).
     -- settle_synthetic_ms = 60,
 
-    -- How long after acting to check that some real output is enabled, and
-    -- how many times to insist on the panel if none is (defaults 3000, 5).
+    -- After acting, check some real output is enabled; insist on the panel
+    -- up to verify_limit times.
     -- verify_ms = 3000,
     -- verify_limit = 5,
 
-    -- What counts as the built-in panel and what is the compositor's own.
-    -- Lua patterns against the output name. The defaults cover every laptop
-    -- connector type the kernel has; change these only for something exotic.
+    -- Lua patterns on the output name: built-in panel, compositor-synthetic.
     -- internal = { "^eDP", "^LVDS", "^DSI" },
     -- synthetic = { "^FALLBACK$", "^HEADLESS%-" },
 }

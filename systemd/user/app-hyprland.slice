@@ -1,16 +1,7 @@
 # dotfiles-desktop
-# Where the programs opened from the bar live.
-#
-# They used to live in bar.service's control group, because execDetached
-# double-forks and a fork does not leave its cgroup -- so `bar --restart` closed
-# every window the launcher had opened. app-scope.sh puts them here instead.
-#
-# PartOf, so this trades no leak for a worse one: stopping a slice stops what is
-# in it, and session-watch.sh stops the target when the compositor exits.
-#
-# A slice needs no file to exist -- systemd builds one from the name -- so this
-# one is here only for that dependency. Without it the programs still start and
-# are reaped at logout instead.
+# Programs opened from the bar, placed here by quickshell/bar/scripts/app-scope.sh
+# so a `bar --restart` does not kill them (a fork never leaves its cgroup).
+# The file exists only for PartOf: the slice ends with the session target.
 [Unit]
 Description=Programs started from the Hyprland session
 PartOf=hyprland-session.target

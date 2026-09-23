@@ -2,24 +2,17 @@
 
 # Draws the plain arrow of a generated cursor theme instead of recolouring one.
 #
-# This runs after tint-cursors.py and overwrites one file. Everything else in
-# the theme stays as that script left it: the resize handles, the text caret and
-# the hands are shapes with a meaning, and redrawing them here would be a second
-# cursor theme kept in a Python file. The arrow is the one cursor that says
-# nothing except "here", so it is the one worth drawing.
+# Runs after tint-cursors.py and replaces only left_ptr. The other cursors
+# carry meaning and stay as tinted; redrawing them would be a second cursor
+# theme kept in Python.
 #
-# It is drawn rather than tinted because the two things that make a pointer
-# readable are not colour. A recoloured Oxygen arrow keeps Oxygen's hairline
-# edge, which disappears against a busy window at any size; and it keeps
-# Oxygen's bitmaps, which exist at three sizes and are stretched for every other
-# request. What is wanted is a heavy dark outline, round joins and a flat fill,
-# and all three are properties of a shape, not of a palette.
+# Drawn, not tinted, because readability is shape, not colour: a recoloured
+# Oxygen arrow keeps its hairline edge and its three bitmap sizes stretched to
+# every other request. Wanted: a heavy dark outline, round joins, flat fill.
 #
-# The geometry is a path, so every size is rasterised from it rather than scaled
-# from a neighbour, and the hotspot is read back off the rendered image at the
-# tip rather than assumed. A pointer whose hotspot is guessed at the corner of
-# its box is off by a pixel or two at every size, in a different direction each
-# time.
+# Every size is rasterised from the path, and the hotspot is read off the
+# rendered tip; a hotspot guessed at the box corner is off by a pixel or two,
+# in a different direction at each size.
 
 import argparse
 import importlib.util
@@ -30,70 +23,47 @@ import tempfile
 
 from PIL import Image
 
-# The arrow, as the centre line of its own outline, in a space 90 tall.
+# The arrow as the centre line of its outline, in a space 90 tall: tip, long
+# edge to the right shoulder, in to the heel (the notch that makes it an arrow,
+# not a play button), out to the tail foot; the left edge closes it.
 #
-# Tip, then the long edge down to the right shoulder, then back in to the heel,
-# then out to the foot of the tail. The left edge closes it. The notch between
-# the shoulder and the heel is what separates an arrow from a triangle: without
-# it the shape reads as a play button.
-#
-# Fitted against the reference drawing rather than judged by eye. A candidate is
-# rendered, both it and the drawing are classified pixel by pixel as background,
-# fill or outline, and the score is the overlap of the two shapes at their best
-# alignment, found through their cross correlation so that where each one sits
-# never enters into it. Scoring on raw pixel agreement instead, over a canvas
-# they mostly share as white, let a shape buy back a positioning error by
-# growing: it settled 5.7% too wide and looked it.
-#
-# The width is not among the fitted numbers. It is pinned to the drawing's own
-# ratio, 0.7690 of the height once the outline is counted, so nothing the search
-# tries can come out wider than the thing it copies. That costs about a point of
-# overlap against letting it float, 94.5% rather than 95.6%, and buys a shape
-# that is the right shape.
+# Fitted to the reference drawing: both are classified per pixel as background,
+# fill or outline, and scored by shape overlap at their best alignment (cross
+# correlation). Raw pixel agreement let a shape trade position error for size
+# and it settled 5.7% too wide. Width is pinned to the drawing's ratio, 0.7690
+# of the height including the outline: 94.5% overlap instead of 95.6% floating,
+# but never wider than the original.
 OUTLINE = [(10.00, 3.00), (78.07, 66.50), (39.08, 62.20), (10.35, 93.00)]
 
-# The notch is the one number here that is not the drawing's. The drawing barely
-# cuts into the back, which reads as a triangle with a corner clipped off, so
-# this one is pulled 15% of the way from where the drawing puts it towards the
-# tip: enough that the back is hollowed and the shape reads as an arrow rather
-# than a wedge.
-#
-# It is a narrow band to work in. Below this the notch stops registering at 24
-# pixels; much above it the shape turns into a barbed arrowhead, which is more
-# than a pointer should be saying. Depth also costs fill, and the fill is what
-# carries the colour: blue area falls 113, 79, 61 and 44 pixels across depths of
-# 0, 20, 30 and 40 percent, so past a third of the way the lower barb at 24
-# pixels is an outline with nothing inside it.
+# The notch is the one value not taken from the drawing. The drawing's barely
+# cuts in and reads as a clipped triangle, so it is pulled 15% of the way
+# towards the tip. Narrow band: less and the notch vanishes at 24 px; more and it
+# becomes a barbed arrowhead. Depth also eats fill, which carries the colour:
+# fill area at 24 px is 113, 79, 61, 44 px at 0, 20, 30, 40% depth, and past a
+# third the lower barb is outline only.
 
-# Outline width as a fraction of the rendered cursor, measured off the drawing:
-# a 15 pixel band down a shape 290 tall.
+# Outline width as a fraction of cursor height: the drawing's 15 px on 290.
 STROKE = 15.0 / 290.0
 
-# Below roughly 40 pixels that fraction stops being a line. At 24, the size this
-# is actually used at, it comes to 1.2 pixels, which antialiasing turns into a
-# soft edge rather than the black border the drawing has. So the fraction is a
-# floor from here up and this is a floor from here down; the shape is drawn
-# slightly heavier when small, which is the trade every icon set makes.
+# Below ~40 px the fraction stops being a line: at 24 (the size in use,
+# hypr/config/env.lua) it is 1.2 px, which antialiasing turns into a soft edge.
+# So small sizes get this floor and are drawn slightly heavier, as icon sets do.
 MIN_STROKE_PX = 2.0
 
-# Both measured from the reference drawing rather than taken from Theme.qml.
-#
-# The rest of the theme is recoloured to the bar's accentSky by tint-cursors.py,
-# and these are deliberately not that: the arrow was asked for in the colours of
-# a particular drawing, and a pointer is looked at on its own, never beside the
-# resize handles it would be compared against.
+# Measured from the reference drawing, not taken from Theme.qml. FILL is also
+# the single source of the whole theme's tint: install.sh reads this line and
+# passes it to tint-cursors.py, so the pointer does not change colour on its way
+# onto a link. Keep the `FILL = "#rrggbb"` form; install.sh parses it with sed.
 FILL = "#1d89e4"
 INK = "#212121"
 
-# The sizes a client is likely to ask for. Anything not here is served by
-# XCursor picking the nearest, which this list exists to make rare.
+# Sizes clients are likely to request; others get XCursor's nearest match.
 SIZES = (16, 20, 24, 28, 32, 40, 48, 56, 64, 72, 96, 128)
 
 
 def load_encoder():
-    # tint-cursors.py owns the Xcursor writer, and a second copy of a binary
-    # format is a second thing to get wrong. The hyphen in its name is why this
-    # is loaded by path rather than imported.
+    # tint-cursors.py owns the Xcursor writer; one copy of a binary format.
+    # Loaded by path because of the hyphen in its name.
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tint-cursors.py")
     spec = importlib.util.spec_from_file_location("tint_cursors", path)
     mod = importlib.util.module_from_spec(spec)
@@ -102,11 +72,9 @@ def load_encoder():
 
 
 def stroke_for(size, outline):
-    # Answers in path units, given what the outline has to measure in pixels
-    # once drawn. The viewBox spans the path plus the stroke, and that whole
-    # span is what maps onto `size`, so the two are tangled: widening the stroke
-    # widens the box it is measured against. Solving for it directly is shorter
-    # than iterating and lands exactly.
+    # Stroke in path units for a given pixel width. The viewBox includes the
+    # stroke, so widening it widens the box it is measured against; solved in
+    # closed form rather than iterated.
     if outline == "none":
         return 0.0
     span = max(y for _, y in OUTLINE) - min(y for _, y in OUTLINE)
@@ -117,10 +85,8 @@ def stroke_for(size, outline):
 
 
 def svg(fill, outline, sw):
-    # The viewBox is the stroked bounds rather than the path's, so the shape
-    # meets every edge of what is rendered and no size wastes a margin it would
-    # then have to be scaled up to make up for. With no outline the two are the
-    # same thing.
+    # viewBox = stroked bounds, so the shape touches every edge and no size
+    # wastes a margin.
     xs = [p[0] for p in OUTLINE]
     ys = [p[1] for p in OUTLINE]
     x0, y0 = min(xs) - sw / 2, min(ys) - sw / 2
@@ -149,18 +115,17 @@ def render(doc, aspect, size):
         if os.path.exists(dst):
             os.unlink(dst)
 
-    # Left-aligned in a square canvas. A cursor is addressed by one number and
-    # this shape is taller than it is wide, so the spare column is on the right,
-    # away from the tip, where nothing is ever drawn.
+    # Left-aligned in a square canvas (a cursor has one size number); the spare
+    # columns fall on the right, away from the tip.
     canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     canvas.paste(im, (0, 0))
     return canvas
 
 
 def tip(im, floor=40):
-    # The topmost opaque run, taken at its centre. Read off the image because
-    # the round join puts the visible point a little inside the path's corner,
-    # by an amount that depends on the size being rendered.
+    # Centre of the topmost opaque run. Read off the image because the round
+    # join moves the visible point inside the path corner by a size-dependent
+    # amount.
     a = im.split()[3].load()
     w, h = im.size
     for y in range(h):
@@ -171,8 +136,8 @@ def tip(im, floor=40):
 
 
 def to_bgra(im):
-    # Xcursor stores premultiplied BGRA. Skipping the multiply leaves a pale
-    # halo along every antialiased edge, which on a heavy outline is most of it.
+    # Xcursor stores premultiplied BGRA; without the multiply every
+    # antialiased edge gets a pale halo.
     px = im.load()
     w, h = im.size
     buf = bytearray()
@@ -202,8 +167,7 @@ def main():
 
     images = []
     for size in SIZES:
-        # A separate document per size, because the stroke is not the same
-        # fraction at every one of them.
+        # One document per size: the stroke fraction varies with size.
         doc, aspect = svg(args.fill, args.outline, stroke_for(size, args.outline))
         im = render(doc, aspect, size)
         xh, yh = tip(im)
@@ -211,9 +175,8 @@ def main():
                        "xhot": xh, "yhot": yh, "delay": 0, "px": to_bgra(im)})
 
     target = os.path.join(cursors, args.name)
-    # A symlink here would be replaced by a file and the alias it stood for
-    # would be lost, so refuse rather than guess. tint-cursors.py writes
-    # left_ptr as a real file, which is the case this is written for.
+    # Refuse a symlink: writing would replace it and lose the alias.
+    # tint-cursors.py writes left_ptr as a real file.
     if os.path.islink(target):
         print(f"pointer: {args.name} is a link, not the arrow itself", file=sys.stderr)
         return 1

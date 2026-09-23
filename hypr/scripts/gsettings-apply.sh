@@ -1,22 +1,7 @@
 #!/usr/bin/env bash
-#
-# Tell the portal what the desktop looks like.
-#
-# On Wayland a GTK application does not read ~/.config/gtk-3.0/settings.ini
-# first. It asks xdg-desktop-portal, and the portal answers from dconf, the
-# key value store gsettings writes to. So the ini file can be perfectly
-# correct and every GTK window still comes up in the wrong theme, because
-# nothing it reads is the file.
-#
-# dconf is not a file this repository can link. It is a binary database in
-# ~/.config/dconf/user, written by the running session. That is why these
-# values are applied by a script at session start rather than deployed by
-# install.sh: there is nothing to deploy.
-#
-# The values here must agree with gtk/gtk-3.0-settings.ini and
-# gtk/gtk-4.0-settings.ini. Two places, one look; changing one without the
-# other produces a desktop that disagrees with itself depending on which
-# toolkit drew the window.
+# On Wayland GTK asks xdg-desktop-portal, which answers from dconf, not from
+# settings.ini. dconf is a binary database, so it is set here at session start
+# instead of being installed. Keep in step with gtk/gtk-{3,4}.0-settings.ini.
 
 set -uo pipefail
 
@@ -31,9 +16,7 @@ set_key() {
         echo "gsettings-apply: no such key: $schema $key" >&2
         return 0
     }
-    # Written only when it differs. Every write wakes every application
-    # listening for the change, and there is no reason to do that on a value
-    # that is already right.
+    # Only on change: every write wakes every listening application.
     [[ "$current" == "'$value'" || "$current" == "$value" ]] && return 0
     gsettings set "$schema" "$key" "$value" 2>/dev/null \
         || echo "gsettings-apply: could not set $key" >&2
@@ -43,15 +26,11 @@ I=org.gnome.desktop.interface
 
 set_key "$I" gtk-theme      "Breeze-Dark"
 set_key "$I" icon-theme     "breeze-dark"
-# Taken from the environment rather than written again here. This script is
-# started by session-start.sh from inside the Hyprland session, so the
-# values hypr/config/env.lua exported are already present. A second copy of the
-# number is how the pointer ends up a different size in GTK windows than
-# everywhere else. The fallbacks cover being run by hand from a plain shell.
+# From hypr/config/env.lua via the session environment, so the cursor has one
+# source of truth. Fallbacks are for running by hand.
 set_key "$I" cursor-theme   "${XCURSOR_THEME:-Spaceduck-Sky}"
 set_key "$I" cursor-size    "${XCURSOR_SIZE:-32}"
 set_key "$I" font-name      "Inter 11"
 set_key "$I" monospace-font-name "CaskaydiaCove Nerd Font Mono 11"
-# The portal reports this as org.freedesktop.appearance color-scheme, which is
-# what a GTK4 or libadwaita application actually looks at.
+# Surfaces as the portal's org.freedesktop.appearance color-scheme (GTK4/libadwaita).
 set_key "$I" color-scheme   "prefer-dark"

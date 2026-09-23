@@ -16,10 +16,8 @@ Item {
 
     property bool shown: false
 
-    // Hiding immediately rather than after the grace period matters when a
-    // menu is opening in the same click: the two surfaces overlap for a
-    // moment, the pointer is over both, and the result reads as a laggy
-    // button rather than two widgets.
+    // Skip the hide delay when a menu opens on the same click, or the two
+    // surfaces overlap briefly.
     property bool immediate: false
 
     onActiveChanged: {

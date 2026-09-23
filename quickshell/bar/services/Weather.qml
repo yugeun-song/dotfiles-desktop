@@ -8,26 +8,18 @@ import qs.services
 Singleton {
     id: root
 
-    // The location lives in scripts/weather.sh, not here. Editing that one
-    // file changes the city for both the bar and the command line, and the
-    // script asks Open-Meteo by coordinate so nothing infers a location.
+    // Location is configured in scripts/weather.sh (fixed coordinates).
     property var data: null
 
     readonly property bool ready: root.data !== null
 
-    // When the reading was obtained, in ms, taken from the payload rather than
-    // from the moment the line arrived. weather.sh serves a ten-minute cache
-    // and, when a fetch fails, falls back to an older one and still exits 0 --
-    // so a line arriving says the script ran, never that the sky was looked
-    // at. The script has published this field all along for exactly this.
+    // Payload's own fetch time (ms). weather.sh may serve a stale cache and
+    // still exit 0, so arrival time says nothing about freshness.
     readonly property double asOf: (root.data?.fetched ?? 0) * 1000
 
     readonly property string place: root.data?.place ?? ""
 
-    // Sentinels rather than plausible numbers. A field the payload did not
-    // carry used to read as 0°, 0% and 0 km/h, which are all weather; is_day
-    // defaulting to 1 asserted daylight, which is a sun glyph at midnight.
-    // Nothing below is a value the sky can take.
+    // Out-of-range sentinels for missing fields; 0 would read as real weather.
     readonly property int code: root.data?.code ?? -1
     readonly property int temp: root.data?.temp ?? -999
     readonly property int feels: root.data?.feels ?? -999
@@ -38,13 +30,9 @@ Singleton {
     readonly property int todayMin: root.data?.today?.min ?? -999
     readonly property int todayMax: root.data?.today?.max ?? -999
 
-    // Only what the pill's face claims: the glyph and the colour are chosen
-    // from code and day together, the label carries temp. A bool has no
-    // sentinel to hold a missing is_day, so it is refused here instead --
-    // otherwise `day` would just assert night where it used to assert noon.
-    //
-    // The tooltip-only fields are absent on purpose; they are checked where
-    // they print, so one missing figure does not blank a readable sky.
+    // Checks only what the pill face shows (code, temp, day flag); tooltip
+    // fields are checked where they print. `day` is a bool with no sentinel,
+    // so a missing is_day is caught via dayKnown.
     readonly property string unknown: {
         if (!root.ready)
             return "";
@@ -57,24 +45,15 @@ Singleton {
         return "";
     }
 
-    // Consecutive failed fetches, used to space out the retries. A boot that
-    // beats NetworkManager to the network would otherwise leave the pill absent
-    // until the next 15-minute tick.
+    // Consecutive failures; drives the retry backoff so an early boot does
+    // not wait for the 15-minute tick.
     property int failures: 0
 
-    // The age past which a served reading is not a live one. weather.sh caches
-    // for ten minutes, so a cache hit lands under this and is still a success;
-    // anything older came from the stale fallback.
+    // Just above weather.sh's 10-minute cache; older means stale fallback.
     readonly property int liveWithin: 660000
 
-    // A fetch that fails and falls back to an older cache still exits 0 and
-    // still prints a payload -- that is what keeps the last known value on the
-    // bar while the network is down. So the exit code says the script ran, not
-    // that the sky was read; only the payload's own timestamp says that. Judged
-    // on the code alone, the ladder below never armed in the one case it was
-    // written for, because a cache from the previous session is almost always
-    // there to fall back on, and the pill sat at "?" until the next 15-minute
-    // tick however early the network came back.
+    // Judge success by payload age, not exit code: the stale-cache fallback
+    // exits 0.
     function settle(): void {
         if (root.ready && Date.now() - root.asOf < root.liveWithin) {
             root.failures = 0;
@@ -84,11 +63,8 @@ Singleton {
         retry.restart();
     }
 
-    // NetworkManager finishing after the bar is the ordinary shape of a login,
-    // so the link coming up is the signal to try again rather than the next
-    // tick. Net picks its backend once, at startup, and reads None when
-    // NetworkManager was not running then; nothing here fires in that case and
-    // the ladder is the only way back, which is why it is still a ladder.
+    // Refetch when the link comes up. If Net's backend is None (NetworkManager
+    // absent at startup) this never fires and the retry backoff is the fallback.
     readonly property bool online: Net.wifiConnected || Net.wiredConnected
 
     onOnlineChanged: {
@@ -101,8 +77,7 @@ Singleton {
 
         command: [Quickshell.shellPath("scripts/weather.sh"), "--bar"]
 
-        // Deferred, so the run is judged against the payload this run printed
-        // rather than the one before it.
+        // Deferred so settle() sees the payload this run printed.
         onExited: Qt.callLater(root.settle)
 
         stdout: SplitParser {
@@ -118,8 +93,7 @@ Singleton {
             }
         }
 
-        // curl and jq write their diagnosis here, and quickshell closes the
-        // channel outright unless something is reading it.
+        // quickshell closes stderr unless something reads it.
         stderr: SplitParser {
             onRead: line => console.warn("[weather]", line)
         }
@@ -133,8 +107,7 @@ Singleton {
         onTriggered: fetch.running = true
     }
 
-    // The script caches for 15 minutes of its own accord, so polling more
-    // often would only re-read the cache.
+    // Above the script's 10-minute cache; faster polls would only hit it.
     Timer {
         interval: 900000
         running: true

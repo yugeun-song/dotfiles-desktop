@@ -3,15 +3,12 @@
 .qmlls.ini
 .DS_Store
 
-# fcitx5 saves by writing a temp beside the target and rename()-ing it over.
-# An interrupted save leaves the temp behind, and one was committed once.
+# Temp files an interrupted fcitx5 save leaves beside its target.
 fcitx5/conf/*_??????
 fcitx5/*_??????
 
-# Python leaves these behind when a script is imported rather than run.
 __pycache__/
 *.pyc
 
-# The output settings of one machine. The example beside it is the tracked
-# file; this is the copy that is read.
+# Per-machine; monitor_settings_example.lua is the tracked template.
 hypr/monitor_settings.lua

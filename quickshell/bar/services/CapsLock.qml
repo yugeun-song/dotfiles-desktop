@@ -9,16 +9,13 @@ Singleton {
 
     property bool active: false
 
-    // When `active` was last confirmed, which is not the same as when the
-    // helper was last seen alive: capslock.sh prints only on a transition, so
-    // silence is its normal state and liveness says nothing about the value.
+    // When `active` was last confirmed. The helper prints only on change, so
+    // silence is normal.
     property double asOf: 0
     property int restarts: 0
 
-    // Backs off rather than retrying at a fixed rate. capslock.sh does not exit
-    // on its own, so one that keeps exiting cannot run here at all, and two
-    // seconds there is a spawn every two seconds for the whole session.
-    // Doubling still brings a helper that died once back at once.
+    // Exponential backoff (2 s to 60 s): the helper never exits by itself, so
+    // repeated exits mean it cannot run here.
     Timer {
         id: supervisor
 
@@ -42,11 +39,8 @@ Singleton {
 
         onRunningChanged: {
             if (!poller.running) {
-                // `active` is kept, not cleared. Clearing it hid the pill,
-                // which tells a user whose Caps Lock is on that it is off --
-                // and that is the one answer the bar cannot be recovered from
-                // by looking at it. Dropping the stamp instead leaves the pill
-                // where it was, saying it no longer knows.
+                // Keep `active`, mark it stale: hiding the pill would claim
+                // Caps Lock is off.
                 root.asOf = 0;
                 supervisor.restart();
             }
@@ -54,8 +48,7 @@ Singleton {
 
         stdout: SplitParser {
             onRead: line => {
-                // Any line at all means the helper is alive and talking, so
-                // the supervisor's backoff starts over.
+                // Any output resets the backoff.
                 supervisor.delay = 2000;
                 const value = line.trim();
                 if (value === "0" || value === "1") {
@@ -63,10 +56,7 @@ Singleton {
                     root.asOf = Date.now();
                     return;
                 }
-                // The script's third token, documented in its header: no LED
-                // node was readable, which is what a keyboard mid-replug looks
-                // like. Dropping it silently left the last state on screen as
-                // though the script had just confirmed it.
+                // "-": no LED node readable (keyboard mid-replug); unknown.
                 if (value === "-") {
                     root.asOf = 0;
                     return;

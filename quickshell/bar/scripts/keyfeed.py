@@ -27,9 +27,7 @@ import struct
 import sys
 import time
 
-# struct input_event on 64-bit Linux: two longs of timestamp, then type, code,
-# value. The size is checked rather than assumed because a mismatch would
-# silently misread every field.
+# struct input_event on 64-bit Linux; size asserted so a mismatch fails loudly.
 FORMAT = "llHHi"
 EVENT_SIZE = struct.calcsize(FORMAT)
 assert EVENT_SIZE == 24, EVENT_SIZE
@@ -37,8 +35,6 @@ assert EVENT_SIZE == 24, EVENT_SIZE
 EV_KEY = 0x01
 KEY_A = 30
 
-# Which of the pressed keys are modifiers, so a chord can be reported as one
-# event rather than as four unrelated presses.
 MODIFIERS = {
     29: "Ctrl", 97: "Ctrl",
     42: "Shift", 54: "Shift",
@@ -46,9 +42,7 @@ MODIFIERS = {
     125: "Super", 126: "Super",
 }
 
-# Names worth printing differently from the kernel's. Everything absent from
-# here falls back to the KEY_ name with its prefix removed and its case fixed,
-# which is already right for the letters and digits.
+# Overrides; anything else is the KEY_ name without prefix, capitalised.
 PRETTY = {
     "KEY_ESC": "Esc", "KEY_SPACE": "Space", "KEY_ENTER": "Enter",
     "KEY_BACKSPACE": "Backspace", "KEY_TAB": "Tab", "KEY_CAPSLOCK": "Caps",
@@ -59,8 +53,7 @@ PRETTY = {
     "KEY_RIGHTBRACE": "]", "KEY_BACKSLASH": "\\", "KEY_SEMICOLON": ";",
     "KEY_APOSTROPHE": "'", "KEY_GRAVE": "`", "KEY_COMMA": ",",
     "KEY_DOT": ".", "KEY_SLASH": "/",
-    # The Korean 104-key layout puts these where a US board has right alt and
-    # right ctrl, and they are the two keys whose label a US name gets wrong.
+    # Korean 104-key: these sit where US boards have right Alt and right Ctrl.
     "KEY_HANGEUL": "한/영", "KEY_HANJA": "한자",
     "KEY_PRINT": "PrtSc", "KEY_SYSRQ": "PrtSc", "KEY_SCROLLLOCK": "ScrLk",
     "KEY_PAUSE": "Pause", "KEY_MENU": "Menu", "KEY_COMPOSE": "Menu",
@@ -139,8 +132,7 @@ def open_keyboards():
         try:
             found[os.open(path, os.O_RDONLY | os.O_NONBLOCK)] = path
         except OSError:
-            # A device that cannot be opened is not fatal: another keyboard may
-            # still be readable, and saying so on every rescan would be noise.
+            # Not fatal, and not worth logging on every rescan.
             continue
     return found
 
@@ -161,9 +153,7 @@ def main():
     emit({"type": "ready", "devices": len(devices)})
 
     held = set()
-    # Bluetooth keyboards come and go, and a device node vanishes with them.
-    # Rescanning on a cadence is what makes the overlay survive a reconnect
-    # without the shell being restarted.
+    # Periodic rescan picks up reconnected (e.g. Bluetooth) keyboards.
     next_scan = time.monotonic() + 5
 
     while True:
@@ -193,8 +183,7 @@ def main():
                         held.discard(code)
                     continue
 
-                # value 2 is auto-repeat. Holding a key down would otherwise
-                # fill the overlay with the same glyph at the repeat rate.
+                # Skip auto-repeat (value 2).
                 if value != 1:
                     continue
 

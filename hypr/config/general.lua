@@ -1,16 +1,10 @@
 -- Compositor settings: outputs, input, layout, appearance, motion.
 
--- A catch-all so an output nobody has configured still lights up at its best
--- mode. config/monitors.lua adds a rule per output on top of this, at load
--- and on every hotplug; this line only has to make the first frame appear.
---
--- highrr, not preferred. A monitor's preferred mode is whatever its EDID puts
--- in the first detailed timing, and on the Philips here that is 2560x1440@60,
--- so the session came up at 60 and the policy then modeset it to 144: the
--- log carried both, back to back, at every start and every reload. A modeset
--- is the one operation this GPU is not trusted with, so the cheapest fix is
--- to not ask for the wrong mode first. monitors.lua asks for highrr as well,
--- so its rule for an external matches this one and costs nothing to apply.
+-- Catch-all for the first frame; config/monitors.lua adds per-output rules.
+-- highrr, not preferred: EDID "preferred" is often 60 Hz (2560x1440@60 on the
+-- Philips here), which forced a second modeset to 144 on every start. Modesets
+-- are what this GPU is least trusted with; monitors.lua asks for highrr too,
+-- so its rule matches this one and costs nothing.
 hl.monitor({
     output = "",
     mode = "highrr",
@@ -27,13 +21,8 @@ hl.config({
         allow_tearing = false,
         layout = "dwindle",
         col = {
-            -- The bar's foreground, which is the lightest colour in the
-            -- palette the bar draws with. It was the bar's green while the
-            -- bar was a row of coloured pills and green was one of them; the
-            -- bar is monochrome now and an accent on the window border is the
-            -- only thing left claiming to be a status. An inactive border that
-            -- is fully transparent reads as no border at all, which is the
-            -- point: only the focused window is outlined.
+            -- The bar's foreground; transparent inactive border, so only the
+            -- focused window is outlined.
             active_border = "rgba(ecf0c1ff)",
             inactive_border = "rgba(00000000)",
         },
@@ -43,9 +32,7 @@ hl.config({
         kb_layout = "kr",
         kb_variant = "kr104",
         follow_mouse = 1,
-        -- Focus follows the pointer, but moving the pointer over a window
-        -- does not raise it. Raising on hover makes drag-and-drop between
-        -- two windows nearly impossible.
+        -- Hover focuses without raising; raising breaks drag-and-drop.
         mouse_refocus = false,
         sensitivity = 0,
         touchpad = {
@@ -65,8 +52,7 @@ hl.config({
             size = 6,
             passes = 2,
             new_optimizations = true,
-            -- Blurring behind the status bar costs a full-screen pass every
-            -- frame for a strip that is already opaque.
+            -- The bar is opaque; blur behind it is a wasted pass per frame.
             special = false,
         },
         shadow = {
@@ -89,58 +75,35 @@ hl.config({
         disable_hyprland_logo = true,
         disable_splash_rendering = true,
         force_default_wallpaper = 0,
-        -- Off, and inert either way on this output: i915 and xe attach
-        -- vrr_capable to eDP and DisplayPort connectors only, so an HDMI one
-        -- has no such property. Setting 1 changes nothing on screen and tells
-        -- output-management clients adaptive sync is on when it is not.
-        -- Revisit on DisplayPort, where the property does exist.
+        -- i915/xe expose vrr_capable on eDP and DP only; on HDMI 1 does
+        -- nothing but misreport adaptive sync. Revisit on DisplayPort.
         vrr = 0,
         focus_on_activate = false,
-        -- true, so a crashed lock screen can be replaced. When the locker dies
-        -- without unlocking, the compositor keeps the session locked -- the
-        -- ext-session-lock protocol requires it, and that is the security
-        -- guarantee. This option is only about whether a NEW locker may attach
-        -- to a session that is already locked. With it false, that attach is
-        -- denied (SessionLockManager.cpp: "Cannot re-lock, ... is disabled" ->
-        -- sendDenied), so hyprlock crashing leaves a locked screen with no
-        -- password field and no way in but a VT switch and a kill. true lets
-        -- the locker be restarted onto the still-locked session, which is the
-        -- documented purpose ("restart a lockscreen app in case it crashes")
-        -- and unlocks nothing on its own.
+        -- Lets a new locker attach to a session whose locker crashed. The
+        -- session stays locked either way (ext-session-lock); with false the
+        -- attach is denied (SessionLockManager.cpp) and there is no password
+        -- field until a VT switch and kill. Unlocks nothing by itself.
         allow_session_lock_restore = true,
-        -- Any input brings the outputs back. Both default to off, which means
-        -- a screen switched off by the lid binding or left off across a
-        -- suspend stays dark no matter what is typed at it. Locked, that is
-        -- not a dark screen, it is a lock screen nobody can read the password
-        -- field on. The cost is that a key pressed on an external keyboard
-        -- lights the internal panel inside a closed lid, which is wasted
-        -- backlight and nothing worse.
+        -- Any input wakes DPMS-off outputs; otherwise a screen off after the
+        -- lid or a suspend hides the lock prompt. monitors.lua re-arms the
+        -- compositor-wide DPMS state so this does not wake a shut panel when
+        -- an external is lit.
         mouse_move_enables_dpms = true,
         key_press_enables_dpms = true,
     },
 
     debug = {
-        -- vfr is under debug, not misc, in this Hyprland. The note that used
-        -- to be here had the latency backwards.
-        --
-        -- Off, the compositor re-arms a frame after every frame and drives
-        -- itself at the panel rate whether or not anything changed. Measured
-        -- on a static screen: 3,275 atomic-commit ioctls a second, on the same
-        -- thread that dispatches libinput, redrawing nothing. It bought no
-        -- latency in exchange -- both paths wait for the same vblank, and what
-        -- changes is how many frames are drawn. The cost is one slow frame
-        -- after a long idle, while the GPU clocks back up.
+        -- vfr lives under debug in this Hyprland. Off, the compositor drew at
+        -- panel rate on a static screen (3,275 atomic commits/s on the input
+        -- thread) for no latency gain. Cost: one slow frame after long idle.
         vfr = true,
     },
 
     render = {
-        -- On for fullscreen only, so windowed work is untouched; the solitary
-        -- check it needs already runs every frame regardless. Expect it to
-        -- engage rarely -- a solitary client must have opened no subsurfaces,
-        -- and a browser's video path usually opens one. Read directScanoutTo
-        -- under a fullscreen window before believing any saving. 1 not 2,
-        -- because 2 also demands the window declare itself a game.
-        -- Explicit sync is not configurable any more; mesa and DRM own it.
+        -- Fullscreen only; rarely engages (any subsurface, e.g. browser video,
+        -- blocks it), so check directScanoutTo before assuming a saving.
+        -- 2 would also require a game content type. Explicit sync is no
+        -- longer an option (mesa/DRM own it).
         direct_scanout = 1,
     },
 
@@ -151,22 +114,15 @@ hl.config({
     },
 
     binds = {
-        -- Off. With this on, a dispatch naming the workspace already showing
-        -- jumps to the previous one instead of doing nothing, so SUPER + digit
-        -- pressed twice and a click on the lit chip both read as a bounce.
-        -- Arriving at an end is exactly when the key gets pressed once more to
-        -- check there is nothing further, which is why the ends felt like they
-        -- flung you back.
+        -- Off: re-selecting the current workspace (a second SUPER+digit, a
+        -- click on the lit chip, an extra press at an end) would bounce back.
         workspace_back_and_forth = false,
-        -- Only shapes the chain back_and_forth walks, so with that off it
-        -- governs nothing. Set rather than deleted, because the two read as a
-        -- pair and a lone survivor invites putting the other one back.
+        -- Inert with back_and_forth off; kept so the pair stays together.
         allow_workspace_cycles = false,
         scroll_event_delay = 0,
     },
 
-    -- Which gesture does what is declared with hl.gesture below; only the
-    -- feel of the swipe is configured here.
+    -- Feel only; the gestures themselves are hl.gesture below.
     gestures = {
         workspace_swipe_distance = 400,
         workspace_swipe_cancel_ratio = 0.3,
@@ -179,18 +135,15 @@ hl.config({
     },
 })
 
--- Touchpad gestures. The old gestures:workspace_swipe pair is gone; a gesture
--- is now declared by finger count and direction.
+-- gestures:workspace_swipe no longer exists; declare by fingers and direction.
 hl.gesture({ fingers = 4, direction = "horizontal", action = "workspace" })
 hl.gesture({ fingers = 3, direction = "swipe", action = "move" })
 
 -- ---------------------------------------------------------------------------
 -- Motion
 -- ---------------------------------------------------------------------------
--- Speeds are tenths of a second, so 1.0 is 100 ms. Everything lands between 45
--- and 165 ms except border at 330, which can afford to arrive late because it
--- is never in the way. The shape matters more than the duration: a
--- decelerating curve is legible long before the animation finishes.
+-- Speed is in tenths of a second (1.0 = 100 ms). Everything is 45-165 ms
+-- except border (330 ms), which is never in the way.
 
 hl.curve("emphasizedDecel", {
     type = "bezier",

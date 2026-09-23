@@ -1,16 +1,8 @@
 #!/usr/bin/env bash
-#
-# Launches the first terminal emulator that is actually installed.
-#
-# The order is a preference, not a survey: kitty first because the shell
-# configuration in dotfiles-terminal is written for it, then the rest in
-# rough order of how likely they are to behave the same way. A machine that
-# has none of them still gets a clear message instead of a keybind that
-# silently does nothing.
+# Launches the first installed terminal, kitty first (dotfiles-terminal targets it).
 #
 #   terminal.sh              open a shell
 #   terminal.sh -e cmd ...   run a command in a terminal
-#
 set -uo pipefail
 
 TERMINALS=(
@@ -46,7 +38,7 @@ term=$(pick) || {
 if [[ "${1:-}" == "-e" ]]; then
     shift
     case "$term" in
-        # gnome-terminal and tilix want -- rather than -e for the command.
+        # These take -- rather than -e.
         gnome-terminal|tilix) exec "$term" -- "$@" ;;
         *)                    exec "$term" -e "$@" ;;
     esac

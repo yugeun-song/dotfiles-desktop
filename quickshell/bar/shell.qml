@@ -5,9 +5,8 @@ import "modules"
 import qs.services
 
 ShellRoot {
-    // One bar per screen, and exactly one of everything else. The overlays
-    // register global shortcuts, which Hyprland binds by name; a second copy
-    // would register the same name twice.
+    // One bar per screen, one of everything else: a second copy would register
+    // the same global shortcut names twice.
     Variants {
         model: Quickshell.screens
 
@@ -20,28 +19,21 @@ ShellRoot {
 
     Cheatsheet {}
 
-    // These two are what start the notification daemon. A QML singleton is
-    // created on first reference, so with nothing instantiating them the
-    // NotificationServer inside Notifications never runs and the bus name stays
-    // unowned -- which is exactly the state this machine was in.
+    // Instantiating these starts the notification daemon: a singleton is only
+    // created on first reference, otherwise the bus name stays unowned.
     NotificationToasts {}
 
     NotificationCentre {}
 
-    // Off until asked for. See Keys.enabled: a visualiser nobody switched on
-    // is a keylogger, and this one holds device descriptors to do it.
+    // Inert until KeyFeed.enabled is toggled, since it reads input devices.
     KeyOverlay {}
 
     Osd {
         id: osd
     }
 
-    // Both readouts are driven by their service rather than by the key, so a
-    // change made anywhere else still shows. Wiring them the other way round
-    // would mean the OSD only appears when this shell owns the key.
-    //
-    // That holds for volume, which watches Pipewire. Brightness has nothing
-    // watching the backlight device, so it still only reports its own writes.
+    // OSDs follow the services, not the keys, so outside changes show too.
+    // Volume watches Pipewire; Brightness only reports its own writes.
     Connections {
         target: Brightness
 

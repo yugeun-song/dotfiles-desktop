@@ -1,35 +1,19 @@
 # Qt and KDE application settings.
 #
-# Palette values are taken from two published themes rather than invented:
+# Palette sources:
 #   Spaceduck    https://github.com/pineapplegiant/spaceduck   (bg, fg, greys, selection)
 #   Tokyo Night  https://github.com/folke/tokyonight.nvim      (blue, cyan, purple, green, orange)
 #
-# Qt reads none of this unless QT_QPA_PLATFORMTHEME names a platform theme
-# plugin; config/env.lua sets it to kde, which loads
-# KDEPlasmaPlatformTheme6.so from plasma-integration. Without that a KDE
-# application ignores this file and draws its own default light palette,
-# which is how a file manager ends up white on a dark desktop.
+# Read only through QT_QPA_PLATFORMTHEME=kde (hypr/config/env.lua, needs
+# plasma-integration); otherwise KDE apps draw a light default palette.
 #
-# The colours are here, in full, on purpose. A .colors file is not read by
-# applications: the settings dialog copies its contents into this file when
-# someone picks a scheme by name. Naming a scheme here without the blocks
-# below leaves every colour at the Qt default.
-#
-# The colour blocks below are duplicated in kde/kdeglobals, and have to stay
-# identical. Qt and KDE applications read kdeglobals directly; this file is
-# only what the settings dialog copies from when someone picks the scheme by
-# name there. Editing one and not the other means the desktop and the settings
-# dialog disagree about what the scheme is.
-
-# Everything named here comes from an official package or from this
-# repository. No AUR.
+# Applications read these colour blocks, not the .colors file, so they must be
+# here in full and stay identical to kde/SpaceduckDark.colors. No AUR packages.
 
 [General]
 ColorScheme=SpaceduckDark
 Name=Spaceduck Dark
-# Breeze is the only widget style that is both compiled code and an official
-# package. The colours above decide the palette, so the style only decides
-# shapes.
+# Breeze: the only compiled widget style in the official repos; shapes only.
 widgetStyle=Breeze
 font=Inter,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 fixed=CaskaydiaCove Nerd Font Mono,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
@@ -135,8 +119,7 @@ ForegroundNegative=247,118,142
 ForegroundNeutral=224,175,104
 ForegroundPositive=158,206,106
 
-# Window manager colours. Hyprland draws its own borders and ignores these,
-# but Qt applications with client side decorations read them.
+# Hyprland ignores these; Qt client-side decorations read them.
 [WM]
 activeBackground=22,25,38
 activeForeground=236,240,193
@@ -154,9 +137,7 @@ ContrastEffect=1
 IntensityAmount=0
 IntensityEffect=0
 
-# Off. An unfocused window that dims its own text is a window you have to
-# click before you can read it, and with one screen there is always exactly
-# one focused window and everything else greyed out.
+# Off: dimming unfocused windows greys out everything but one window.
 [ColorEffects:Inactive]
 ChangeSelectionColor=false
 Enable=false
@@ -169,8 +150,7 @@ IntensityAmount=0
 IntensityEffect=0
 
 [Icons]
-# breeze-dark ships with breeze-icons, which is official. breeze-plus-dark
-# was the previous choice and comes from the AUR.
+# From breeze-icons (official repos).
 Theme=breeze-dark
 
 [KDE]

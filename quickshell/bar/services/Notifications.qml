@@ -4,69 +4,42 @@ import QtQuick
 import Quickshell
 import Quickshell.Services.Notifications
 
-// The notification daemon, and the history behind it.
-//
-// Nothing owned org.freedesktop.Notifications on this machine before this
-// existed. mako was in the package list and was never installed, so every
-// notification the desktop sent went nowhere: capture.sh announcing a saved
-// screenshot, session-start.sh reporting that it could not start something.
-// They were not lost noisily, they were simply never delivered.
-//
-// The server lives here rather than in a module because a second copy would try
-// to take the same bus name and lose, and because the history has to outlive
-// any window that shows it.
+// The notification daemon (org.freedesktop.Notifications) and its history.
+// No other daemon is installed. A singleton: a second server would lose the bus
+// name, and the history must outlive any window showing it.
 Singleton {
     id: root
 
-    // How much to keep. Long enough that "what did that say" is answerable an
-    // hour later, short enough that it stays in memory without thought.
     readonly property int historyLimit: 100
 
     property var history: []
 
-    // Derived, never counted. Five separate paths used to move a number that
-    // history already answers: dismiss() rebuilt the list without touching it,
-    // historyLimit truncated the list while the counter kept climbing, the
-    // panel zeroed it on click, and a notification arriving into the open
-    // panel incremented it. A count kept beside the thing it counts can only
-    // be wrong in ways the thing itself cannot.
+    // Derived from history, never counted separately, so it cannot drift.
     readonly property int unread: root.history.filter(e => !e.read).length
 
-    // Whether the history panel is showing. It lives here rather than in the
-    // panel because the bar's pill toggles it and the panel renders it, and a
-    // module cannot reach a sibling module's property.
+    // Here, not in the panel: the bar pill toggles it and sibling modules
+    // cannot reach each other's properties.
     property bool centreOpen: false
 
     function toggleCentre() {
         root.centreOpen = !root.centreOpen;
-        // Opening the panel is the act of reading, so the count clears there.
         if (root.centreOpen)
             root.markRead();
     }
 
     signal toast(var entry)
 
-    // Arrival times, kept across a configuration reload.
-    //
-    // The server hands its retained notifications back after every reload and
-    // add() runs on each one, so every timestamp in the history used to collapse
-    // onto the moment of the reload: thirty notifications spanning an hour all
-    // reading the same second. It went unnoticed while the display was hours and
-    // minutes and the reload usually fell in the same minute.
-    //
-    // There is nothing to recover the real time from. A Notification carries an
-    // id, its text, an urgency and an expireTimeout, and no arrival time. So the
-    // times are kept here, in the one thing whose contents outlive a reload.
+    // Arrival times by id, kept across reloads. The server replays retained
+    // notifications through add() after a reload, and a Notification carries no
+    // arrival time, so without this every timestamp collapses onto the reload.
     PersistentProperties {
         id: arrivals
 
         reloadableId: "notificationArrivals"
 
-        // JSON, not an object. These values are carried across a reload into a
-        // new QML engine and a JS object cannot make that crossing: quickshell
-        // reports "JSValue can't be reassigned to another engine" and the
-        // property arrives undefined, which is worse than not persisting at
-        // all because every read of it then throws. A string crosses.
+        // A JSON string, not an object: a JS object cannot cross into the new
+        // engine ("JSValue can't be reassigned to another engine") and arrives
+        // undefined.
         property string times: "{}"
     }
 
@@ -78,7 +51,6 @@ Singleton {
         }
     }
 
-    // The time this id first arrived, remembered the first time it is asked for.
     function arrivalOf(id) {
         const m = root.arrivalMap();
         if (m[id] !== undefined)
@@ -89,8 +61,7 @@ Singleton {
         return now;
     }
 
-    // Anything the history no longer holds. Without this the map is the only
-    // thing here that never forgets, and it grows for as long as the session.
+    // Drops ids the history no longer holds, or the map grows all session.
     function prune() {
         const m = root.arrivalMap();
         const live = {};
@@ -102,46 +73,25 @@ Singleton {
         arrivals.times = JSON.stringify(live);
     }
 
-    // The sending utility puts its own basename in app_name when the caller
-    // passes no --app-name, so "notify-send" means nobody identified themselves
-    // rather than naming an application. Labelling every scripted notification
-    // with the tool that sent it tells a reader nothing they cannot see.
+    // notify-send fills app_name with its own basename when no --app-name is
+    // given, which names no application.
     function senderName(raw) {
         if (!raw || raw === "notify-send" || raw === "notify-desktop")
             return "";
         return raw;
     }
 
-    // A notification is kept after it is closed, which is the whole point of a
-    // history, so each one is copied into a plain object as it arrives. Holding
-    // the Notification itself would mean reading properties off an object the
-    // server has already destroyed.
-    // Markup is advertised to senders below, and both the toasts and the
-    // history render a body as StyledText so that a <b> arrives bold instead
-    // of as four visible characters. StyledText also honours <img src=...>,
-    // and it fetches whatever that names. Any program that can reach the
-    // session bus can send a notification, so that is a remote URL any local
-    // program can make this process request, out of a component whose whole
-    // job is to display text it did not write.
-    //
-    // Nothing legitimate puts an image inside a body: the icon travels in
-    // app_icon, which is handled separately. So the tag is dropped here, once,
-    // rather than at each of the two places that render one, and the markup
-    // that senders are actually promised keeps working.
+    // Bodies render as StyledText, which fetches any <img src=...>: any bus
+    // client could make this process request an arbitrary URL. Icons travel in
+    // app_icon, so <img> is stripped once here and other markup keeps working.
     function withoutImages(text: string): string {
         return text.replace(/<\s*img\b[^>]*>?/gi, "");
     }
 
     function snapshot(n) {
-        // Two kinds of action never become a button.
-        //
-        // "default" is what the sender wants run when the notification itself is
-        // clicked, and the freedesktop spec says it should not be displayed as
-        // one. Claude Code sends it with no label, so drawing it produced an
-        // empty chip that did nothing a reader could predict.
-        //
-        // Anything else with no label is the same problem without the excuse:
-        // a button whose text is blank cannot say what pressing it does.
+        // Copied into a plain object: the history outlives the Notification.
+        // "default" is the click-the-body action and the spec says not to show
+        // it as a button; unlabelled actions are skipped too.
         const actions = [];
         let hasDefault = false;
         for (let i = 0; i < n.actions.length; i++) {
@@ -160,25 +110,19 @@ Singleton {
             appIcon: n.appIcon || "",
             summary: n.summary || "",
             body: root.withoutImages(n.body || ""),
-            // 2 is Critical in the freedesktop spec, which is the only level
-            // worth treating differently: it is what "your battery is about to
-            // die" uses, and it should not disappear on a timer.
+            // Critical never expires on a timer.
             critical: n.urgency === NotificationUrgency.Critical,
             actions: actions,
             hasDefault: hasDefault,
             at: root.arrivalOf(n.id),
             read: false,
-            // Kept so an action can still be invoked from the history while the
-            // sender is alive. Reading anything else off it after close is not
-            // safe; see snapshot above.
+            // Only for invoking actions later; read nothing else off it.
             live: n
         };
     }
 
     function add(n) {
-        // Already read if it arrived into an open panel: the user is looking at
-        // it as it lands. Counting it unread there left a badge that outlived
-        // the reading of every notification it stood for.
+        // Arriving into an open panel counts as read.
         const entry = root.snapshot(n);
         entry.read = root.centreOpen;
 
@@ -213,26 +157,20 @@ Singleton {
         root.prune();
     }
 
-    // tracked is what keeps a Notification alive past its close, and nothing
-    // was ever clearing it: every notification the session had seen stayed in
-    // the server for as long as the shell ran. The history is the only thing
-    // that needs them alive, so they are let go on the three paths that drop
-    // one -- aged out of the limit, dismissed, cleared.
+    // tracked keeps a Notification alive past its close; clear it on every path
+    // that drops an entry, or the server holds them all session.
     function release(entry) {
         if (entry && entry.live)
             entry.live.tracked = false;
     }
 
-    // Rebuilt rather than marked in place: unread is a binding over history, and
-    // a var property only tells its dependents anything when it is reassigned.
+    // Rebuilt, not mutated: a var property notifies only on reassignment.
     function markRead() {
         root.history = root.history.map(e => Object.assign({}, e, { read: true }));
     }
 
-    // Invoking an action tells the sending application to do something, which
-    // it can only do while it is still running. An action on a notification
-    // from a program that has since exited does nothing, and saying so is
-    // better than a button that silently fails.
+    // An action only works while the sender is running; warn instead of
+    // failing silently.
     function invoke(entry, identifier) {
         if (!entry.live) {
             console.warn("[notifications] the sender is gone; cannot run", identifier);
@@ -252,16 +190,14 @@ Singleton {
     NotificationServer {
         id: server
 
-        // Everything this shell can actually honour, and nothing it cannot.
-        // Claiming a capability that is not implemented makes senders format
-        // for a renderer that is not there.
+        // Advertise only what is rendered; senders format for these claims.
         actionsSupported: true
         bodySupported: true
         bodyMarkupSupported: true
         imageSupported: true
 
-        // The notification object is destroyed when it closes unless something
-        // asks to keep it. The history needs it alive to invoke actions later.
+        // Retained notifications are handed back after a reload (see arrivals).
+        // tracked = true below is what keeps each one alive past its close.
         keepOnReload: true
 
         onNotification: notification => {

@@ -6,18 +6,11 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.services
 
-// The history behind the toasts: what arrived, what it said, and what it can
-// still be asked to do.
-//
-// A toast is a glance. Everything it cannot hold -- the notification that
-// arrived while the screen was locked, the one dismissed by reflex, the second
-// line of a body that was elided -- lives here instead.
+// Notification history panel: everything a toast could not hold.
 Scope {
     id: root
 
-    // How far a row has to be dragged before letting go deletes it rather than
-    // springing it back, as a fraction of its width. The same figure the toasts
-    // use, because the two are the same gesture on the same notification.
+    // Swipe-to-delete threshold as a fraction of row width; matches the toasts.
     readonly property real swipeCommit: 0.28
 
     function toggle() {
@@ -28,25 +21,10 @@ Scope {
         Notifications.centreOpen = false;
     }
 
-    // Absolute time, not "3 minutes ago". A relative label has to be recomputed
-    // to stay true, and one that silently stops updating is worse than a clock.
-    //
-    // Written out whole: date, seconds, and the offset. This list is read to
-    // answer "when exactly", and the short form could not. It hid the date
-    // whenever the notification had arrived today, which is most of them and
-    // exactly the ones where the answer sounds obvious and is not; and a bare
-    // clock reading never says which clock it was read from.
-    //
-    // The offset is a number rather than an abbreviation, for the reason
-    // LeftPills gives: an abbreviation has to be recognised before it says
-    // anything, and several are ambiguous across regions. Minutes appear only
-    // when they are not zero, so Seoul reads UTC+9 and Kathmandu UTC+5:45.
-    //
-    // Day, then month, then year, which is the order hypr/hyprlock.conf and the
-    // clock's tooltip already use. The month is a name rather than a number
-    // because that is the half of this convention that carries its weight: 03
-    // and 08 swap places between one country and the next and nothing on screen
-    // says which was meant, while "Mar" and "Aug" cannot be read backwards.
+    // Full absolute time: a relative label goes stale unless recomputed, and
+    // this list answers "when exactly". Numeric UTC offset for the reason given
+    // in StatusItems.qml. Day-month-year with a month name, as hyprlock and the
+    // bar clock use, so 03/08 cannot be read backwards.
     function stamp(ms) {
         const d = new Date(ms);
         const p = n => (n < 10 ? "0" : "") + n;
@@ -72,11 +50,8 @@ Scope {
             color: "transparent"
             focusable: true
 
-            // This covers the whole screen so a click anywhere dismisses it,
-            // which means it must ignore the bar's exclusive zone. Without this
-            // the compositor first pushes the surface below the bar and the
-            // card's own top margin then stacks on top of that, putting it a
-            // full bar height too low.
+            // Full-screen so any click dismisses it. Ignore the bar's exclusive
+            // zone, or the card's top margin stacks below the bar twice.
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
@@ -89,9 +64,7 @@ Scope {
                 right: true
             }
 
-            // Keys go to an item inside the window, never to the window. A
-            // PanelWindow does not take focus itself, so a Keys handler on it is
-            // never reached and Escape does nothing.
+            // Keys handlers must sit on an item: a PanelWindow never takes focus.
             Item {
                 anchors.fill: parent
                 focus: true
@@ -103,9 +76,7 @@ Scope {
                     }
                 }
 
-                // Clicking away closes. The area is transparent rather than
-                // dimmed: this panel is a sidebar, not a modal, and dimming the
-                // whole screen to read one line overstates it.
+                // Click-away closes; undimmed, since this is a sidebar, not a modal.
                 MouseArea {
                     anchors.fill: parent
 
@@ -121,51 +92,24 @@ Scope {
                     anchors.rightMargin: Theme.edgeMarginRight
                     width: Theme.centreWidth
 
-                    // Everything inside the card that is not the list: the
-                    // header's own top margin, the header, the gap under it and
-                    // the card's bottom margin.
-                    //
-                    // This used to be the literal px(28), which is px(8) short
-                    // of what those four actually come to, and px(8) is what
-                    // was being cut off the bottom row. A number that has to
-                    // agree with four anchors elsewhere in the file will stop
-                    // agreeing with them; adding them up cannot.
+                    // Card height minus the list, summed from the same anchors
+                    // below so it cannot drift from them.
                     readonly property int chrome: Theme.centrePad + header.height
                                                 + Theme.px(10) + Theme.centrePad
 
-                    // How many notifications this is meant to show at once.
-                    // Counted in rows rather than taken as a share of the
-                    // screen, because a row is drawn at the bar's scale and a
-                    // share of the screen is not: on the laptop panel the same
-                    // 45% that holds five rows on the monitor held three, so
-                    // the denser screen showed less of the same history.
+                    // Sized in rows, not screen share: rows scale with the bar,
+                    // so a screen share shows fewer rows on the denser panel.
                     readonly property int rowTarget: 5
 
-                    // It is a panel over work in progress, not a page, so the
-                    // share of the screen is still here -- as a ceiling now
-                    // rather than as the rule, for the screen short enough that
-                    // five rows would be the whole of it.
+                    // Screen share survives only as a ceiling for short screens.
                     readonly property int limit: Math.min(
                         Math.round((parent.height - Theme.barHeight) * 0.62),
                         card.chrome + card.rowTarget * card.rowUnit - list.spacing)
 
-                    // One row plus the gap under it, at the shape most of them
-                    // take: the sender and timestamp line, a summary, one
-                    // wrapped line of body, and the padding the row adds.
-                    //
-                    // A constant, and deliberately not measured off the list.
-                    // It was (contentHeight + spacing) / count, which looks
-                    // like the right answer and is not: ListView reports
-                    // contentHeight as an estimate for the rows it has not
-                    // built yet and refines it as delegates come and go, so the
-                    // panel changed height while it was being scrolled.
-                    //
-                    // Rows are not all this tall. A body that wraps to two
-                    // lines, which is what a screenshot path does, adds about
-                    // twenty pixels. So the alignment this buys is approximate,
-                    // and it is still worth having: the alternative is a strip
-                    // of a row along the bottom edge, which reads as a
-                    // rendering fault rather than as "there is more below".
+                    // A typical row plus spacing, as a constant. Not measured
+                    // from the list: ListView's contentHeight is an estimate for
+                    // unbuilt rows and changes while scrolling. Taller rows make
+                    // the whole-row fit approximate, which beats a sliver of row.
                     readonly property int rowUnit: Theme.px(14)   // sender, time
                                                  + Theme.px(6)    // gap
                                                  + Theme.px(21)   // summary
@@ -174,9 +118,8 @@ Scope {
                                                  + Theme.notifRowPad * 2
                                                  + list.spacing
 
-                    // The tallest this may be: whole rows inside the limit,
-                    // and nothing about the list in it, so it does not move
-                    // while the list is scrolled.
+                    // Whole rows within limit; independent of the list so it
+                    // stays still while scrolling.
                     readonly property int cap: {
                         const rows = Math.max(1, Math.floor(
                             (card.limit - card.chrome + list.spacing) / card.rowUnit));
@@ -186,9 +129,8 @@ Scope {
                     height: {
                         if (Notifications.history.length === 0)
                             return card.chrome + Theme.px(30);
-                        // contentHeight is exact once every row exists, which
-                        // is the only case this branch decides: a list short
-                        // enough to fit is a list with nothing left to estimate.
+                        // contentHeight is exact whenever it is below cap: every
+                        // row is built.
                         return Math.min(card.chrome + list.contentHeight, card.cap);
                     }
                     radius: Theme.centreRadius
@@ -218,11 +160,6 @@ Scope {
                         anchors.margins: Theme.centrePad
                         height: Theme.px(22)
 
-                        // The count leads the word. It was on the far right as
-                        // "18 kept", which put the only part of this line that
-                        // ever changes as far as possible from the part that
-                        // never does, and made a label out of a panel that
-                        // already announces itself by being open.
                         Text {
                             anchors.left: parent.left
                             anchors.verticalCenter: parent.verticalCenter
@@ -235,9 +172,7 @@ Scope {
                             color: Theme.surfaceFaint
                         }
 
-                        // The only control left on this panel, so it is drawn at
-                        // a size that says so. It was the smaller of two icons
-                        // while every row also carried a close button.
+                        // The panel's only control, so drawn large.
                         Text {
                             anchors.right: parent.right
                             anchors.verticalCenter: parent.verticalCenter
@@ -286,8 +221,6 @@ Scope {
                         boundsBehavior: Flickable.StopAtBounds
                         model: Notifications.history
 
-                        // The rows below the one that left slide up rather than
-                        // snapping into the gap.
                         displaced: Transition {
                             NumberAnimation {
                                 properties: "y"
@@ -296,9 +229,8 @@ Scope {
                             }
                         }
 
-                        // Same split as the toasts: the slot holds the row's
-                        // place in the list and collapses, the row is what
-                        // travels. One item doing both leaves its gap behind.
+                        // The slot holds the list position and collapses; the
+                        // row travels. One item doing both leaves a gap behind.
                         delegate: Item {
                             id: slot
 
@@ -355,18 +287,13 @@ Scope {
                                     }
                                 }
 
-                                // Hover highlight and swipe are the same area, so
-                                // a drag that starts anywhere on the row works
-                                // rather than only on a dedicated handle.
                                 MouseArea {
                                     id: hover
 
                                     anchors.fill: parent
                                     hoverEnabled: true
 
-                                    // A hand, not a pointing finger. The row has
-                                    // no click to offer -- it is dragged aside to
-                                    // delete -- and a finger would promise one.
+                                    // Open hand: the row drags, it does not click.
                                     cursorShape: hover.drag.active ? Qt.ClosedHandCursor
                                                                    : Qt.OpenHandCursor
                                     drag.target: row
@@ -408,11 +335,6 @@ Scope {
                                             font.pixelSize: Theme.notifLabelSize
                                             font.weight: Font.DemiBold
                                             font.letterSpacing: Theme.notifTracking
-                                            // The application's name, which is
-                                            // a label and not a state: the bar
-                                            // foreground, dimmed, like every
-                                            // other label here. Urgent keeps
-                                            // its accent.
                                             color: slot.modelData.critical ? Theme.accentRed
                                                                            : Theme.surfaceDim
                                         }
@@ -452,10 +374,6 @@ Scope {
                                         textFormat: Text.StyledText
                                     }
 
-                                    // The buttons the sending application offered.
-                                    // Notifications.invoke warns and returns false
-                                    // if that application has since exited, which
-                                    // is the only way an action can fail here.
                                     Row {
                                         visible: slot.modelData.actions.length > 0
                                         spacing: Theme.px(18)
@@ -476,10 +394,6 @@ Scope {
                                                 font.pixelSize: Theme.notifLabelSize
                                                 font.weight: Font.DemiBold
                                                 font.letterSpacing: Theme.notifTracking
-                                                // An action is a target, so it
-                                                // brightens under the pointer
-                                                // rather than wearing a colour
-                                                // to say it is one.
                                                 color: press.containsMouse ? Theme.fg
                                                                            : Theme.surfaceDim
 

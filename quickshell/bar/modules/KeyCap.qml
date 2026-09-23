@@ -1,27 +1,13 @@
 import QtQuick
 import qs.services
 
-// One key press, drawn as a cap.
-//
-// Modifiers do not get caps of their own. Shift and D pressed together are one
-// event, not two, and two caps side by side say the opposite: that something
-// happened twice. The modifiers are drawn as their symbols, in front of the key
-// and inside the same cap, which is the convention every keyboard shortcut in
-// print has used for decades.
-//
-// The shadow is a second rectangle directly beneath the face, not offset to one
-// side and not blurred. It is the side of the key rather than a shadow cast on
-// the desktop, which is why it goes straight down: a key has a side, and it is
-// the same side whichever way the light falls.
-//
-// The side is the palette's grey rather than a darker shade of the face. A
-// shade of cream is still cream, and against a dark desktop the two edges read
-// as one thick face; the grey separates them. It was yellow, which was the only
-// accent left anywhere on this desktop once the bar went monochrome.
+// One chord drawn as a single cap: modifier symbols precede the key inside
+// the same cap. The key's side is an unblurred grey rectangle straight below
+// the face; a darker cream would merge with the face on a dark desktop.
 Item {
     id: root
 
-    // The modifier symbols, already assembled: "" or "\u2303\u21E7".
+    // Pre-assembled modifier symbols, e.g. "" or "\u2303\u21E7".
     property string mods: ""
     property string text: ""
 
@@ -63,17 +49,8 @@ Item {
             anchors.centerIn: parent
             spacing: Theme.px(2)
 
-            // As dark and as heavy as the key it modifies. It was drawn at
-            // 55% to say it is the qualifier rather than the thing that
-            // happened, which next to a letter read as a lighter typeface
-            // instead.
-            //
-            // One weight above the letter, and that is what makes them equal
-            // rather than what makes them differ: Inter draws the modifier
-            // marks out of thinner strokes than it draws a stem, so DemiBold
-            // beside DemiBold still looks like two weights. Bold beside
-            // DemiBold matches. The order is what says which one is the
-            // qualifier.
+            // Bold, one step above the key: Inter draws modifier marks with
+            // thinner strokes, so Bold beside DemiBold looks equal in weight.
             Text {
                 anchors.verticalCenter: parent.verticalCenter
                 visible: root.mods !== ""
@@ -88,8 +65,7 @@ Item {
                 anchors.verticalCenter: parent.verticalCenter
                 text: root.text
                 font.family: root.iconGlyph ? Theme.iconFont : Theme.uiFont
-                // Nerd Font glyphs sit well inside their em box, so asking for
-                // the same number gives a smaller drawing than Inter does.
+                // Nerd Font glyphs sit small in their em box; size up to match.
                 font.pixelSize: root.iconGlyph ? Theme.px(20) : Theme.px(17)
                 font.weight: Font.DemiBold
                 color: root.ink

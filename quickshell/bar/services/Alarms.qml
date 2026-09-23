@@ -7,29 +7,21 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    // State is a plain JSON file managed by scripts/alarm.sh. Watching the
-    // file means the bar needs no IPC and picks up changes made from any
-    // terminal immediately.
+    // JSON state owned by scripts/alarm.sh; watched, so no IPC is needed.
     readonly property string statePath: (Quickshell.env("XDG_STATE_HOME") ?? `${Quickshell.env("HOME")}/.local/state`) + "/quickshell-bar/alarms.json"
 
     property var entries: []
     property var ringing: null
 
-    // When `entries` was last accepted from the file. The list is deliberately
-    // kept across a failed load -- a half-written file must not erase every
-    // alarm -- so its age is the only thing separating "these are the alarms"
-    // from "these were the alarms".
+    // Last good load. entries survive a failed load, so this marks staleness.
     property double asOf: 0
 
-    // Filtered against nowSeconds rather than a captured Date.now(): a binding
-    // only re-runs on its dependencies, so a wall time read here would freeze
-    // the list at the last file change and leave a past alarm showing "0m".
+    // Uses nowSeconds, not Date.now(): a binding only re-runs on dependencies.
     readonly property var pending: root.entries.filter(a => a.epoch > root.nowSeconds).sort((a, b) => a.epoch - b.epoch)
 
     readonly property var next: root.pending[0] ?? null
 
-    // The label counts down rather than showing the wall time: a bare HH:MM
-    // beside a clock glyph reads as "the time", not "when this fires".
+    // Ticked by the timer below; drives pending and the tooltip countdown.
     property real nowSeconds: Date.now() / 1000
 
     readonly property string countdown: {
@@ -54,8 +46,7 @@ Singleton {
     }
     readonly property bool hasAlarm: root.next !== null || root.ringing !== null
 
-    // Occurrences already rung, as id@epoch. The epoch is part of the key so a
-    // daily alarm rolled forward by reap counts as a new occurrence.
+    // Rung occurrences as id@epoch, so a rolled-forward daily alarm rings again.
     property var firedKeys: []
     property real lastReap: 0
 
@@ -64,10 +55,8 @@ Singleton {
             const parsed = JSON.parse(file.text());
             if (!Array.isArray(parsed))
                 throw new Error("state file is not a list");
-            // Every field the bar prints, checked before it is printed.
-            // SystemPills interpolates at, daily and label straight into the
-            // tooltip, so one entry missing a field put the literal word
-            // "undefined" where a time belongs.
+            // StatusItems interpolates these fields into the tooltip; drop
+            // entries that would print "undefined".
             const good = parsed.filter(a => a
                                        && typeof a.epoch === "number" && isFinite(a.epoch)
                                        && typeof a.at === "string" && a.at !== ""
@@ -77,11 +66,8 @@ Singleton {
             root.entries = good;
             root.asOf = Date.now();
         } catch (error) {
-            // The previous list is kept: a truncated or half-written file would
-            // otherwise erase every alarm from the bar without a word. What it
-            // stops doing is claiming to be current -- the catch used to assign
-            // nothing at all, so a file that never parsed again left the last
-            // good list on the bar indefinitely.
+            // Keep the previous list (a half-written file must not erase it),
+            // but mark it stale.
             root.asOf = 0;
             console.warn("[alarms] unreadable state:", error);
         }
@@ -91,8 +77,8 @@ Singleton {
         root.ringing = null;
     }
 
-    // Spaced out because a reap that cannot write leaves the entry due, and the
-    // 5-second tick would then respawn it for as long as the shell runs.
+    // Rate-limited: a reap that cannot write leaves the entry due, and the
+    // 5 s tick would respawn it forever.
     function reap() {
         if (clean.running || root.nowSeconds - root.lastReap < 60)
             return;
@@ -103,15 +89,12 @@ Singleton {
     function check() {
         const now = Date.now() / 1000;
 
-        // A ring nobody dismissed stops being news. Without this the latch is
-        // permanent: the pill stays red on an alarm from hours ago, and the
-        // early return below means no alarm after it ever rings again.
+        // Auto-dismiss after 5 min, or the latch blocks every later alarm.
         if (root.ringing !== null && now - root.ringing.epoch >= 300)
             root.dismiss();
 
-        // An alarm whose moment passed unobserved, across a suspend or a shell
-        // restart, still has to be rolled forward or dropped here, or a daily
-        // alarm keeps its stale epoch and never comes due again.
+        // Missed across suspend or restart: roll forward or a daily alarm
+        // never comes due again.
         if (root.entries.some(a => !a.fired && now - a.epoch >= 300))
             root.reap();
 
@@ -120,8 +103,7 @@ Singleton {
         const due = root.entries.find(a => !a.fired && !root.firedKeys.includes(`${a.id}@${a.epoch}`) && a.epoch <= now && now - a.epoch < 300);
         if (!due)
             return;
-        // Remembered here rather than left to reap rewriting the file: if reap
-        // fails the entry stays due, and the next tick would ring it again.
+        // Recorded locally: if reap fails the entry stays due and would re-ring.
         root.firedKeys = root.firedKeys.concat(`${due.id}@${due.epoch}`);
         root.ringing = due;
         chime.running = true;
@@ -138,24 +120,20 @@ Singleton {
             file.reload();
             root.reload();
         }
-        // A missing file only means alarm.sh has never run. Anything else means
-        // the list on screen cannot be trusted, so say so.
         onLoadFailed: error => {
             if (error === FileViewError.FileNotFound) {
-                // An answer, not a failure, so the stamp is set: an empty list
-                // read off a machine with no alarms is a reading like any other.
+                // alarm.sh never ran: a valid empty reading, not a failure.
                 root.entries = [];
                 root.asOf = Date.now();
                 return;
             }
-            // Deleted after a good load, or chmod 000. The list stops being
-            // current here rather than surviving as though it were.
+            // Deleted after a good load, or unreadable: mark stale.
             root.asOf = 0;
             console.warn("[alarms] load failed:", error);
         }
     }
 
-    // Rings once. A repeating sound in a status bar is hostile.
+    // Rings once, never loops.
     Process {
         id: chime
 

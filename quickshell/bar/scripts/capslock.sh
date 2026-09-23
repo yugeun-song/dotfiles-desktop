@@ -1,21 +1,10 @@
 #!/usr/bin/env bash
-#
-# Reports Caps Lock state on stdout, one line per change, and nothing while
-# the state holds. The status bar starts this once and reads the stream.
-#
-# The line is 0, 1, or `-` when no LED node could be read. That last case is
-# not the same as off: a keyboard being replugged has no node for a moment,
-# and reporting 0 there would flip the bar to a state the user never set.
-#
-# The kernel exposes one LED per keyboard and the node names carry an input
-# index that changes when a device is replugged, so the glob is re-evaluated
-# every pass rather than resolved once.
-#
+# Prints Caps Lock state on change only: 0, 1, or `-` when no LED node is
+# readable (e.g. mid-replug; not the same as off). LED node names change on
+# replug, so the glob is re-evaluated every pass.
 set -u
 
-# The loop wakes five times a second, and an external sleep would fork
-# /bin/sleep every one of them. bash ships sleep as a loadable builtin;
-# with it the whole loop costs no process at all.
+# Loadable sleep builtin: avoids forking /bin/sleep five times a second.
 enable -f /usr/lib/bash/sleep sleep 2>/dev/null || true
 
 interval="${CAPSLOCK_POLL_INTERVAL:-0.2}"

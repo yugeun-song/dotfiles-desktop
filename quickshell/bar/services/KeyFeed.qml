@@ -4,48 +4,24 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 
-// What the keyboard is doing, for the on-screen visualiser.
-//
-// Named KeyFeed and not Keys: Keys is a built-in QML attached type, and a
-// singleton of that name shadows it everywhere, so every Keys.onPressed in the
-// shell stops resolving and the whole configuration fails to load.
-//
-// The reading happens in scripts/keyfeed.py because evdev is a binary stream
-// and QML has no business parsing struct input_event. That script is the only
-// part of this that needs a permission, and the permission is membership of the
-// input group rather than root.
-//
-// The two halves talk in JSON lines on stdout. That seam is deliberate: a Rust
-// binary printing the same lines would drop in without a change here.
+// Key presses for the on-screen overlay, read by scripts/keyfeed.py (evdev,
+// needs the input group) over a JSON-lines protocol. Not named "Keys": that
+// would shadow the attached type and break every Keys.onPressed.
 Singleton {
     id: root
 
-    // Off unless asked for. A visualiser that runs all the time is a keylogger
-    // nobody switched on, and it holds three device descriptors to do it.
+    // Off by default: an always-on reader is a keylogger nobody asked for.
     property bool enabled: false
 
-    // The chords on screen. Each is {mods: [...], key: "C", id: n}.
+    // {mods: [...], key: "C", id: n}
     property var chords: []
 
-    // Long enough to read a chord that went past quickly, short enough that the
-    // overlay is gone before it becomes furniture.
     readonly property int dwellMs: 500
 
     readonly property int maxVisible: 5
 
-    // The symbols every printed keyboard shortcut has used for decades. They
-    // are not in the Nerd Font the icons come from, but they are in Inter,
-    // which is what the caps already draw their labels with.
-    //
-    // Super takes the diamond rather than the command glyph: this is Linux, and
-    // U+2318 means Command on a Mac. Borrowing it would be saying the wrong
-    // thing in a symbol chosen for being unambiguous.
-    // The tables moved to Theme, which is where both drawers of them can
-    // reach without reaching this file's device reader as well.
-
-    // The keys Inter has no symbol for. These come from the icon font instead,
-    // and every one is a codepoint Theme already draws somewhere in the bar, so
-    // it has been looked at on a screen rather than guessed from a table.
+    // Keys Inter has no symbol for, drawn from the icon font instead. Modifier
+    // and other key symbols live in Theme.modSymbol / Theme.keySymbol.
     readonly property var keyIcon: ({
         "Playpause":  Theme.iconPlay,
         "Play":       Theme.iconPlay,
@@ -68,16 +44,12 @@ Singleton {
         return root.keyIcon[name] ?? Theme.keySymbol[name] ?? name;
     }
 
-    // Which family draws it. A glyph from the icon font rendered in Inter is a
-    // box, and the reverse loses the symbol's proportions, so the label has to
-    // say where it came from.
+    // Tells KeyCap which font to use; the wrong one draws a box.
     function keyIsIcon(name) {
         return root.keyIcon[name] !== undefined;
     }
 
-    // Ctrl, Alt, Shift, Super, which is the order they are printed in and so
-    // the order they are read in. The feed sends names; assembling them is the
-    // shell's job, so that replacing the reader leaves this table alone.
+    // Printed order. The feed sends names; symbols are the shell's concern.
     function symbolsFor(mods) {
         const order = ["Ctrl", "Alt", "Shift", "Super"];
         let out = "";
@@ -95,11 +67,8 @@ Singleton {
     function push(mods, key) {
         const next = root.chords.concat([{ mods: mods, key: key, id: root.nextId }]);
         root.nextId = root.nextId + 1;
-        // Cut, not asked to leave. Marking the oldest and letting it play an
-        // exit kept its width while it fell, so typing faster than the
-        // animation stacked chords across the screen; scheduling the
-        // departures apart from each other to unstack them was a second queue
-        // on top of the first. A chord shows for its dwell and goes.
+        // Overflow is cut without an exit animation; animating it kept its
+        // width and stacked chords across the screen during fast typing.
         while (next.length > root.maxVisible)
             next.shift();
         root.chords = next;
@@ -138,9 +107,6 @@ Singleton {
                 try {
                     msg = JSON.parse(t);
                 } catch (e) {
-                    // A line that will not parse means the two halves disagree
-                    // about the protocol, which is worth one warning and not a
-                    // silent drop.
                     console.warn("[keyfeed] unparseable line:", t);
                     return;
                 }
@@ -159,8 +125,7 @@ Singleton {
         onExited: code => {
             if (!root.enabled)
                 return;
-            // Exiting while still switched on is a failure, not a stop. Saying
-            // so beats an overlay that is on and silent.
+            // Exit while enabled is a failure; surface it.
             root.failure = `the key feed exited with ${code}`;
             console.warn("[keyfeed]", root.failure);
             root.enabled = false;

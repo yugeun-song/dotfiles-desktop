@@ -6,12 +6,8 @@ import Quickshell.Hyprland
 import Quickshell.Wayland
 import qs.services
 
-// A transient readout for a value that changes by key press: brightness and
-// output volume. It appears on change and leaves on its own.
-//
-// Deliberately not focusable and not keyboard-grabbing. An overlay that took
-// focus would swallow the next press of the very key that summoned it, so
-// holding volume-up would show one step and then stop.
+// Transient brightness/volume readout. Never takes focus: it would swallow the
+// next press of the key that summoned it, breaking key repeat.
 Scope {
     id: root
 
@@ -38,9 +34,7 @@ Scope {
         onTriggered: root.active = false
     }
 
-    // The loader has to outlive `active`, or the window is destroyed the
-    // instant the value expires and the fade animates on a surface nobody
-    // ever sees.
+    // Outlives `active` by the fade, or the window is gone before it fades.
     property bool mounted: false
 
     onActiveChanged: {
@@ -63,9 +57,7 @@ Scope {
         active: root.mounted
 
         PanelWindow {
-            // Follows the focused screen for the same reason the launcher
-            // does: the alternative is a readout on a monitor nobody is
-            // looking at.
+            // The focused screen, as in the launcher.
             screen: {
                 const name = Hyprland.focusedMonitor?.name ?? "";
                 const match = Quickshell.screens.find(s => s.name === name);
@@ -74,11 +66,8 @@ Scope {
 
             color: "transparent"
             exclusiveZone: 0
-            // Auto, not Ignore. Ignore was supposed to measure from the screen
-            // edge, so the margin below added the bar's height to clear it --
-            // but the bar's exclusive zone was applied as well and the card
-            // landed twice as far down as intended. Auto starts below whatever
-            // the bar claimed, so the margin is only the gap.
+            // Auto places this below the bar's zone, so the top margin is only
+            // the gap. Ignore plus a bar-height margin landed twice as low.
             exclusionMode: ExclusionMode.Auto
             focusable: false
             WlrLayershell.layer: WlrLayer.Overlay
@@ -92,14 +81,11 @@ Scope {
                 top: true
             }
 
-            // A gap under the bar, not the bar's height: Auto has already
-            // placed this below it.
             margins {
                 top: Theme.px(6)
             }
 
-            // Nothing here accepts input; the mask keeps clicks going through
-            // to whatever is underneath.
+            // Empty mask: clicks pass through.
             mask: Region {
                 item: null
             }
@@ -107,10 +93,8 @@ Scope {
             Rectangle {
                 id: card
 
-                // The card is built with root.active already true, so binding
-                // straight to it would start at the end of the animation and
-                // the card would appear in one step. Starting from the hidden
-                // values and binding on completion gives it something to run.
+                // Created with active already true; bind after completion so
+                // the entrance animates instead of starting at its end.
                 property bool shown: false
 
                 Component.onCompleted: card.shown = Qt.binding(() => root.active)
@@ -123,8 +107,6 @@ Scope {
                 border.color: Theme.surfaceLine
                 opacity: card.shown ? 1 : 0
 
-                // Sliding down out of the bar reads as "the bar said this",
-                // which is where the value lives the rest of the time.
                 transform: Translate {
                     y: card.shown ? 0 : -Theme.px(8)
 
@@ -151,20 +133,14 @@ Scope {
                         anchors.verticalCenter: parent.verticalCenter
                         text: root.icon
                         font.family: Theme.iconFont
-                        // Larger than the text beside it, and larger than it
-                        // looks like it needs: the brightness sun draws well
-                        // inside its em box, so asking for the readout's size
-                        // produced a glyph half the height of the number.
+                        // Oversized: the brightness glyph sits well inside its
+                        // em box.
                         font.pixelSize: Theme.px(24)
-                        // The bar's foreground, not the caller's accent. A
-                        // brightness step and a volume step are the same kind
-                        // of thing and were arriving in two different colours,
-                        // neither of which the bar wears.
+                        // Ignores the caller's accent on purpose: one colour for
+                        // every readout.
                         color: Theme.surfaceText
                     }
 
-                    // The bar is the point of this widget: a number alone
-                    // does not tell you how much headroom is left.
                     Rectangle {
                         anchors.verticalCenter: parent.verticalCenter
                         width: Theme.px(118)

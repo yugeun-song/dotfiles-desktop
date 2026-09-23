@@ -5,31 +5,22 @@ import Quickshell
 import Quickshell.Wayland
 import qs.services
 
-// Notifications as they arrive, stacked under the bar at the right edge.
-//
-// The window asks for an exclusive zone of zero rather than positioning itself
-// with a margin of Theme.barHeight. Under the layer-shell protocol a zone of
-// zero means "respect what other surfaces have reserved", so the compositor
-// puts this below the bar on its own. A hand-computed offset would be a second
-// copy of the bar's height, and would be wrong the first time the bar changes.
+// Toasts stacked under the bar at the right edge. exclusiveZone 0 makes the
+// compositor place the window below the bar's reserved zone, so no copy of
+// the bar height is needed here.
 Scope {
     id: root
 
-    // Long enough to finish reading a line, short enough not to sit in the way.
     readonly property int dwellMs: 5000
 
-    // Critical toasts leave too, just later. The convention that urgency 2
-    // waits to be acknowledged is for a server with nowhere else to put the
-    // notification; this one has the history panel. Left forever, one badly
-    // aimed critical toast holds the corner of the screen for the session.
+    // Critical toasts expire too, later: the history panel keeps them, so they
+    // need not wait for acknowledgement.
     readonly property int criticalDwellMs: 20000
 
-    // Beyond this the stack reaches the bottom of the screen and the oldest are
-    // unreadable anyway, so the oldest give way to what just arrived.
+    // The oldest give way beyond this.
     readonly property int maxVisible: 4
 
-    // How far a toast has to be dragged before letting go dismisses it rather
-    // than springing it back, as a fraction of its width.
+    // Swipe-to-dismiss threshold as a fraction of card width.
     readonly property real swipeCommit: 0.28
 
     property var live: []
@@ -58,16 +49,13 @@ Scope {
     }
 
     LazyLoader {
-        // Nothing to say twice. While the history panel is open every toast it
-        // would draw is already on screen behind it, and the two surfaces
-        // overlap at the same corner.
+        // Hidden while the history panel is open: same content, same corner.
         active: root.live.length > 0 && !Notifications.centreOpen
 
         PanelWindow {
             color: "transparent"
 
-            // Never focusable. A toast that took the keyboard would swallow the
-            // next keystroke of whatever the notification interrupted.
+            // A focusable toast would swallow the user's next keystroke.
             focusable: false
             exclusiveZone: 0
             exclusionMode: ExclusionMode.Normal
@@ -85,10 +73,8 @@ Scope {
             }
 
             implicitWidth: Theme.notifWidth
-            // Rounded up, not passed through. A Text reports a fractional
-            // implicitHeight, so the layer surface was a fraction of a pixel
-            // shorter than the card inside it and the bottom border was the
-            // part that fell outside.
+            // Rounded up: Text reports fractional heights, and a surface a
+            // fraction short clips the card's bottom border.
             implicitHeight: Math.max(1, Math.ceil(stack.implicitHeight))
 
             Column {
@@ -98,33 +84,22 @@ Scope {
                 spacing: Theme.notifStackGap
 
                 Repeater {
-                    // Not `model: root.live`. push() and drop() assign a whole
-                    // new array, and a Repeater over a plain array rebuilds
-                    // every delegate when the array is replaced: each toast
-                    // already on screen replayed its slide-in, restarted its
-                    // five second dwell from zero, and one caught mid-dismissal
-                    // came back. ScriptModel diffs the list and emits only the
-                    // row that actually moved, so the survivors are left alone.
-                    // concat() carries the same entry objects across, which is
-                    // what identity on `id` is matching.
+                    // ScriptModel, not the bare array: a Repeater rebuilds every
+                    // delegate when a plain array is reassigned, replaying each
+                    // toast's entrance and dwell. ScriptModel diffs by `id`.
                     model: ScriptModel {
                         values: root.live
                         objectProp: "id"
                     }
 
-                    // Two items, not one: the slot holds the space in the column
-                    // and the card is what moves. Animating a single item's x
-                    // inside a Column leaves its gap behind until the model
-                    // changes, so the stack jumps instead of closing up behind
-                    // what left.
+                    // The slot holds the column space and collapses; the card
+                    // moves. One item doing both leaves a gap, then a jump.
                     Item {
                         id: slot
 
                         required property var modelData
 
-                        // One dwell, read by the timer that ends this toast and
-                        // by the bar that draws it running out. Two numbers
-                        // would drift.
+                        // Shared by the expiry timer and the life bar.
                         readonly property int dwellMs: slot.modelData.critical
                                                        ? root.criticalDwellMs
                                                        : root.dwellMs
@@ -133,13 +108,10 @@ Scope {
                         height: Math.ceil(card.implicitHeight)
                         clip: true
 
-                        // Runs on expiry, on the close button, and on a released
-                        // swipe. One way out, so all three look the same.
+                        // The single exit: expiry, click, and released swipe.
                         SequentialAnimation {
                             id: leaving
 
-                            // Left running, the bar reaches zero behind the
-                            // exit animation and asks for a second one.
                             onStarted: countdown.stop()
 
                             NumberAnimation {
@@ -161,11 +133,8 @@ Scope {
                             }
                         }
 
-                        // This timer, not the bar below, is what ends the
-                        // toast; the bar only draws the same interval. A
-                        // drawing fault then costs the readout and not the
-                        // expiry, which is the way round it has to be for a
-                        // surface that covers the screen.
+                        // This timer ends the toast; the life bar only draws it,
+                        // so a drawing fault cannot keep a toast up.
                         Timer {
                             running: true
                             interval: slot.dwellMs
@@ -176,10 +145,6 @@ Scope {
                         Rectangle {
                             id: card
 
-                            // One number for every edge. Deriving the height from
-                            // the content plus twice this is what keeps the space
-                            // under the last line equal to the space above the
-                            // first one.
                             readonly property int pad: Theme.notifPad
 
                             width: parent.width
@@ -192,9 +157,7 @@ Scope {
                             border.color: slot.modelData.critical ? Theme.accentRed
                                                                   : Theme.surfaceLine
 
-                            // Arrives from the edge it will later leave by.
-                            // Without this it appears instantly and the exit
-                            // reads as a glitch rather than as a direction.
+                            // Enters from the edge it leaves by.
                             Component.onCompleted: {
                                 card.x = card.width;
                                 entering.start();
@@ -211,13 +174,9 @@ Scope {
                                 easing.type: Easing.OutCubic
                             }
 
-                            // Fades with the distance travelled, so a swipe shows
-                            // how close it is to committing rather than only
-                            // reporting it after release.
                             opacity: Math.max(0, 1 - card.x / (card.width * 0.7))
 
-                            // Only for the spring back. The exit and the entrance
-                            // drive x themselves and would fight a Behavior.
+                            // Spring-back only; entrance and exit drive x themselves.
                             Behavior on x {
                                 enabled: !swipe.drag.active && !leaving.running && !entering.running
 
@@ -240,10 +199,8 @@ Scope {
 
                                 Text {
                                     width: parent.width
-                                    // Against the model, not against this Text's
-                                    // own `text`: the enclosing Column is
-                                    // id: text, so the bare name resolves to it
-                                    // and the row would never draw.
+                                    // Read from the model: a bare `text` here
+                                    // resolves to the Column with id: text.
                                     visible: slot.modelData.critical
                                              || slot.modelData.appName !== ""
                                     text: slot.modelData.critical
@@ -262,8 +219,7 @@ Scope {
                                 Text {
                                     width: parent.width
                                     text: slot.modelData.summary
-                                    // A summary is a single line of plain text in the freedesktop spec.
-                                    // Only the body below is markup, and only because senders are told so.
+                                    // Plain per the spec; only the body is markup.
                                     textFormat: Text.PlainText
                                     font.family: Theme.uiFont
                                     font.pixelSize: Theme.notifTitleSize
@@ -286,9 +242,8 @@ Scope {
                                     wrapMode: Text.Wrap
                                     maximumLineCount: 3
                                     elide: Text.ElideRight
-                                    // Markup is advertised to senders in the
-                                    // service, so it has to be honoured here or a
-                                    // body arrives full of visible <b> tags.
+                                    // Markup is advertised; <img> is stripped in
+                                    // the service.
                                     textFormat: Text.StyledText
                                 }
 
@@ -305,20 +260,11 @@ Scope {
                                 }
                             }
 
-                            // The dwell, drawn, on the same slot.dwellMs the
-                            // timer above counts.
-                            //
-                            // Two items, because Item.clip is a bounding
-                            // rectangle and a rounded card cannot be clipped
-                            // to. The visible strip is a window onto the bottom
-                            // of a rectangle carrying the card's own radius, so
-                            // in those few pixels its edges are the corner arc
-                            // itself and the bar follows the corners out rather
-                            // than crossing them or stopping short of them.
-                            //
-                            // The window shrinks, not the rounded piece inside
-                            // it: shrinking the piece would drag its left corner
-                            // along too.
+                            // Life bar. Item.clip is rectangular, so a clipped
+                            // strip shows the bottom of a card-radius rectangle
+                            // and the bar follows the rounded corners. The clip
+                            // window shrinks, not the rounded piece, or its left
+                            // corner would move too.
                             Item {
                                 id: life
 
@@ -331,23 +277,13 @@ Scope {
                                 clip: true
 
                                 Rectangle {
-                                    // Tall enough for a full quarter circle,
-                                    // pushed up so only its bottom edge lands
-                                    // inside the window.
                                     width: life.span
                                     height: card.radius * 2
                                     y: life.height - height
                                     radius: Math.max(0, card.radius - card.border.width)
 
-                                    // Bright, and not the border's colour any
-                                    // more. It used to take that expression so
-                                    // the two could not drift apart, and then
-                                    // the border became a hairline at a tenth
-                                    // opacity -- which is right for an edge and
-                                    // invisible for the one thing on the toast
-                                    // that is meant to be watched. Urgent keeps
-                                    // its accent; everything else is the bar's
-                                    // foreground at full strength.
+                                    // Not the border colour: the hairline border
+                                    // is too faint for something meant to be watched.
                                     color: slot.modelData.critical ? Theme.accentRed
                                                                    : Theme.surfaceText
                                 }
@@ -363,17 +299,14 @@ Scope {
                                 }
                             }
 
-                            // Drags right only. Dragging a notification left
-                            // would suggest it goes somewhere, and there is
-                            // nothing to the left of it but the desktop.
+                            // Right-drag only: dismissal leaves by the screen edge.
                             MouseArea {
                                 id: swipe
 
                                 anchors.fill: parent
 
-                                // A toast does answer a click -- it runs the
-                                // default action -- so it keeps the finger until
-                                // a drag actually starts.
+                                // Pointing hand until dragging: a click runs the
+                                // default action.
                                 cursorShape: swipe.drag.active ? Qt.ClosedHandCursor
                                                                : Qt.PointingHandCursor
                                 drag.target: card
@@ -388,15 +321,10 @@ Scope {
                                         card.x = 0;
                                 }
 
-                                // A press that never moved is still a click. The
-                                // freedesktop convention is that an action named
-                                // "default" is what a click on the body means.
                                 onClicked: {
                                     if (card.x !== 0)
                                         return;
-                                    // The default action is filtered out of the
-                                    // displayed list, so ask the flag rather than
-                                    // search a list it is no longer in.
+                                    // "default" is filtered from actions; use the flag.
                                     if (slot.modelData.hasDefault)
                                         Notifications.invoke(slot.modelData, "default");
                                     leaving.start();

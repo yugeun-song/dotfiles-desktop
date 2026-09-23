@@ -7,29 +7,13 @@ import Quickshell.Io
 import Quickshell.Hyprland
 import qs.services
 
-// Every key binding, read from the compositor rather than written down here.
-//
-// The obvious way to build this is a list in the file, which is wrong for the
-// same reason a second copy of anything is wrong: it is right on the day it is
-// written and drifts every time a binding changes, and nothing reports the
-// drift. `hyprctl binds` already knows, because hypr/config/keybinds.lua gives
-// almost every bind a description and Hyprland keeps it. So this asks.
-//
-// It follows that a binding with no description does not appear. That is the
-// intended behaviour and not an omission to work around: the ones without a
-// description are the duplicate wheel and arrow-key variants of bindings that
-// are already listed under their primary key.
-//
-// Laid out as a table rather than as headed groups. Grouping put the modifiers
-// in a heading and the key in the row, so a row read on its own said "R" and
-// the reader had to look up the column to find out that it meant Super+Ctrl+R.
-// Every row now carries its whole chord, which makes the headings redundant and
-// the rows sortable, and a flat table of equal rows is what that wants to be.
+// Key bindings read live from `hyprctl -j binds`, so the sheet never drifts
+// from hypr/config/keybinds.lua. Binds without a description are left out on
+// purpose. Flat table, one full chord per row.
 Scope {
     id: root
 
-    // Two, not three. Every row is now as wide as its longest chord plus a
-    // description, and three columns of that leaves neither enough room.
+    // Three columns leave too little room for chord plus description.
     readonly property int columnCount: 2
 
     property bool open: false
@@ -50,8 +34,7 @@ Scope {
     property int total: 0
 
 
-    // Hyprland reports the modifiers as a bitmask. The mask is a sum, so 69 is
-    // SUPER+CTRL+SHIFT.
+    // Hyprland modmask bits; 69 = Super+Ctrl+Shift.
     readonly property var modNames: [
         { bit: 64, name: "Super" },
         { bit: 4,  name: "Ctrl"  },
@@ -59,9 +42,7 @@ Scope {
         { bit: 1,  name: "Shift" }
     ]
 
-    // Fewer modifiers first, so the plain Super bindings a reader is most
-    // likely to want come before the three-modifier ones. Ties break on the
-    // mask so the order is the same every time it opens.
+    // Fewer modifiers first; ties break on the mask for a stable order.
     function modRank(mask) {
         let bits = 0;
         for (let i = 0; i < root.modNames.length; i++)
@@ -70,12 +51,8 @@ Scope {
         return bits * 1000 + mask;
     }
 
-    // The whole chord, in the order the fingers take it.
-    //
-    // Words, not the symbols the key overlay draws. A symbol is quicker to
-    // recognise once it is known, and this is the page someone opens because
-    // they do not know it yet; a legend that has to be consulted to read the
-    // table is a second lookup inside the first one.
+    // Modifier names as words, not the key overlay's symbols: this page is
+    // for readers who do not know the bindings yet.
     function chordLabel(mask, key) {
         const parts = [];
         for (let i = 0; i < root.modNames.length; i++)
@@ -99,9 +76,7 @@ Scope {
             return map[k];
         if (k.indexOf("mouse:") === 0)
             return "Mouse " + k.slice(6);
-        // The media and laptop function keys arrive as their X11 names, which
-        // are long enough to push the description off the row and tell a reader
-        // nothing they did not already know from the key's printed icon.
+        // Shorten XF86 keysyms so they do not push the description off the row.
         if (k.indexOf("XF86") === 0) {
             const t = k.slice(4)
                 .replace("MonBrightness", "Brightness ")
@@ -127,8 +102,6 @@ Scope {
                 try {
                     parsed = JSON.parse(this.text);
                 } catch (e) {
-                    // Say so once rather than open an empty window that looks
-                    // like there are no bindings at all.
                     console.warn("[cheatsheet] could not parse hyprctl binds:", e);
                     root.columns = [];
                     root.total = 0;
@@ -148,18 +121,11 @@ Scope {
                     });
                 }
 
-                // Modifier count first, then alphabetical inside it, so the
-                // chords of one hand shape stay together and the order is
-                // stable between openings.
                 rows.sort((a, b) => a.rank - b.rank || a.what.localeCompare(b.what));
 
-                // Split down the middle rather than dealt alternately: a table
-                // is read down a column, and dealing would put consecutive rows
-                // side by side instead of one under the other.
-                //
-                // Done here rather than in a binding because a Repeater nested
-                // inside a Repeater cannot see the outer index reliably and
-                // renders nothing at all when it cannot.
+                // Contiguous halves so the table reads down each column. Split
+                // here, not in a binding: a nested Repeater cannot see the outer
+                // index reliably and then renders nothing.
                 const per = Math.ceil(rows.length / root.columnCount);
                 const cols = [];
                 for (let c = 0; c < root.columnCount; c++)
@@ -189,13 +155,8 @@ Scope {
             color: "transparent"
             focusable: true
 
-            // The same reason the launcher and the notification centre give:
-            // a surface anchored to all four edges is handed an exclusive zone
-            // of zero, and zero means "place me clear of what is already
-            // reserved". So the compositor pushed this one down by the height
-            // of the bar and took the same height off it, which centred the
-            // card against the wrong rectangle and cost the bottom row of the
-            // table. It was missing here alone.
+            // Exclusive zone 0 would place this clear of the bar's zone and
+            // shift the centred card; Ignore covers the whole output.
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
@@ -208,9 +169,7 @@ Scope {
                 right: true
             }
 
-            // Keys go to an item inside the window, not to the window. A
-            // PanelWindow does not take focus itself, so a Keys handler on it
-            // is never reached and Escape does nothing.
+            // A PanelWindow never takes focus itself; Keys must live on a child.
             Item {
                 anchors.fill: parent
                 focus: true
@@ -224,9 +183,7 @@ Scope {
                     }
                 }
 
-                // The dim behind the card, and the click target that closes it.
-                // A dialog dismissable only from the keyboard is one someone
-                // will fight with the mouse first.
+                // Dim backdrop; clicking it closes the sheet.
                 Rectangle {
                     anchors.fill: parent
                     color: Qt.rgba(Theme.bg.r, Theme.bg.g, Theme.bg.b, 0.82)
@@ -240,10 +197,7 @@ Scope {
                 Rectangle {
                     id: card
 
-                    // One row of the table, and the only height in here that
-                    // other things are measured against. Uniform on purpose:
-                    // the alternating tint that makes a long table readable
-                    // only reads as stripes when the stripes are equal.
+                    // Uniform so the alternating stripes stay equal.
                     readonly property int rowHeight: Theme.px(34)
                     readonly property int gutter: Theme.px(26)
 
@@ -255,8 +209,7 @@ Scope {
                     border.width: 1
                     border.color: Theme.surfaceLine
 
-                    // Clicks on the card must not reach the dimmer behind it,
-                    // or reading the sheet would close it.
+                    // Swallow clicks so they do not reach the backdrop.
                     MouseArea {
                         anchors.fill: parent
                     }
@@ -285,9 +238,7 @@ Scope {
                         color: Theme.surfaceFaint
                     }
 
-                    // The header row, and the rule under it. Uppercase mono,
-                    // spaced out: it has to read as a label for the column and
-                    // not as the first entry in it.
+                    // Header row and rule.
                     Item {
                         id: head
 
@@ -345,15 +296,9 @@ Scope {
                         }
                     }
 
-                    // How much of a column the chord takes. Fixed rather than
-                    // fitted to the longest one: measuring every row to find
-                    // the widest means building every row, and the point of a
-                    // table is that the second column starts in the same place
-                    // on every line whether or not the first one filled it.
-                    //
-                    // Sized against the longest chord this machine has rather
-                    // than guessed: "Super + Ctrl + Alt + Shift + Delete", which
-                    // Inter draws in a little under 260 at this size.
+                    // Fixed so the action column lines up without measuring
+                    // every row. Fits "Super + Ctrl + Alt + Shift + Delete"
+                    // (~260 px in Inter at this size).
                     readonly property int chordWidth: Theme.px(300)
 
                     Flickable {
@@ -401,11 +346,7 @@ Scope {
                                             width: column.width
                                             height: card.rowHeight
 
-                                            // Every other row, and nothing on
-                                            // the ones between: a stripe that
-                                            // is a shade of the card reads as
-                                            // one table, where two full colours
-                                            // read as two.
+                                            // Stripe on every other row.
                                             Rectangle {
                                                 anchors.fill: parent
                                                 visible: row.index % 2 === 0
@@ -423,9 +364,7 @@ Scope {
                                                 font.pixelSize: Theme.px(15)
                                                 color: Theme.surfaceText
                                                 elide: Text.ElideRight
-                                                // The gaps in a chord are runs
-                                                // of spaces, and AutoText would
-                                                // be free to collapse them.
+                                                // Never parse a key label as markup.
                                                 textFormat: Text.PlainText
                                             }
 
@@ -441,10 +380,7 @@ Scope {
                                                 elide: Text.ElideRight
                                             }
 
-                                            // Hairline, and under every row
-                                            // including the striped ones, so
-                                            // the eye has a ruler to follow
-                                            // across to the description.
+                                            // Hairline under every row.
                                             Rectangle {
                                                 anchors.bottom: parent.bottom
                                                 width: parent.width

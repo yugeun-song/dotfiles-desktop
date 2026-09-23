@@ -1,18 +1,10 @@
 # dotfiles-desktop
-# Takes hyprland-session.target down when the compositor is gone.
+# Stops hyprland-session.target when the compositor exits. Hyprland is not a
+# unit (greetd starts it), so session-watch.sh waits on its lock file with
+# inotify; see the script for coverage.
 #
-# Nothing else knows when Hyprland exits. It is not a unit; greetd starts it,
-# and the user manager only hears about it through the environment the
-# compositor pushes in at start. This service is the other half: it waits on
-# the compositor's lock file with inotify, which costs nothing while it waits,
-# and stops the target the moment the file is unlinked. See the script for the
-# cases that does and does not cover.
-#
-# Restart=always with exit 0 excluded, the contract on-failure could not
-# express. A session without its watch never stops on its own, and systemd
-# counts a SIGTERM as success, so on-failure left a killed watch dead with
-# nothing failed. Exit 0 is the success path -- the script exits 0 only after
-# asking for the target to stop -- and restarting there would race that stop.
+# Restart on anything but exit 0: a killed watch (SIGTERM counts as success)
+# must come back, while exit 0 means the stop was already requested.
 [Unit]
 Description=Ends the Hyprland session target when the compositor exits
 PartOf=hyprland-session.target

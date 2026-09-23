@@ -1,23 +1,18 @@
 #!/usr/bin/env python3
-"""Build a tinted XCursor theme from one already installed.
+"""Build a tinted XCursor theme from an installed one.
 
-Cursor themes are bitmaps with the colour baked into them, so a themed pointer
-is not something a setting can ask for: it has to be drawn. Drawing 26 shapes
-by hand to change one colour is not a good trade, and recolouring what is
-already there keeps every hotspot, every size and every alias exactly as the
-source theme had them.
+Cursor colours are baked into bitmaps, so a themed pointer has to be drawn.
+Recolouring an existing theme keeps every hotspot, size and alias.
 
-Tinting is by luminance rather than by replacing a colour. The black outline
-stays black, the white body becomes the tint, and the grey shading in between
-lands proportionally, so the drawing keeps the shape that makes it readable
-against both a dark and a light window.
+Tinting is by luminance, not colour replacement: black outline stays black,
+the white body becomes the tint, grey shading lands proportionally, so the
+shape stays readable on dark and light windows.
 
-Output goes to a directory of its own under ~/.local/share/icons. The source
-theme is never touched: it belongs to a package, and pacman would overwrite an
-edit at the next upgrade without saying so.
+Output goes to its own directory under ~/.local/share/icons. The source theme
+belongs to a package and is never modified (pacman would silently undo it).
 
-Usage:
-    tint-cursors.py --from Oxygen_White --name Spaceduck-Sky --tint '#7dcfff'
+Usage (install.sh passes pointer.py's FILL as the tint):
+    tint-cursors.py --from Oxygen_White --name Spaceduck-Sky --tint '#1d89e4'
 """
 
 import argparse
@@ -29,15 +24,10 @@ import sys
 XCURSOR_MAGIC = b"Xcur"
 CHUNK_IMAGE = 0xFFFD0002
 
-# The names cursor-shape-v1 asks for, and the legacy X name each one means.
-#
-# A Wayland client on the modern protocol asks for "default", not "left_ptr",
-# and Oxygen_White carries no such name: neither file nor alias. The result is
-# the one pointer nobody can miss going untinted while every cursor a client
-# sets by hand comes out right, because those still travel under their X names.
-#
-# Filled in only where the target actually exists, so this stays a completion of
-# whatever theme is handed in rather than a promise about one particular theme.
+# cursor-shape-v1 names mapped to their legacy X names. Clients on that
+# protocol ask for "default", which Oxygen_White lacks, so the main pointer went
+# untinted while hand-set cursors (X names) were fine. Added only where the
+# target exists, so this completes any source theme rather than assuming one.
 SHAPE_ALIASES = {
     "default": "left_ptr",
     "context-menu": "left_ptr",
@@ -71,9 +61,8 @@ SHAPE_ALIASES = {
 def parse(path):
     """Every image chunk in an Xcursor file, in file order.
 
-    The format is a fixed header, a table of contents, then chunks. Only image
-    chunks matter here; a theme may also carry comment chunks, and those are
-    dropped rather than rewritten because nothing reads them.
+    Layout: header, table of contents, chunks. Comment chunks are dropped;
+    nothing reads them.
     """
     with open(path, "rb") as fh:
         data = fh.read()
@@ -97,9 +86,8 @@ def parse(path):
 def luminance_of(px, i, a):
     """Un-premultiplied luminance of one BGRA pixel.
 
-    Un-premultiplying before measuring matters: a half-transparent white pixel
-    is stored as mid-grey, and treating that as grey would tint the antialiased
-    edge darker than the body it belongs to.
+    Half-transparent white is stored as mid-grey; measuring it premultiplied
+    would tint antialiased edges darker than their body.
     """
     b = min(255, px[i] * 255 // a)
     g = min(255, px[i + 1] * 255 // a)
@@ -108,17 +96,12 @@ def luminance_of(px, i, a):
 
 
 def body_level(images, floor=150):
-    """The luminance of a cursor's body, as the commonest bright level in it.
+    """A cursor's body luminance: the commonest opaque level above `floor`.
 
-    Oxygen's cursors are not one white. The arrow's body is #efefef, the move
-    cursor's is #e6e6e6, the resize handles' is #e8e8e8, and mapping luminance
-    straight onto a tint carries those apart into three visibly different blues:
-    the pointer changed colour on its way onto a link. Measuring each cursor's
-    own body and treating that as full brightness puts them all on the same one.
-
-    Only pixels above the floor are counted, so the black outline every Oxygen
-    cursor carries is not mistaken for the body. The hand is mostly outline and
-    would otherwise measure as almost black.
+    Oxygen's bodies differ (arrow #efefef, move #e6e6e6, resize #e8e8e8), and
+    a straight luminance map made three visibly different blues. Normalising to
+    each cursor's own body makes them one colour. The floor keeps the black
+    outline out; the hand is mostly outline and would measure near black.
     """
     counts = {}
     for im in images:
@@ -136,11 +119,10 @@ def body_level(images, floor=150):
 
 
 def tint(px, rgb, full=255):
-    """Recolour in place. Pixels are BGRA, premultiplied by alpha.
+    """Recolour premultiplied BGRA pixels in place.
 
-    `full` is the luminance that becomes the tint exactly; anything above it
-    clamps. It is the cursor's own body level rather than 255, which is what
-    keeps every cursor in the theme the same colour.
+    `full` (the cursor's body level, not 255) maps to the tint exactly; brighter
+    pixels clamp.
     """
     r_t, g_t, b_t = rgb
     full = max(1, full)
@@ -205,9 +187,8 @@ def main():
 
     root = os.path.join(os.path.expanduser("~/.local/share/icons"), args.name)
     dst = os.path.join(root, "cursors")
-    # Rebuilt from nothing every time. Leaving old files behind would keep a
-    # shape the source theme has since dropped, and the only symptom would be
-    # one pointer out of thirty in the wrong colour.
+    # Rebuilt from scratch: a stale file would leave one pointer in thirty
+    # the wrong colour.
     shutil.rmtree(root, ignore_errors=True)
     os.makedirs(dst, exist_ok=True)
 
@@ -222,8 +203,7 @@ def main():
         if images is None:
             skipped += 1
             continue
-        # Measured across every size of this cursor before any of them is
-        # changed, so one file is one colour.
+        # Measured across all sizes before tinting, so one file is one colour.
         full = body_level(images)
         for im in images:
             tint(im["px"], rgb, full)
@@ -239,8 +219,7 @@ def main():
             os.symlink(target, os.path.join(dst, name))
             linked += 1
 
-    # Fill in the shape names the source theme never had. Existing names are
-    # never touched: the source's own idea of what "pointer" means wins.
+    # Add missing shape names only; the source's own names win.
     added = 0
     for name, target in SHAPE_ALIASES.items():
         link = os.path.join(dst, name)

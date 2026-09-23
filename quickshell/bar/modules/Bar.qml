@@ -2,16 +2,8 @@ import QtQuick
 import Quickshell
 import qs.services
 
-// The menu bar.
-//
-// Two groups and nothing in the middle. The left is whose window you are in,
-// the right is what the machine is doing, and the centre is left empty because
-// that is where Island hangs -- a separate surface, so that it can be taller
-// than the bar without the bar claiming that height as its exclusive zone.
-//
-// The old bar had three groups and a centring problem with it: the middle had
-// to be measured against whichever side was wider or it drifted under one of
-// them. Nothing here is centred, so none of that arithmetic survives.
+// The menu bar: focus on the left, machine status on the right, media chip
+// centred on the screen.
 PanelWindow {
     id: root
 
@@ -27,9 +19,7 @@ PanelWindow {
     implicitHeight: Theme.barHeight
     exclusiveZone: root.preview ? 0 : Theme.barHeight
 
-    // In preview the bar sits at an absolute offset, so it must ignore the
-    // exclusive zone another shell's bar already claimed. Otherwise the margin
-    // stacks on top of that zone and the bar lands too low.
+    // Preview sits at an absolute offset, so ignore other bars' exclusive zones.
     exclusionMode: root.preview ? ExclusionMode.Ignore : ExclusionMode.Auto
 
     anchors {
@@ -49,15 +39,10 @@ PanelWindow {
 
     Rectangle {
         anchors.fill: parent
-        // Translucent, not the opaque slab the pill rail was. The compositor
-        // blurs this layer (hypr/config/rules.lua), so what the wallpaper
-        // contributes is a blurred wash rather than detail, and the bar still
-        // reads as a surface rather than as text floating on the desktop.
+        // Opaque; hypr/config/rules.lua keeps blur off for this layer.
         color: Theme.menuBarBg
 
-        // The one line that says where the bar ends. Without it a translucent
-        // bar over a dark wallpaper has no edge at all, and the status items
-        // look like they are sitting on the desktop.
+        // Edge line; without it the bar has no edge on a dark wallpaper.
         Rectangle {
             anchors.left: parent.left
             anchors.right: parent.right
@@ -67,10 +52,7 @@ PanelWindow {
             color: Theme.menuBarLine
         }
 
-        // The left group, in order of how fixed each part is: the system
-        // badge, then the workspaces, then the name of whatever has focus.
-        // The two that never change width come first, so the one that does
-        // cannot move them.
+        // Fixed-width parts first, so the focused app's name cannot shift them.
         Row {
             id: leftGroup
 
@@ -92,17 +74,9 @@ PanelWindow {
             }
         }
 
-        // What is playing, in the middle of the bar. Centred on the screen
-        // rather than between the two groups, so it does not move when either
-        // of them changes width.
-        //
-        // Still centred on the screen; only how wide it may grow is answered
-        // from the groups. Because the centre is the screen's and not the
-        // groups', the room is twice the distance from it to whichever group
-        // reaches further in -- the room between the two is not symmetric about
-        // that centre, and a chip given all of it would run under the nearer
-        // one. Reading their widths cannot loop back: neither group is laid out
-        // against the chip.
+        // Centred on the screen, not between the groups, so it holds still as they
+        // resize. Its room is twice the distance from centre to the nearer group
+        // (less gaps); no loop, since neither group depends on the chip.
         MediaChip {
             anchors.horizontalCenter: parent.horizontalCenter
             anchors.verticalCenter: parent.verticalCenter

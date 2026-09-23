@@ -1,14 +1,6 @@
 #!/usr/bin/env bash
-#
-# Weather lookup. Usable from a shell or called by a desktop shell widget.
-#
-# The location is pinned to fixed coordinates. Neither GPS nor IP-based
-# geolocation is used. Data comes from Open-Meteo, which needs no API key.
-# Coordinates are passed explicitly, so there is no room for the service to
-# infer a location.
-#
-# To use a different city, edit the three variables below, or override them
-# through the environment:
+# Weather from Open-Meteo (no API key) for fixed coordinates; no geolocation.
+# Change the city by editing the location block below or via the environment:
 #   WEATHER_LAT=35.1796 WEATHER_LON=129.0756 WEATHER_NAME=Busan weather.sh
 #
 # Output modes
@@ -26,18 +18,13 @@ for dep in curl jq; do
     command -v "$dep" >/dev/null 2>&1 || { echo "weather.sh: $dep is required" >&2; exit 1; }
 done
 
-# ---------------------------------------------------------------------------
-# Location. This is the only block that needs editing.
-# Look coordinates up at https://open-meteo.com/en/docs (geocoding section).
-# ---------------------------------------------------------------------------
+# Location. Coordinates: https://open-meteo.com/en/docs (geocoding section).
 WEATHER_LAT="${WEATHER_LAT:-37.5665}"
 WEATHER_LON="${WEATHER_LON:-126.9780}"
 WEATHER_NAME="${WEATHER_NAME:-Seoul}"
 WEATHER_TZ="${WEATHER_TZ:-Asia/Seoul}"
 
-# Kept below the status bar's 15-minute poll. At exactly 15 the cache is still
-# a few seconds short of expiring when the next tick arrives, so that tick is
-# served from cache and the reading only refreshes every 30 minutes.
+# Below the bar's 15-minute poll; at exactly 15 every other tick hits the cache.
 CACHE_TTL="${WEATHER_CACHE_TTL:-600}"   # 10 minutes
 CACHE_DIR="${XDG_CACHE_HOME:-$HOME/.cache}/weather"
 CACHE_FILE="$CACHE_DIR/${WEATHER_LAT}_${WEATHER_LON}.json"
@@ -50,12 +37,7 @@ PARAMS+="&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_da
 PARAMS+="&daily=weather_code,temperature_2m_max,temperature_2m_min"
 PARAMS+="&timezone=${WEATHER_TZ}&forecast_days=3"
 
-# --proto and --proto-redir pin both the first hop and any redirect to https.
-# Without them -L will follow a redirect down to plaintext http, and the request
-# carries the coordinates in its query string, so a downgrade published by a
-# poisoned DNS answer or a middlebox would put a location on the wire in the
-# clear. Open-Meteo does not redirect at all today, which is exactly why this
-# costs nothing and why it is worth having before it ever does.
+# https only, redirects included: the query string carries the coordinates.
 fetch() {
     curl -fsSL --proto '=https' --proto-redir '=https' --max-redirs 3 \
         --max-time 10 "${API}?${PARAMS}"
@@ -71,8 +53,7 @@ cache_fresh() {
     (( age < CACHE_TTL ))
 }
 
-# A cache truncated by a killed run is still non-empty with a fresh mtime, so
-# age alone does not say the file is usable.
+# Validate content: a truncated cache can still look fresh.
 cache_read() {
     local cached
     cached=$(cat "$CACHE_FILE" 2>/dev/null) || return 1
@@ -80,10 +61,8 @@ cache_read() {
     printf '%s' "$cached"
 }
 
-# Sets $json and $FETCHED. FETCHED is when the reading it returns was obtained,
-# so a consumer can tell a stale cache from a live answer; a live body is timed
-# here rather than by the cache mtime, which stays behind when the cache write
-# is skipped.
+# Sets $json and $FETCHED (when the reading was obtained). A live body uses
+# now, not the cache mtime, since the cache write may be skipped.
 get_json() {
     if cache_fresh && json=$(cache_read); then
         FETCHED=$(cache_mtime)
@@ -92,8 +71,7 @@ get_json() {
     local body tmp
     body=$(fetch)
     if [[ -n "$body" ]] && printf '%s' "$body" | jq -e '.current' >/dev/null 2>&1; then
-        # Write through a temporary file so a run that dies mid-write leaves
-        # the previous cache in place instead of a partial one.
+        # Atomic replace.
         if tmp=$(mktemp "$CACHE_DIR/.wx.XXXXXX" 2>/dev/null); then
             printf '%s' "$body" > "$tmp" && mv "$tmp" "$CACHE_FILE" || rm -f "$tmp"
         fi
@@ -101,8 +79,7 @@ get_json() {
         FETCHED=$(date +%s)
         return 0
     fi
-    # On a failed fetch, fall back to a stale cache so the last known value
-    # still shows while the network is down.
+    # Fetch failed: serve the stale cache.
     if json=$(cache_read); then
         FETCHED=$(cache_mtime)
         return 0
@@ -110,7 +87,7 @@ get_json() {
     return 1
 }
 
-# WMO weather code to text. Table follows the Open-Meteo documentation.
+# WMO weather code to text, per the Open-Meteo docs.
 wmo_desc() {
     case "$1" in
         0)        echo "Clear" ;;
@@ -136,8 +113,7 @@ wmo_desc() {
     esac
 }
 
-# Icon glyphs. A Nerd Font is in use, so these are present.
-# When is_day is 0 the clear/partly-cloudy cases switch to night glyphs.
+# Nerd Font glyphs; clear/partly-cloudy switch to night variants when is_day=0.
 wmo_icon() {
     local code="$1" day="${2:-1}"
     case "$code" in
@@ -172,7 +148,7 @@ case "${1:-}" in
         wmo_icon "$code" "$isday"
         ;;
     --bar)
-        # One line, so a stream parser split on newlines receives it whole.
+        # Single line for the bar's line parser.
         printf '%s' "$json" | jq -c --arg place "$WEATHER_NAME" --argjson fetched "$FETCHED" '{
             place:    $place,
             fetched:  $fetched,

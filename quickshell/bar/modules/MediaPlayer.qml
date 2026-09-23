@@ -4,26 +4,19 @@ import QtQuick
 import Quickshell.Services.Mpris
 import qs.services
 
-// The player: art and title on one line, the position on the next, the
-// transport under both. Three rows down the card rather than two columns
-// across it, which is what makes it read as a player and not a panel with a
-// player in it.
-//
-// Every tone here is the bar's foreground at some opacity, never a literal
-// white. The card is the bar opening, and a card lit in a white the bar does
-// not use reads as a different program's window.
+// The player card: art and title, then position, then transport.
+// Tones come from the bar's foreground, never a literal white, so the card
+// reads as the bar opening rather than another program's window.
 Item {
     id: root
 
     readonly property var player: Media.player
     readonly property bool hasMedia: Media.present
     readonly property bool playing: Media.playing
-    // The position poll runs off this, so a closed card polls nothing.
+    // Gates the position poll.
     readonly property bool live: Media.open
 
-    // Empty unless the URL passed Theme.localArt, and false until the image
-    // has actually decoded: a host on the allowlist is not a promise that the
-    // fetch succeeded.
+    // Theme.localArt filters the URL; hasArt also waits for a real decode.
     readonly property string artSource: Theme.localArt(root.player?.trackArtUrl ?? "")
     readonly property bool hasArt: root.artSource !== "" && cover.status === Image.Ready
 
@@ -32,25 +25,15 @@ Item {
                                      && (root.player?.positionSupported ?? false)
                                      && (root.player?.length ?? 0) > 0
 
-    // Mpris answers with a position when asked rather than announcing one, so
-    // a progress bar has to ask. Once a second, and only while the card is
-    // open.
+    // MPRIS does not announce position changes; polled 1 s while open.
     property real position: 0
 
-    // Whether the fill glides to its next value or is simply put there. It
-    // glides for the one-second steps of ordinary playback and jumps for
-    // everything else -- a track change, a seek, and above all the card being
-    // reopened, where the poll had been stopped and the stored position
-    // was a minute stale. Without this the bar slid across from wherever it
-    // had been left every time the island opened, which is the wrong thing
-    // twice: it animates a value that did not change gradually, and it shows
-    // a position that is not the track's.
+    // Glide only for ordinary 1 s playback steps; jump on track change, seek
+    // or reopening the card (the stored position is stale by then).
     property bool glide: false
 
-    // Whether the player will take a new position, and whether one is being
-    // dragged right now. While scrubbing the bar follows the pointer rather
-    // than the poll: the player answers a seek a beat late, and a bar that
-    // waited for it lagged the finger doing the dragging.
+    // While scrubbing, follow the pointer, not the poll: players answer a
+    // seek late.
     readonly property bool canScrub: root.seekable && (root.player?.canSeek ?? false)
     property bool scrubbing: false
     property real scrubPosition: 0
@@ -75,8 +58,8 @@ Item {
         }
     }
 
-    // One frame is enough for the jump to be applied without the Behavior;
-    // the interval is a little longer so a slow frame cannot beat it.
+    // Re-enables glide after a jump; longer than a frame so a slow frame
+    // cannot animate the jump.
     Timer {
         id: settle
 
@@ -96,9 +79,6 @@ Item {
         return `${m}:${r < 10 ? "0" : ""}${r}`;
     }
 
-    // What the card sizes itself to. Equal margins on all four sides follow
-    // from this: the card is this plus its pad, and the pad is the same
-    // number horizontally and vertically.
     implicitHeight: root.hasMedia ? content.implicitHeight : idle.implicitHeight
 
     Column {
@@ -110,17 +90,12 @@ Item {
         spacing: Theme.mediaGap
         visible: root.hasMedia
 
-        // Row one: art, what is playing, and a mark at the far right that the
-        // reference puts there too -- it is the only thing on this surface
-        // that says which of several players is the one being shown.
+        // Row one: art, title and artist, level meter.
         Row {
             width: parent.width
             spacing: Theme.px(13)
 
-            // No placeholder. A player whose art is somewhere this shell will
-            // not fetch from -- and there are plenty -- would otherwise leave
-            // a grey square sitting there for the length of the track, which
-            // says less than the space it takes. The row simply closes up.
+            // No placeholder: when art is unavailable the row closes up.
             Rectangle {
                 id: art
 
@@ -152,8 +127,7 @@ Item {
                 Text {
                     width: parent.width
                     text: root.player?.trackTitle ?? ""
-                    // Title and artist come from the player, and for a browser
-                    // that means from the page. Nothing here wanted markup.
+                    // Player metadata (for a browser, the page's); never markup.
                     textFormat: Text.PlainText
                     elide: Text.ElideRight
                     font.family: Theme.uiFont
@@ -173,14 +147,8 @@ Item {
                 }
             }
 
-            // The level meter, in the space the row has left. It was a player
-            // icon here, which said which application was playing and nothing
-            // else; the meter says the same thing -- only one player is ever
-            // driving it -- and says it while moving.
-            //
-            // Hidden rather than left flat when cava has nothing to give: an
-            // empty level list draws the same row of stubs a silent passage
-            // does, and a still meter beside a playing track reads as broken.
+            // Meter while cava has levels; otherwise a dim note glyph, since a
+            // flat meter beside a playing track reads as broken.
             Item {
                 id: mark
 
@@ -209,8 +177,7 @@ Item {
             }
         }
 
-        // Row two: where the track is. Hidden rather than drawn empty when the
-        // player cannot say -- a bar stuck at zero claims it has not started.
+        // Row two: position. Hidden when unknown; a bar stuck at zero lies.
         Item {
             width: parent.width
             height: Theme.mediaProgressHeight
@@ -260,9 +227,7 @@ Item {
                     radius: height / 2
                     color: Theme.surfaceText
 
-                    // Matches the poll, so the fill moves at the rate the
-                    // number beside it does instead of stepping once a second.
-                    // Off while scrubbing, where it has to track the pointer.
+                    // ~Poll interval, so the fill moves continuously.
                     Behavior on width {
                         enabled: root.glide && !root.scrubbing
 
@@ -273,9 +238,7 @@ Item {
                     }
                 }
 
-                // The grab handle, shown while the pointer is on the bar or
-                // dragging it. A track with no handle does not look draggable,
-                // and one with a permanent handle is a second thing to read.
+                // Handle only on hover or drag.
                 Rectangle {
                     x: Math.round(fill.width - width / 2)
                     anchors.verticalCenter: parent.verticalCenter
@@ -286,7 +249,7 @@ Item {
                     visible: root.canScrub && (scrub.containsMouse || root.scrubbing)
                 }
 
-                // Taller than the track it drives: a 5-pixel target is not one.
+                // Taller than the 5 px track it drives.
                 MouseArea {
                     id: scrub
 
@@ -320,15 +283,11 @@ Item {
                             return;
                         const target = root.scrubPosition;
                         root.scrubbing = false;
-                        // Written straight to the player, which is what MPRIS
-                        // exposes for an absolute move; seek() is relative and
-                        // would need a position that is already stale.
+                        // Absolute set; seek() is relative to a stale position.
                         if (root.player)
                             root.player.position = target;
-                        // Put the local value there too and stop the glide, so
-                        // the fill stays where it was dropped instead of
-                        // sliding back and then forward when the poll catches
-                        // up a second later.
+                        // Keep the fill where it was dropped until the poll
+                        // catches up.
                         root.glide = false;
                         root.position = target;
                         settle.restart();
@@ -339,12 +298,7 @@ Item {
             }
         }
 
-        // Row three: the transport. Graded the way the reference grades it --
-        // play-pause largest, skip either side, shuffle and repeat at the ends
-        // -- and spread across the whole width rather than huddled in the
-        // middle, which is the other half of what makes it read as a player.
-        // One cell per control, so the spacing is the width divided rather
-        // than a number that has to be re-guessed when the width changes.
+        // Row three: transport, one equal cell per control across the width.
         Row {
             width: parent.width
             topPadding: Theme.px(9)
@@ -366,9 +320,7 @@ Item {
                     width: parent.width / 5
                     height: Theme.mediaControlMain
 
-                    // Mpris publishes whether each of these is available, and a
-                    // control that is drawn but does nothing is worse than one
-                    // that is visibly unavailable.
+                    // Unsupported controls are drawn visibly disabled.
                     readonly property bool usable: {
                         switch (control.modelData.key) {
                         case "prev":
@@ -384,9 +336,7 @@ Item {
                         }
                     }
 
-                    // Shuffle and repeat are the two that hold a state rather
-                    // than perform an action, so they are lit when on and dim
-                    // when off, like every toggle on the bar.
+                    // Shuffle and repeat hold state, so they are lit when on.
                     readonly property bool engaged: {
                         switch (control.modelData.key) {
                         case "shuffle":
@@ -436,8 +386,7 @@ Item {
                     }
 
                     MouseArea {
-                        // The whole cell, so there is no dead space between
-                        // one control and the next.
+                        // Whole cell: no dead space between controls.
                         anchors.fill: parent
                         enabled: control.usable
                         cursorShape: Qt.PointingHandCursor
@@ -453,8 +402,7 @@ Item {
                                 root.player.shuffle = !root.player.shuffle;
                                 break;
                             case "loop":
-                                // Three states, cycled in the order a listener
-                                // wants them: off, the whole list, this track.
+                                // Off -> playlist -> track.
                                 root.player.loopState = root.player.loopState === MprisLoopState.None ? MprisLoopState.Playlist
                                                       : root.player.loopState === MprisLoopState.Playlist ? MprisLoopState.Track
                                                       : MprisLoopState.None;
@@ -470,7 +418,6 @@ Item {
         }
     }
 
-    // Nothing playing, said once and quietly rather than with a dead player.
     Column {
         id: idle
 

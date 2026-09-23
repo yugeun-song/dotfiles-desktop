@@ -2,23 +2,17 @@
 
 # Makes the drag cursors bigger and heavier than the rest of the theme.
 #
-# A pointer is read against whatever is behind it, and the drag shapes lose that
-# contest. The arrow is drawn with a two pixel border and a solid fill; Oxygen's
-# open and closed hands are line art, mostly outline with little inside them, and
-# at 24 pixels there is not enough of either to see while something is being
-# dragged across a busy window. They are also the cursors that matter most at
-# that moment, because they are the feedback that the drag is happening at all.
+# Oxygen's open and closed hands are line art; at 24 px they vanish against a
+# busy window at exactly the moment they are the only feedback that a drag is
+# happening. The arrow, by contrast, has a 2 px border and a solid fill.
 #
-# Two changes, and neither is a resize of what is already there.
+# Bigger without blurring: Xcursor images carry a nominal size and their real
+# dimensions, and clients pick by nominal and draw at real. So nominal 24 is
+# answered with a 34 px image resampled down from Oxygen's 48, never an
+# upscaled 24.
 #
-# Bigger, without blurring. An Xcursor image carries a nominal size and its own
-# real dimensions, and clients pick by the nominal and draw at the real one. So
-# a request for 24 can be answered with a 34 pixel image resampled down from
-# Oxygen's 48, which is sharper than the 24 it would otherwise have got, not
-# softer. Scaling the 24 up would have been the obvious move and the wrong one.
-#
-# Heavier, by growing an outline from the alpha channel rather than drawing one.
-# It follows the fingers and the gap between them instead of boxing the hand in.
+# Heavier: an outline grown from the alpha channel, so it follows the fingers
+# and the gaps between them instead of boxing the hand.
 
 import argparse
 import importlib.util
@@ -27,9 +21,8 @@ import sys
 
 from PIL import Image, ImageFilter
 
-# Every shape a drag can put on screen. Named as the theme names them; each is
-# resolved to the real file behind it, because these are mostly symlinks and
-# writing through one would replace it and lose the alias.
+# Every drag shape, by theme name. Each is resolved to its real file: most are
+# symlinks, and writing through one would replace it and lose the alias.
 DRAG = ("grab", "grabbing", "move", "all-scroll", "openhand", "closedhand", "fleur")
 
 SCALE = 1.4
@@ -78,8 +71,7 @@ def emphasise(images, scale, ink):
     out = []
     for nominal in sorted(by_nominal):
         target = max(1, round(nominal * scale))
-        # The closest real image to what is being asked for, so the resample is
-        # a reduction wherever the theme has anything larger to reduce from.
+        # Closest real image, so the resample is a reduction whenever possible.
         src = min(images, key=lambda im: abs(im["w"] - target))
         img = to_image(src).resize((target, target), Image.LANCZOS)
 

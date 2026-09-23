@@ -1,79 +1,46 @@
--- Output policy: which screens are on, at what mode and scale, and what the
--- lid does. It runs inside the compositor.
+-- Output policy, run inside the compositor as hl.on handlers emitting
+-- hl.monitor rules (no process, no polling):
 --
--- The rule is the one the shell script that used to do this implemented:
+--   any external output   -> externals are the desktop, built-in panel off
+--   no external output    -> built-in panel is the desktop
 --
---   any external output   -> the externals are the desktop, the built-in
---                            panel goes off
---   no external output    -> the built-in panel is the desktop
+-- keep_internal (setting or marker file) means both. Machine specifics live in
+-- monitor_settings.lua (see monitor_settings_example.lua); a bad or missing
+-- file is reported and ignored, and every default is a working desktop.
 --
--- with keep_internal, in the settings file or as a marker file, meaning
--- "both". What changed is where the rule runs. It used to be a bash watcher
--- on the event socket that called hyprctl; it is now a config module that
--- registers hl.on handlers and emits hl.monitor rules. There is no process,
--- no polling, and no second authority arguing with the config on reload.
+-- Facts from the Hyprland 0.56.2 sources that shape the code:
 --
--- Anything that describes a particular machine -- the scale of its panel,
--- whether it wants both screens -- lives in monitor_settings.lua beside the
--- config, which is not part of the repository. monitor_settings_example.lua
--- is, and documents every field. A settings file that is missing, fails to
--- load, or is not a table is reported once and ignored: every default below
--- is a working desktop on its own.
+--   FALLBACK    When the last output goes, the compositor creates a headless
+--               output named FALLBACK that shows up like a real screen. Counted
+--               as external it kept the panel off (black screen on unplug), so
+--               FALLBACK and HEADLESS-* are ignored.
 --
--- Three facts about this Hyprland shape the code. All three were read from
--- the 0.56.2 sources, not from the wiki.
+--   reload      hyprctl reload drops all monitor rules and timers, re-runs this
+--               file, then re-checks outputs. So the policy also runs at load
+--               (a docked reload keeps the panel off without blinking) and the
+--               verify timer is re-armed there.
 --
---   FALLBACK    When the last enabled output goes away the compositor makes a
---               headless output literally named FALLBACK. It appears in
---               hl.get_monitors() and in monitor.added like a real screen. The
---               old classifier counted it as an external, kept the panel off,
---               and every HDMI unplug ended on a black screen. Anything named
---               FALLBACK or HEADLESS-* is ignored here.
+--   idempotent  A rule matching current state costs nothing, so each
+--               evaluation emits the full desired state; no bookkeeping.
 --
---   reload      hyprctl reload throws away every monitor rule and every timer,
---               re-runs this file, and then re-checks each output against the
---               rules. So the policy is evaluated at load time too: a reload
---               while docked emits the panel's disabled rule before that check
---               runs, and the panel stays off instead of blinking on and back
---               off. And the verify timer is armed at load as well, because a
---               reload that lands inside a hotplug has just cancelled the one
---               that was pending.
+-- hl.get_monitors() lists enabled outputs only, so the panel name comes from
+-- sysfs and its description (for scale matching) from STATE_FILE.
 --
---   idempotent  A rule is compared with the output's current state and one
---               that already matches costs nothing. Every evaluation therefore
---               emits the whole desired state and lets the compositor find the
---               difference. No "already placed" bookkeeping, no parked
---               position: the overlap check only looks at enabled outputs.
+-- Limits: verify counts enabled outputs, not visible ones; an enabled but
+-- dark external leaves the panel off (use ~/recover-desktop from a console).
+-- A wlr-output-management client (wlr-randr, wdisplays, kanshi) overrides
+-- every rule for the session unseen; do not run one alongside this.
 --
--- hl.get_monitors() lists enabled outputs only. A disabled panel is invisible
--- to it, and at first launch nothing is visible at all. The panel's name comes
--- from sysfs and its description, which is what the scale setting matches on,
--- from a small state file this module writes. Both are read once per load.
+-- Callbacks must fit the 50 ms budget: nothing spawns, and the only file I/O
+-- on the event path is one open of the keep-internal marker.
 --
--- Two limits, so they are not rediscovered. The verify timer counts outputs
--- the compositor has enabled, not screens that show something: an external
--- that is enabled and dark leaves the panel off, and ~/recover-desktop from a
--- console is the way out. And a wlr-output-management client -- wlr-randr,
--- wdisplays, kanshi -- stores an override the compositor applies on top of
--- every rule for the rest of the session; nothing here can see it. Do not
--- run one alongside this.
---
--- Everything here runs under the compositor's callback budget, which is 50 ms
--- for an event or timer callback. Nothing spawns a process. The only file
--- access on the event path is one io.open of the keep-internal marker; the
--- state file is written from its own timer, so a slow disk cannot take the
--- verify timer with it.
---
--- From outside: hyprctl eval 'MONITORS.evaluate("manual")'
+-- Manual run: hyprctl eval 'MONITORS.evaluate("manual")'
 
 local M = {}
 MONITORS = M
 
--- Hyprland writes no log file unless debug:disable_logs is turned off, so a
--- print() from here is invisible on an ordinary machine. Anything the user
--- has to act on -- a settings file that does not load, a state file that
--- cannot be written, a panel that would not come back -- is also put on the
--- screen. Routine evaluations are only printed.
+-- print() is invisible unless debug:disable_logs is off, so anything needing
+-- action also goes on screen.
 local function warn(message)
     print("monitors: " .. message)
     pcall(function()
@@ -85,18 +52,12 @@ local SETTINGS_FILE = CONFIG .. "/monitor_settings.lua"
 local KEEP_INTERNAL_FILE = CONFIG .. "/keep-internal"
 local STATE_FILE = (os.getenv("XDG_STATE_HOME") or (HOME .. "/.local/state")) .. "/hypr/monitors.state"
 
--- The defaults. The connector type is what makes a panel internal, so no
--- list of this machine's outputs is needed. The synthetic names are the
--- compositor's own and match neither side of the rule.
---
--- Two settle times, because the two directions cost differently. An output
--- that went away leaves the desktop dark until the panel is back, so that is
--- answered fast; only a burst from a cable that is not quite seated is left
--- to settle. An output that arrived leaves both screens on until the panel is
--- switched off, which is harmless, so that waits long enough for a link that
--- is still training, or a display that flaps as it wakes, to stop flapping
--- before the panel is modeset. However long the flapping goes on, an
--- evaluation is forced after settle_max_ms.
+-- Defaults. Connector type decides internal vs external. Removal settles
+-- fast (the desktop is dark until the panel returns); arrival settles long
+-- (both screens on is harmless, a training link may flap). settle_max_ms
+-- forces an evaluation during endless flapping.
+-- settle_synthetic_ms, panel_off_* and sysfs are not settable from the
+-- settings file (see load_settings).
 local policy = {
     internal = { "^eDP", "^LVDS", "^DSI" },
     synthetic = { "^FALLBACK$", "^HEADLESS%-" },
@@ -104,24 +65,18 @@ local policy = {
     keep_internal = false,
     settle_removed_ms = 400,
     settle_added_ms = 2000,
-    -- A synthetic output arriving is the compositor reporting it has no screen
-    -- left. Nothing about that improves by waiting, so this is only long
-    -- enough to leave the event handler before rules are emitted.
+    -- FALLBACK means no screen is left; waiting cannot help. Just long
+    -- enough to leave the event handler.
     settle_synthetic_ms = 60,
     settle_max_ms = 6000,
     verify_ms = 3000,
     verify_limit = 5,
     sysfs = true,
-    -- Between lighting the externals and darkening the panel. See the two
-    -- stages in M.evaluate: these are two modesets and they must not reach
-    -- the driver as one commit. The delay is not a settle window -- the
-    -- flapping has already settled by the time this is armed -- it is the gap
-    -- that keeps the panel's modeset out of the external's.
+    -- Gap between lighting externals and darkening the panel, so the two
+    -- modesets never reach the driver as one commit (see M.evaluate).
     panel_off_delay_ms = 700,
-    -- How soon after darkening the panel to check that something is still
-    -- lit. The ordinary verify at 3 s is a net for a policy that decided
-    -- wrongly; this one is a net for the one action in the whole module that
-    -- can take the last screen away, so it is checked on its own and sooner.
+    -- Sooner check after panel-off, the one action that can remove the last
+    -- screen.
     panel_off_verify_ms = 900,
 }
 
@@ -137,8 +92,7 @@ local function is_string_list(value)
     return true
 end
 
--- Each field is checked on its own, so one bad value falls back to its
--- default and says so, rather than silently taking the whole file down.
+-- Per-field validation: one bad value falls back alone, with a warning.
 local function load_settings()
     local chunk, err = loadfile(SETTINGS_FILE)
     if not chunk then
@@ -173,9 +127,8 @@ local function load_settings()
     local function positive(value)
         return type(value) == "number" and value > 0
     end
-    -- A pattern that does not compile raises inside string.find, and a raise
-    -- while this file loads is a configuration that failed to load: no binds,
-    -- emergency mode. So every pattern is tried on an empty string first.
+    -- A bad pattern would raise in string.find at load, which fails the whole
+    -- config (no binds). Test-compile each one first.
     local function is_pattern_list(value)
         if not is_string_list(value) or #value == 0 then
             return false
@@ -206,8 +159,7 @@ local function load_settings()
             warn(SETTINGS_FILE .. ": scales must be a list, using the default")
         else
             for i, entry in ipairs(scales) do
-                -- The type test comes first: indexing a number raises, and a
-                -- raise here is a config that failed to load.
+                -- Type test first: indexing a non-table raises at load.
                 local scale = type(entry) == "table" and tonumber(entry.scale) or nil
                 local match = type(entry) == "table" and entry.match or nil
                 local output = type(entry) == "table" and entry.output or nil
@@ -230,10 +182,8 @@ end
 
 load_settings()
 
--- A test harness runs this module in a nested compositor, where the only real
--- output is called WAYLAND-1 and the "externals" are headless outputs it
--- creates and destroys. It says so through this global before the module
--- loads, and it wins over the settings file.
+-- Set by scripts/monitors-selftest.sh (nested compositor: WAYLAND-1 is the
+-- panel, HEADLESS-* the externals). Wins over the settings file.
 if type(MONITOR_POLICY_OVERRIDE) == "table" then
     for key, value in pairs(MONITOR_POLICY_OVERRIDE) do
         policy[key] = value
@@ -281,11 +231,8 @@ local function read_lines(path)
     return lines
 end
 
--- The description Hyprland reports is "make model serial" with commas
--- removed, so a match is a prefix of it ending at a word boundary: the same
--- panel on another connector still matches, a different panel on the same
--- connector does not. An output entry names the connector instead, for the
--- machines where that is the easier thing to know.
+-- The description is "make model serial" without commas; match is a prefix
+-- ending at a word boundary.
 local function scale_for(name, description)
     for _, entry in ipairs(policy.scales) do
         if entry.output and entry.output == name then
@@ -303,12 +250,9 @@ end
 -- ---------------------------------------------------------------------------
 -- What outputs exist, whether or not the compositor has one enabled.
 -- ---------------------------------------------------------------------------
--- known: name -> description of every real output this machine has shown.
--- The description is what a scale entry matches on, and it is the one thing
--- that cannot be recovered for an output that is not enabled right now. So it
--- is remembered across reloads and launches in STATE_FILE, written only when
--- a pair changes. An entry that is stale, a panel from another machine say,
--- only produces a rule for an output that never appears, which costs nothing.
+-- known: name -> description of every real output seen. A disabled output's
+-- description cannot be queried, so it persists in STATE_FILE. Stale entries
+-- only yield rules for outputs that never appear, which is harmless.
 local known = {}
 
 local function load_state()
@@ -324,11 +268,9 @@ local function load_state()
     end
 end
 
--- Written beside the target and renamed over it: this file is read at the
--- next launch, which may follow a crash. Written from its own timer, never
--- from an event or evaluation, so a disk that stalls cannot cost the verify
--- timer its turn. Reported once if it cannot be written, because the only
--- other symptom is a panel that comes up at scale 1 after a docked boot.
+-- Atomic write (temp + rename), since the next launch may follow a crash.
+-- From its own timer so a stalled disk cannot delay verify. Warned once:
+-- otherwise the only symptom is scale 1 after a docked boot.
 local state_dirty = false
 local state_write_failed = false
 
@@ -377,10 +319,7 @@ local function note(name, description)
     schedule_state_save()
 end
 
--- The connector names the kernel exposes, and whether each has something
--- plugged in. Probed by name rather than listed, because listing a directory
--- needs a process and this must not spawn one. The type names are DRM's own;
--- the ones a laptop or desktop can actually have are enough.
+-- Probed by name: listing a directory would need a process. DRM type names.
 local CONNECTOR_TYPES = {
     "eDP", "LVDS", "DSI", "HDMI-A", "HDMI-B", "DP", "DVI-I", "DVI-D", "DVI-A", "VGA", "DPI", "USB", "Virtual",
 }
@@ -411,17 +350,10 @@ local function present()
         if name then
             local class = classify(name)
             if class ~= "synthetic" then
-                -- Learn it either way; the description is what a scale entry
-                -- matches on and it is the same whether the output is drawing.
                 note(name, monitor.description or "")
-                -- An output the compositor has enabled but cannot drive reports
-                -- a zero pixel size: every mode refused by the atomic test (an
-                -- untrusted xe modeset, a dock over its bandwidth) or an output
-                -- held enabled while dark. It shows nothing, so it is not the
-                -- desktop. Counting it would keep the panel off with the screen
-                -- black and no way back -- the verify net sees real > 0 and the
-                -- reload re-reads the same enabled output. Treated as absent, so
-                -- the panel stays on beside it; a later good mode names it real.
+                -- Zero size = enabled but undrivable (every mode refused, dock
+                -- over bandwidth). Counting it would keep the panel off on a
+                -- black screen that verify cannot see, so it is not real.
                 if (monitor.width or 0) > 0 and (monitor.height or 0) > 0 then
                     state.real = state.real + 1
                     if class == "internal" then
@@ -441,12 +373,8 @@ end
 -- ---------------------------------------------------------------------------
 -- The desired state, as rules.
 -- ---------------------------------------------------------------------------
--- highrr, not preferred: the highest refresh rate the output can do, then the
--- largest resolution at that rate, which is also what the catch-all rule in
--- general.lua asks for, so a rule for an external matches it and costs
--- nothing. Position is left to the compositor except for the first external,
--- which anchors the layout at 0x0 so the bar's notion of "the leftmost screen
--- is the main desktop" holds when both are on.
+-- highrr matches the catch-all in general.lua, so it costs nothing. The
+-- first external is pinned at 0x0: the bar treats the leftmost screen as main.
 local function enabled_rule(name, position)
     return {
         output = name,
@@ -461,25 +389,13 @@ local function keep_internal()
     return policy.keep_internal or exists(KEEP_INTERNAL_FILE)
 end
 
--- The rules are split by one question: does applying it take a screen away?
---
--- Lighting an output is additive and safe in any order. Darkening the panel is
--- not: it is the only rule here that can leave the session with nothing to
--- draw on, and on this machine it also frees a CRTC, which makes the driver
--- reconsider the connector the externals are on. Sent in the same batch as the
--- rule lighting an external, the two modesets arrive as one commit and the
--- compositor passes through a state with no enabled output. On 2026-09-09 it
--- stopped there and stayed for thirteen minutes, alive with its clients still
--- connected; the kernel logged nothing, so nothing was stuck below it.
---
--- So they go out separately, and the panel goes second.
+-- Lighting is safe in any order; darkening the panel is not. It frees a
+-- CRTC, and batched with an external's enable the two modesets become one
+-- commit through a no-output state, where the compositor once stayed wedged.
+-- So the panel goes off separately, second.
 
--- Everything that lights a screen. Never a disabled rule.
---
--- With the panel to be turned off this emits no rule for it at all rather than
--- an enabled one: a rule stands until it is replaced, so silence leaves the
--- panel's last rule in force. That is what keeps the two stages idempotent
--- together, and what stops the panel blinking on between them on a reload.
+-- Enabling rules only. With panel_off, the panel gets no rule at all, so its
+-- last rule stands and it does not blink on between stages or on reload.
 local function lit_rules(state, panel_off)
     local rules = {}
     for i, name in ipairs(state.external) do
@@ -498,7 +414,6 @@ local function lit_rules(state, panel_off)
     return rules
 end
 
--- The panel, alone.
 local function panel_rules()
     local rules = {}
     for name in pairs(known) do
@@ -512,8 +427,7 @@ local function panel_rules()
     return rules
 end
 
--- One remembered summary per stage, because the two now print separately and a
--- single one would make each stage look like a change every time the other ran.
+-- Per stage, so each stage only prints on its own changes.
 local last_summary = {}
 
 local function apply(rules, reason, stage)
@@ -536,29 +450,20 @@ end
 -- ---------------------------------------------------------------------------
 -- Evaluation, and the net under it.
 -- ---------------------------------------------------------------------------
--- sysfs is consulted at load time only, and only at first launch, which is
--- the one moment the compositor shows no output and no workspace: a docked
--- boot then never enables the panel in the first place. Any later reload
--- that finds no output is a hotplug in progress, and there the kernel's
--- "connected" is not evidence of a working screen: a cable that is plugged
--- in but refused by the compositor must leave the panel on, and only the
--- compositor's own list says which it is.
+-- sysfs counts only at first launch (no output, no workspace), so a docked
+-- boot never lights the panel. Later, "connected" does not prove a working
+-- screen; only the compositor's list decides.
 local sysfs = {}
 local verify_generation = 0
 local verify_failures = 0
 local schedule_verify
 
 -- ---------------------------------------------------------------------------
--- Stage two: the panel goes off on its own, later, and only if the externals
--- are still there when the moment comes.
+-- Stage two: panel off, later, only if the externals are still there.
 -- ---------------------------------------------------------------------------
 local panel_off_generation = 0
 
--- Drops a panel-off that is armed and has not run. Called wherever the world
--- moved under the decision that armed it: a new hotplug burst, a synthetic
--- output appearing, an evaluation that decided the panel stays on. The
--- generation counter is the same mechanism the settle and verify timers use;
--- a timer that finds its generation stale returns without doing anything.
+-- Invalidates a pending panel-off via its generation counter.
 local function cancel_panel_off()
     panel_off_generation = panel_off_generation + 1
 end
@@ -567,11 +472,8 @@ local function panel_off_now(reason, generation)
     if generation ~= panel_off_generation then
         return
     end
-    -- Re-read rather than trust what stage one saw. In the gap the cable can
-    -- have been pulled, the external can have failed its modeset and dropped
-    -- to zero pixels, or the keep-internal marker can have appeared. In any of
-    -- those the panel is the only screen left, so it stays on and this does
-    -- nothing.
+    -- Re-read: in the gap the external may have gone, failed its modeset, or
+    -- keep-internal may have appeared.
     local state = present()
     if #state.external == 0 or keep_internal() then
         return
@@ -600,19 +502,11 @@ function M.evaluate(reason, at_load)
             end
         end
     end
-    -- Armed before anything is applied, so a callback cut short by the
-    -- compositor's watchdog still leaves the net in place.
-    --
-    -- Faster when this load turned the panel off on sysfs evidence alone, with
-    -- no output enabled yet. The compositor is about to build its FALLBACK
-    -- output ~2 s after it is ready, and FALLBACK's first frame applies the
-    -- rules queued by then and is torn down in the same idle batch by its own
-    -- start listener. If the external the kernel reported never becomes a real
-    -- output (cable pulled between sysfs and the DRM scan, a mode the
-    -- compositor refuses), the default 3 s verify can miss that frame and the
-    -- screen stays black. A 1 s verify puts the panel-enable rule in the queue
-    -- in time. This is a mitigation for a race that could not be reproduced
-    -- deterministically, not a proof it cannot happen.
+    -- Armed before applying, so a watchdog-cut callback still leaves the net.
+    -- 1 s instead of verify_ms when the panel went off on sysfs alone: FALLBACK
+    -- appears ~2 s in and applies queued rules on its first frame, which a 3 s
+    -- verify can miss if the external never materialises. A mitigation for an
+    -- unreproduced race, not a proof.
     local panel_off = externals_present and not keep_internal()
     schedule_verify(sysfs_only and math.min(1000, policy.verify_ms) or nil)
     apply(lit_rules(state, panel_off), reason, "lit")
@@ -621,12 +515,8 @@ function M.evaluate(reason, at_load)
         cancel_panel_off()
         return
     end
-    -- At load there is nothing on screen to lose: no output enabled, no
-    -- workspace, no window to move off the panel. There is only one modeset,
-    -- so there is nothing for a second one to collide with, and splitting them
-    -- here would instead light the panel for the length of the delay on every
-    -- docked boot -- the blink this module already went to some trouble to
-    -- remove. The split is for the running compositor only.
+    -- At load there is one modeset and nothing to collide with; splitting
+    -- would blink the panel on every docked boot.
     if at_load then
         apply(panel_rules(), reason .. " (panel off)", "panel")
         return
@@ -634,12 +524,9 @@ function M.evaluate(reason, at_load)
     schedule_panel_off(reason)
 end
 
--- The safety net. Whatever the policy decided, a session with no real output
--- enabled is a laptop with its lid open and nothing on it, and there is no
--- way back from that with a keyboard nobody can see. Bounded, because an
--- output that cannot be enabled at all would otherwise be asked for forever.
--- Armed at load as well; should the event loop not be up yet at first
--- launch, the hyprland.start evaluation arms another.
+-- Safety net: no real output enabled means re-evaluate, which lights the
+-- panel. Bounded by verify_limit so an unusable panel is not retried forever.
+-- Also armed at load; hyprland.start re-arms it at first launch.
 schedule_verify = function(delay_ms)
     verify_generation = verify_generation + 1
     local generation = verify_generation
@@ -664,19 +551,13 @@ end
 -- ---------------------------------------------------------------------------
 -- Events.
 -- ---------------------------------------------------------------------------
--- Every add and remove restarts the settle timer with the delay its direction
--- calls for; only the last event in a burst evaluates, unless the burst has
--- gone on for settle_max_ms, in which case the state it is in gets applied.
--- os.time() is wall-clock at one-second granularity, which is all the cap
--- needs to be.
+-- Each event restarts the settle timer; the last event of a burst evaluates,
+-- or settle_max_ms forces one (os.time() 1 s granularity is enough for that).
 local settle_generation = 0
 local settle_since = nil
 
 local function schedule(reason, delay_ms)
-    -- An event means the world moved. A panel-off armed by the previous
-    -- evaluation was decided against a state that no longer holds, and letting
-    -- it fire behind the new evaluation is how the panel would go off just as
-    -- the external it was making way for went away.
+    -- A pending panel-off was decided on a state that no longer holds.
     cancel_panel_off()
     local now = os.time()
     settle_since = settle_since or now
@@ -702,25 +583,15 @@ hl.on("monitor.added", function(monitor)
     local name = monitor.name
     if name then
         note(name, monitor.description or "")
-        -- A panel the policy brings back keeps whatever DPMS state it had
-        -- when it was switched off, which may be "off" from a lid that was
-        -- shut at the time. Lit here unless the lid is shut now; behind a
-        -- shut lid it stays as it is. The lid flag is this module's own and
-        -- resets to open on reload, which errs towards a lit screen.
+        -- A re-enabled panel keeps its old DPMS state (maybe off from the
+        -- lid); light it unless the lid is shut. lid_closed resets to open on
+        -- reload, erring towards a lit screen.
         if classify(name) == "internal" and not lid_closed and hl.get_monitor(name) then
             hl.dispatch(hl.dsp.dpms({ action = "enable", monitor = name }))
         end
     end
-    -- An arriving external waits. Anything else is the panel's cue to come
-    -- back, and how fast depends on what arrived.
-    --
-    -- A synthetic output is not a screen. It is the compositor saying it has
-    -- run out of them, which is the one state this module exists to get out
-    -- of, and it is not a state a settle window can improve: the window is
-    -- there to absorb a cable that is not quite seated, and no amount of
-    -- waiting turns FALLBACK into a display. Waiting there is what left the
-    -- session dark for the length of the window on every unplug, and on
-    -- 2026-09-09 the compositor never came out of that state at all.
+    -- An arriving external waits; a synthetic one (FALLBACK: no screen left)
+    -- is answered almost at once, since waiting only prolongs the dark.
     local delay = policy.settle_removed_ms
     if name then
         local class = classify(name)
@@ -744,22 +615,12 @@ end)
 -- ---------------------------------------------------------------------------
 -- Lid.
 -- ---------------------------------------------------------------------------
--- Only the display: input devices are untouched, so the keyboard keeps
--- working with the lid shut, and nothing here suspends. DPMS rather than
--- disabling the output, because bringing an output back is a modeset and DPMS
--- is not. Named per output, so with keep_internal and an external attached
--- the lid still darkens exactly the panel behind it. The name is resolved
--- first: the dpms dispatcher given a name it cannot resolve acts on every
--- output, silently, and that is not a lid.
---
--- One more thing the compositor does with a per-output DPMS request, read
--- from 0.56.2: it records the requested state as the compositor-wide one.
--- With misc.key_press_enables_dpms and mouse_move_enables_dpms on (they are,
--- see general.lua) the next key or pointer event then re-lights every output,
--- panel included. So after the panel goes dark, an enable is sent to an
--- external that is already lit -- a no-op for that output -- to put the
--- compositor-wide record back to "on". With no external there is nothing to
--- send it to, and the panel wakes on the next key as it always did.
+-- Display only: no suspend, input untouched. DPMS, not disable, because
+-- re-enabling is a modeset. Per output, and resolved first: dpms with an
+-- unresolvable name silently hits every output.
+-- A per-output DPMS request also sets the compositor-wide state (0.56.2), so
+-- with *_enables_dpms on (general.lua) any input would re-light the panel.
+-- Enabling an already-lit external afterwards resets that state to on.
 local function dpms_internal(action)
     local state = present()
     for _, name in ipairs(state.internal) do

@@ -1,6 +1,6 @@
 # dotfiles-desktop
-# Clipboard history, text half. Kept out of the shell so it survives a shell
-# restart, and one unit per type because wl-paste watches one type at a time.
+# Clipboard history, text. Outside the bar so it survives a bar restart;
+# one unit per type because wl-paste --watch takes one type.
 [Unit]
 Description=Clipboard history (text)
 PartOf=hyprland-session.target
@@ -14,9 +14,7 @@ StartLimitBurst=5
 [Service]
 Type=simple
 ExecStart=/usr/bin/wl-paste --type text --watch cliphist store
-# always, not on-failure, for the reason in bar.service: systemd counts SIGTERM
-# and exit 0 as success, so on-failure left a unit killed by a stray pkill
-# inactive with nothing failed. The start limit above still bounds it.
+# always, not on-failure: see bar.service.
 Restart=always
 RestartSec=1
 Slice=session.slice

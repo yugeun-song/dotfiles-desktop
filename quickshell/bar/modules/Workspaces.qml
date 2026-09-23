@@ -4,35 +4,23 @@ import QtQuick
 import Quickshell.Hyprland
 import qs.services
 
-// The workspaces, as numbers, with the sliding indicator behind them.
+// Workspace numbers with a sliding indicator. Always the ten containing the
+// current workspace (1-10, 11-20, ...), so the row never changes width and a
+// target never moves under the pointer.
 //
-// Always ten, and always the ten the current workspace falls in: 1 to 10, then
-// 11 to 20, and so on. The row is therefore the same width whatever is open,
-// which is the point -- built from the workspaces that happened to exist, it
-// grew and shrank as windows opened and closed, and the number being aimed at
-// moved out from under the pointer between one glance and the next.
-//
-// The indicator stretches as it travels and settles back to one cell, with a
-// shadow under it that deepens with the stretch. The timings and the tint are
-// the ones this bar has always used: 520 ms in the direction of travel and
-// 150 ms behind it, so the leading edge arrives first and the trailing edge
-// catches up, which is what makes it read as one object moving rather than two
-// edges sliding.
+// The indicator's edges animate at different speeds (150 ms / 520 ms) so it
+// stretches toward the destination and reads as one moving object.
 Item {
     id: root
 
     readonly property int activeId: Hyprland.focusedWorkspace?.id ?? 1
     readonly property int groupSize: 10
 
-    // The ten the current workspace sits in. A named workspace has a negative
-    // id -- the scratchpad is one -- and does not belong to any ten, so the
-    // row stays on whichever group it was showing.
+    // Special workspaces have negative ids; the row keeps its current group.
     property int firstId: 1
     readonly property int lastId: root.firstId + root.groupSize - 1
 
-    // Fixed cells, because the indicator is positioned by arithmetic over them
-    // and a cell that sized to its own digits would put it in the wrong place
-    // for every workspace after the first double-digit one.
+    // Fixed cells: the indicator is positioned by arithmetic over them.
     readonly property int cellWidth: Theme.workspaceMinWidth
     readonly property int cellGap: Theme.px(2)
     readonly property int stride: root.cellWidth + root.cellGap
@@ -68,9 +56,7 @@ Item {
         root.movingRight = root.activeId > root.previousId;
         root.previousId = root.activeId;
         root.firstId = group;
-        // Crossing into another ten replaces every number in the row, so
-        // sliding between them would animate the indicator across cells that
-        // are not the ones it left or arrived at.
+        // Changing group relabels every cell, so snap instead of sliding.
         root.relayout(!groupChanged);
     }
 
@@ -104,10 +90,7 @@ Item {
         }
     }
 
-    // How far the indicator is stretched beyond a single cell, 0 at rest and 1
-    // when it spans a couple of them mid-travel. The trail is tinted by this so
-    // a settled indicator stays flat and only a moving one picks up the
-    // lighter smear.
+    // 0 at rest, 1 when stretched over ~2 extra cells; drives trail tint and shadow.
     readonly property real stretch: Math.min(1, Math.max(0, (root.slideRight - root.slideLeft - root.cellWidth) / (root.stride * 2)))
     readonly property color trailTint: Qt.lighter(Theme.fg, 1 + root.stretch * 0.6)
 
@@ -115,9 +98,7 @@ Item {
         id: indicatorShadow
 
         x: indicator.x
-        // One pixel, not two. The shadow is the only thing in the bar that
-        // reaches below its row, and at two it was enough to make the whole
-        // left side read as sitting lower than the right.
+        // 1 px: at 2 px the left side of the bar read as sitting lower.
         y: indicator.y + Theme.px(1)
         width: indicator.width
         height: indicator.height
@@ -157,19 +138,14 @@ Item {
         }
     }
 
-    // Scrolling the row walks the workspaces, which is how this bar has always
-    // worked.
     WheelHandler {
         id: wheel
 
-        // A touchpad sends one gesture as a stream of small deltas followed by
-        // a kinetic tail, so acting on each event walks several workspaces for
-        // one flick. A notch is 120, and only a full notch moves.
+        // Touchpads send many small deltas plus a kinetic tail; act only per
+        // full 120-unit notch.
         property real notch: 0
 
-        // The bounds the keyboard walk uses, so a wheel and Ctrl+Super+H land
-        // in the same place. MIN_WORKSPACE and MAX_WORKSPACE in
-        // hypr/config/keybinds.lua hold the same two.
+        // Keep in sync with MIN_/MAX_WORKSPACE in hypr/config/keybinds.lua.
         readonly property int minWorkspace: 1
         readonly property int maxWorkspace: 100
 
@@ -178,8 +154,6 @@ Item {
             wheel.notch += event.angleDelta.y;
             if (Math.abs(wheel.notch) < 120)
                 return;
-            // Read before the accumulator is cleared, or the direction is lost
-            // and every notch scrolls the same way.
             const step = wheel.notch > 0 ? -1 : 1;
             wheel.notch = 0;
 
@@ -187,9 +161,7 @@ Item {
             if (current < wheel.minWorkspace)
                 return;
 
-            // An absolute target rather than a relative step. Hyprland treats
-            // "-1" and "+1" as a walk that wraps, so one more notch at the
-            // first workspace crosses the whole set and lands on the last.
+            // Absolute target: Hyprland's relative "-1"/"+1" wraps around.
             const target = Math.min(wheel.maxWorkspace,
                                     Math.max(wheel.minWorkspace, current + step));
             if (target === current)
@@ -242,8 +214,7 @@ Item {
                     text: `${cell.id}`
                     font.family: Theme.uiFont
                     font.pixelSize: Theme.workspaceTextSize
-                    // Three weights for three states, which is what tells an
-                    // occupied workspace from an empty one without a mark.
+                    // Current is bolder; occupied vs empty is told by opacity.
                     font.weight: cell.current ? Font.DemiBold : Font.Normal
                     // Dark on the indicator, light off it.
                     color: cell.current ? Theme.bg
@@ -258,9 +229,8 @@ Item {
                 MouseArea {
                     anchors.fill: parent
                     cursorShape: Qt.PointingHandCursor
-                    // In Lua syntax: hl.dispatch wraps what it is given, and
-                    // anything that is not a call evaluates to nil and is
-                    // refused with nothing reaching here to say so.
+                    // Must be a Lua call expression; anything else evaluates
+                    // to nil and is refused silently.
                     onClicked: Hyprland.dispatch(`hl.dsp.focus({workspace = ${cell.id}})`)
                 }
             }

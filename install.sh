@@ -1,18 +1,10 @@
 #!/usr/bin/env bash
 #
-# Installs the desktop configuration into place.
+# Installs the desktop configuration. Files are copied, not linked, so nothing
+# edited here runs until this is re-run. --check lists what is behind, exit 1.
 #
-# Files are copied, not linked, so nothing here runs until this is re-run.
-# `install.sh --check` names what is behind and exits 1.
-#
-# Two files need privileges, both under /etc because they belong to the system
-# rather than to a user: the font chain, and the greeter's appearance. They
-# used to be printed as commands to run afterwards, and they were never run, so
-# the machine kept the configuration of the dotfiles this repository replaced.
-# They are installed here now, and the privilege is asked for once at the start
-# rather than in the middle.
-#
-# The greeter one is conditional: see greeter_is_tuigreet.
+# /etc/fonts/local.conf and /etc/tuigreet/config.toml need sudo; it is asked
+# for once, up front. Printing them as manual steps meant they never ran.
 #
 set -euo pipefail
 
@@ -22,13 +14,8 @@ STAMP="$(date +%Y%m%d-%H%M%S)"
 FONTCONF=/etc/fonts/local.conf
 GREETERCONF=/etc/tuigreet/config.toml
 
-# Asked for before anything is written, so a password prompt never appears
-# halfway through with links already made and the rest still to do. Refreshed
-# in the background because the timestamp expires on its own and this script
-# can take longer than that on a cold cache.
-#
-# Failing here is not fatal: everything except the font chain is the user's own
-# files. What cannot be installed is reported at the end.
+# sudo is acquired before any write and kept alive in the background, since a
+# cold run can outlast the timestamp. Without it only the /etc files are skipped.
 SUDO_OK=0
 SUDO_KEEPALIVE=
 
@@ -40,17 +27,8 @@ case "${1:-}" in
     *)       echo "usage: ${0##*/} [--check]" >&2; exit 2 ;;
 esac
 
-# Whether this machine's greeter is the one tuigreet/config.toml describes.
-#
-# Asked rather than assumed, because that file is only correct for tuigreet:
-# its colour names, its animation and its widget layout mean nothing to any
-# other greeter, and writing it where something else reads its configuration
-# would be worse than leaving the appearance alone. greetd names the greeter it
-# runs on one line, and that line is the answer.
-#
-# Three things have to hold: greetd configured, the command it runs being
-# tuigreet, and tuigreet actually installed. Any of them missing and the file
-# is skipped with a word about why.
+# tuigreet/config.toml means nothing to another greeter, so it is installed
+# only when greetd's command is tuigreet and tuigreet is installed.
 greeter_is_tuigreet() {
     [[ -r /etc/greetd/config.toml ]] || return 1
     grep -qE '^[[:space:]]*command[[:space:]]*=.*\btuigreet\b' /etc/greetd/config.toml || return 1
@@ -89,12 +67,10 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# Parse-checked before anything is written and before the password prompt, so a
-# refusal touches nothing. The mirrors below reload the running compositor, and
-# a module that throws while loading takes the session to emergency mode.
-#
-# Only exit 1 stops the install. Anything else is the check not running, usually
-# because Hyprland is not installed yet -- the state of a first run.
+# Checked before any write or prompt: mirroring reloads the running compositor,
+# and a module that throws sends the session to emergency mode. Only exit 1
+# (does not load) aborts; other codes mean the check could not run, e.g. no
+# Hyprland yet on a first install.
 if (( ! CHECK )) && [[ -x "$SRC/hypr/scripts/verify-config.sh" ]]; then
     _verify=0
     "$SRC/hypr/scripts/verify-config.sh" "$SRC/hypr" >/dev/null || _verify=$?
@@ -108,16 +84,10 @@ fi
 
 (( CHECK )) || acquire_sudo
 
-# Copy, every run, over whatever is there.
-#
-# For what this repository authors and nothing else writes. These were symlinks
-# once, which made the installed path resolve back into the working tree: the
-# old monitor script walked up from its own location and read the repository's
-# preset rather than the installed one, which was never installed at all.
-#
-# Unlike seed() this overwrites -- the repository is the source of truth here.
-# The copy goes in place rather than being swapped in, because quickshell
-# reloads on a write and a directory replaced underneath it crashes instead.
+# For what this repository authors: overwritten on every run. Not symlinked,
+# because a link resolves back into the working tree. A directory is updated
+# file by file, never swapped whole: quickshell crashes if its directory is
+# replaced underneath it.
 mirror() {
     local from="$1" to="$2" rel
     if [[ ! -e "$from" ]]; then
@@ -136,12 +106,9 @@ mirror() {
         return 0
     fi
 
-    # A link left by an older version of this script. Removing it is the whole
-    # conversion; what replaces it is the same content as a real file.
+    # Converts a link from an older install. The no-op is reported so an
+    # uninstalled fix is visible; checked after unlinking because diff follows links.
     [[ -L "$to" ]] && rm -f "$to"
-    # Reporting a no-op is the point: a fix committed but never installed is
-    # what cost a session, and silence is what hid it. Checked after the link
-    # is gone, because diff follows one.
     if [[ -e "$to" ]] && diff -rq "$from" "$to" >/dev/null 2>&1; then
         echo "unchanged $to"
         return 0
@@ -150,15 +117,9 @@ mirror() {
     if [[ -d "$from" ]]; then
         [[ -e "$to" && ! -d "$to" ]] && rm -f "$to"
         mkdir -p "$to"
-        # One file at a time, each written beside its target and renamed over
-        # it, the same way the single-file branch below works and for two more
-        # reasons. bash reads a running script incrementally, so a script that
-        # is blocked in a command -- session-watch.sh in inotifywait -- and
-        # is overwritten in place picks up reading from the new file's bytes
-        # at its old offset, and did: "unexpected EOF while looking for
-        # matching quote". And Hyprland reloads on the write of any module it
-        # has loaded, so an in-place copy could hand it a half-written file.
-        # A rename is one file, whole, or the old one.
+        # Write beside and rename over. bash reads a running script lazily, so
+        # overwriting session-watch.sh in place corrupts it mid-run; Hyprland
+        # reloads on write and could read a half-copied module.
         while IFS= read -r -d '' rel; do
             rel="${rel#./}"
             if [[ -d "$from/$rel" && ! -L "$from/$rel" ]]; then
@@ -169,9 +130,8 @@ mirror() {
                 mv -T -- "$to/$rel.new-$$" "$to/$rel"
             fi
         done < <(cd -- "$from" && find . -mindepth 1 -print0)
-        # A file the repository no longer has is one a stale binding can still
-        # reach, so it goes. Only inside this directory: local.lua and
-        # monitor_settings.lua live a level up and are not ours to delete.
+        # Prune files the repository dropped. Only inside this directory:
+        # local.lua and monitor_settings.lua sit a level up.
         while IFS= read -r -d '' rel; do
             rel="${rel#./}"
             if [[ ! -e "$from/$rel" ]]; then
@@ -180,11 +140,8 @@ mirror() {
             fi
         done < <(cd -- "$to" && find . -mindepth 1 -print0)
     else
-        # Written beside the target and moved onto it, so there is never a
-        # moment when the path does not exist. Hyprland watches its config and
-        # reads it the instant it changes: an rm followed by a cp gave it a
-        # window in which the file was gone, and it put "cannot open
-        # hyprland.lua: No such file or directory" on the screen.
+        # Rename, not rm+cp: Hyprland reads its config the instant it changes
+        # and errors on a momentarily missing hyprland.lua.
         local tmp="$to.new-$$"
         cp -a -- "$from" "$tmp"
         mv -T -- "$tmp" "$to"
@@ -193,17 +150,10 @@ mirror() {
 }
 
 mirror "$SRC/quickshell/bar"         "$CONFIG/quickshell/bar"
-# Copy, once, and then leave it alone.
-#
-# The rule this file follows: mirror what is authored here, seed what a program
-# owns. fcitx5, KDE and GTK all save by writing a temp file beside the target
-# and rename()-ing it over, and rename() replaces a symlink rather than
-# following it -- so the first change made in a settings window turns the link
-# into a real file and the repository quietly stops being what runs.
-#
-# Seeding says what is true: this is where the settings start, and the program
-# owns them after. To take a change back, copy the file into the repository; to
-# push one out, delete it and run this again.
+# For what a program owns: copied once, never overwritten. fcitx5, KDE and GTK
+# save by rename() over the target, which replaces a symlink rather than
+# following it. To take a change back, copy it into the repository; to push one
+# out, delete the installed file and re-run.
 seed() {
     local from="$1" to="$2"
     if [[ ! -e "$from" ]]; then
@@ -219,10 +169,7 @@ seed() {
         fi
         return 0
     fi
-    # A link left by an older version of this script. The content matches by
-    # definition, so the only thing to do is turn it into the real file it
-    # should have been, which is what makes the next in-place rewrite land
-    # somewhere harmless.
+    # A link from an older install becomes a real file.
     if [[ -L "$to" ]]; then
         rm -f "$to"
         mkdir -p "$(dirname "$to")"
@@ -244,34 +191,22 @@ seed() {
     echo "seeded $to"
 }
 
-# config/ before hyprland.lua, and a reload afterwards.
-#
-# Hyprland reloads the moment a file it has loaded is written, and only files
-# it has loaded. hyprland.lua was mirrored first once, its reload ran while the
-# module it had just started requiring was not copied yet, the load failed
-# before the keybinds, and the session sat in emergency mode with three binds
-# and an error overlay. The new module's arrival changed nothing, because a
-# file the compositor has never loaded is not one it watches. So the modules
-# land first, and the explicit reload below makes the final state what is on
-# disk whatever the watcher saw halfway through the copy.
-# Where config/monitors.lua remembers the description of each output it has
-# seen, so a disabled panel still gets its scale. The module cannot create the
-# directory itself, and the reload below is its first chance to write there.
+# config/ before hyprland.lua, then an explicit reload. Hyprland reloads on
+# writes to files it has already loaded only, so a hyprland.lua that requires a
+# not-yet-copied module leaves the session in emergency mode.
+# The state dir is where monitors.lua caches output descriptions; the module
+# cannot create it.
 (( CHECK )) || mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/hypr"
 mirror "$SRC/hypr/config"            "$CONFIG/hypr/config"
 mirror "$SRC/hypr/scripts"           "$CONFIG/hypr/scripts"
-# The one file under hypr/ that is not in the repository: this machine's
-# output settings, copied from monitor_settings_example.lua and edited.
-# Mirrored when it exists, mentioned when it does not; the policy runs on
-# its defaults without it.
+# Untracked per-machine settings; the policy runs on defaults without them.
 if [[ -f "$SRC/hypr/monitor_settings.lua" ]]; then
     mirror "$SRC/hypr/monitor_settings.lua" "$CONFIG/hypr/monitor_settings.lua"
 elif (( ! CHECK )); then
     echo "no hypr/monitor_settings.lua: copy hypr/monitor_settings_example.lua to it for this machine's scales"
 fi
 mirror "$SRC/hypr/hyprland.lua"      "$CONFIG/hypr/hyprland.lua"
-# Files this repository once installed and no longer does. The policy reads
-# monitor_settings.lua now; a preset left behind would only mislead.
+# Installed by older versions; removed so they cannot mislead.
 _retired_files=("$CONFIG/hypr/monitors.preset")
 for _retired in "${_retired_files[@]}"; do
     [[ -e "$_retired" ]] || continue
@@ -295,37 +230,22 @@ seed "$SRC/hypr/hyprlock.conf"     "$CONFIG/hypr/hyprlock.conf"
 seed "$SRC/hypr/hyprpaper.conf"    "$CONFIG/hypr/hyprpaper.conf"
 mirror "$SRC/bin/bar"               "$HOME/.local/bin/bar"
 mirror "$SRC/bin/unlock"            "$HOME/.local/bin/unlock"
-# At the top of the home directory on purpose, not on PATH: it is typed from
-# a text console after the desktop has gone dark, where "~/recover-desktop"
-# is the one path that needs no memory of where anything is installed.
+# In ~ on purpose: typed from a text console where PATH may not be set up.
 mirror "$SRC/bin/recover-desktop"   "$HOME/recover-desktop"
-# The three commands are single files, which mirror() skips when the content
-# matches, mode or no mode, and make_executable below only walks the script
-# directories. A checkout that arrived at 644 would install commands nobody
-# can run.
+# mirror() ignores mode when content matches, and make_executable only walks
+# the script directories, so a 644 checkout needs this.
 (( CHECK )) || chmod +x "$HOME/.local/bin/bar" "$HOME/.local/bin/unlock" "$HOME/recover-desktop" 2>/dev/null || true
 
-# The session's units: the target the compositor starts, the watch that stops
-# it, and one service per long-running program. Mirrored like the rest of what
-# this repository authors, not linked: systemd reads user units at login, and a
-# symlink into a working tree is a unit that disappears whenever that tree is
-# not where it was. The reasoning for each unit is in its own file.
-#
-# daemon-reload afterwards, or systemd keeps serving the unit list it read at
-# login and the new files are not there yet. What is already running is left
-# alone: a unit that is active keeps its old process until the target is
-# restarted, and the input method among them costs every open window its
-# input context when it restarts. The next login, or scripts/session-start.sh,
-# picks the new units up.
+# Units are mirrored, then daemon-reload below. Running units are not
+# restarted (restarting fcitx5 drops every window's input context); the next
+# login or session-start.sh picks them up.
 for _unit in "$SRC"/systemd/user/*; do
     mirror "$_unit" "$CONFIG/systemd/user/$(basename "$_unit")"
 done
 unset _unit
 
-# A unit this repository once shipped and no longer does would stay installed
-# and could still run: nothing sweeps that directory, which is shared with the
-# units other packages enable there. So every unit here carries a first-line
-# marker, and a file wearing the marker with no source left is removed.
+# The unit directory is shared with other packages, so only units whose first
+# line is the "# dotfiles-desktop" marker and whose source is gone are removed.
 for _installed in "$CONFIG"/systemd/user/*.service "$CONFIG"/systemd/user/*.target "$CONFIG"/systemd/user/*.slice; do
     [[ -f "$_installed" ]] || continue
     [[ -e "$SRC/systemd/user/$(basename "$_installed")" ]] && continue
@@ -338,24 +258,13 @@ for _installed in "$CONFIG"/systemd/user/*.service "$CONFIG"/systemd/user/*.targ
 done
 unset _installed
 
-# fcitx5's D-Bus activation, pointed at the unit. Same directory precedence as
-# every XDG data file: the copy under the home directory wins over /usr/share.
+# Overrides /usr/share's fcitx5 D-Bus activation to start the unit instead.
 mirror "$SRC/dbus/services/org.fcitx.Fcitx5.service" \
        "${XDG_DATA_HOME:-$HOME/.local/share}/dbus-1/services/org.fcitx.Fcitx5.service"
 
-# The pointer, built rather than shipped.
-#
-# XCursor themes are bitmaps with the colour baked in, so a themed pointer is
-# not something a setting can ask for. tint-cursors.py recolours a packaged
-# theme by luminance, keeping every hotspot and alias, and pointer.py redraws
-# the plain arrow over the result.
-#
-# One colour feeds both, and it is pointer.py's rather than Theme.qml's: while
-# the arrow alone carried a different one, the pointer changed colour on its way
-# onto a link and back on the way off. A cursor theme is one object to whoever
-# is looking at it.
-#
-# Failure is not fatal: the machine keeps whatever pointer it had.
+# XCursor themes are bitmaps, so the colour is baked in at build time. The tint
+# comes from pointer.py's FILL so the redrawn arrow and every other shape match.
+# Failure is not fatal; the previous pointer stays.
 cursor_tint=$(sed -n 's/^FILL = "\(#[0-9a-fA-F]\{6\}\)".*/\1/p' \
               "$SRC/theme/cursor/pointer.py" | head -1)
 if (( CHECK )); then
@@ -364,13 +273,9 @@ elif [[ -n "$cursor_tint" ]]; then
     if "$SRC/theme/cursor/tint-cursors.py" --from Oxygen_White \
            --name Spaceduck-Sky --tint "$cursor_tint" \
            --comment "Oxygen_White recoloured to the drawn pointer's blue"; then
-        # Only after the theme exists, and only over its plain arrow. No colours
-        # passed: they are pointer.py's own, and the tint above already came
-        # from there.
         "$SRC/theme/cursor/pointer.py" --theme Spaceduck-Sky \
             || echo "install: the arrow stayed as the tint left it" >&2
-        # And the drag shapes, which lose the contest against a busy window at
-        # the size the rest of the theme is drawn at. Reasoning in the script.
+        # Enlarges the drag shapes; reasoning in the script.
         "$SRC/theme/cursor/emphasise.py" --theme Spaceduck-Sky \
             || echo "install: the drag cursors were left at theme size" >&2
     else
@@ -391,28 +296,15 @@ seed "$SRC/kde/kdeglobals"        "$CONFIG/kdeglobals"
 seed "$SRC/kde/kded6rc"           "$CONFIG/kded6rc"
 seed "$SRC/kde/baloofilerc"      "$CONFIG/baloofilerc"
 
-# The other half of turning Baloo off; the reasoning is in kde/baloofilerc.
-#
-# Removing the unit's enabling symlink is separate from the config key because
-# they fail differently. The key is read through an ExecCondition, so it stops
-# the daemon but leaves systemd starting and immediately stopping a unit at
-# every login. Disabling stops that, and does nothing if the unit was never
-# enabled, which is the usual case on a machine that has not run Plasma.
+# Baloo off, second half (see kde/baloofilerc): the config key only fails the
+# unit's ExecCondition, so disable it to stop the start/stop at every login.
 if (( ! CHECK )) && command -v systemctl >/dev/null 2>&1; then
     systemctl --user disable kde-baloo.service >/dev/null 2>&1 || true
 fi
 
-# KDE's crash reporter, which on this desktop crashes on every crash it is told
-# about, including its own.
-#
-# It is a Qt GUI started from a systemd user unit, so it has no wayland display
-# and Qt ends it with qFatal -- an abort that is itself a coredump, which starts
-# it again. One quickshell crash left a hundred and thirty of its cores and
-# 1.1 GB under /var/lib/systemd/coredump.
-#
-# The socket is what launches it, so the socket is what has to go. Nothing here
-# reads its reports, and coredumpctl reads the cores without any of it. A no-op
-# where drkonqi was never installed.
+# drkonqi runs from a user unit with no Wayland display, so Qt aborts it, and
+# its own coredump launches it again (one crash left 1.1 GB of cores). Masked;
+# coredumpctl still works. No-op where drkonqi is absent.
 if (( ! CHECK )) && command -v systemctl >/dev/null 2>&1; then
     for _u in drkonqi-coredump-launcher.socket \
               drkonqi-coredump-pickup.service \
@@ -430,8 +322,8 @@ if (( ! CHECK )); then
     if command -v systemctl >/dev/null 2>&1; then
         systemctl --user daemon-reload 2>/dev/null \
             || echo "  could not reload the user manager; the units apply at the next login" >&2
-        # hypridle runs under the unit its package ships; enabling is what
-        # hooks it to graphical-session.target, and it is idempotent.
+        # hypridle uses its packaged unit; enabling hooks it to
+        # graphical-session.target.
         systemctl --user enable hypridle.service >/dev/null 2>&1 \
             || echo "  could not enable hypridle.service; the screen will not lock" >&2
     fi
@@ -456,13 +348,8 @@ make_executable() {
     fi
 }
 
-# The installed copies, not the repository. While these were symlinks the two
-# were one inode and chmod-ing either worked; they are separate files now, and
-# cp -a carries whatever mode the checkout had. A tree unpacked from an archive,
-# or cloned with core.fileMode false, arrives at 644, and then the key bindings
-# do nothing and the pills never fill while this script still reports success.
-# Reported, not fatal: under set -e a missing script directory would end the
-# run here and skip the font chain below without a word about it.
+# cp -a keeps the checkout's mode, and an archive or core.fileMode=false tree
+# arrives at 644. Reported, not fatal, so set -e cannot skip the /etc steps.
 if (( ! CHECK )); then
     make_executable "$CONFIG/quickshell/bar/scripts" "the caps lock, input method, weather and alarm pills, and every program the bar opens" || :
     make_executable "$CONFIG/hypr/scripts" "the session, terminal and capture bindings" || :
@@ -494,7 +381,6 @@ elif (( SUDO_OK )); then
     fi
     if sudo install -Dm644 "$SRC/fontconfig/local.conf" "$FONTCONF"; then
         echo "installed $FONTCONF"
-        # Without this the new chain is on disk and nothing is using it.
         sudo fc-cache -f >/dev/null 2>&1 && echo "font cache rebuilt"
     else
         echo "could not write $FONTCONF" >&2
@@ -505,8 +391,6 @@ else
     echo "  sudo fc-cache -f" >&2
 fi
 
-# The greeter's appearance. Only for tuigreet, and only when tuigreet is what
-# greetd runs; see greeter_is_tuigreet.
 if ! greeter_is_tuigreet; then
     echo "greeter: not tuigreet, so $GREETERCONF is left alone"
 elif [[ -f "$GREETERCONF" ]] && cmp -s "$SRC/tuigreet/config.toml" "$GREETERCONF"; then
@@ -518,9 +402,7 @@ elif (( SUDO_OK )); then
     fi
     if sudo install -Dm644 "$SRC/tuigreet/config.toml" "$GREETERCONF"; then
         echo "installed $GREETERCONF"
-        # Nothing to reload: greetd starts a fresh tuigreet for every login, so
-        # the next one reads this. A greeter already on screen keeps the old
-        # colours until it is replaced.
+        # No reload needed: greetd starts a fresh tuigreet per login.
     else
         echo "could not write $GREETERCONF" >&2
     fi

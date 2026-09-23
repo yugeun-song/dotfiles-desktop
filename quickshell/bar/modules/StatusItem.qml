@@ -2,65 +2,46 @@ import QtQuick
 import Quickshell
 import qs.services
 
-// One entry in the right-hand status group.
-//
-// Pill without the face. A pill was a coloured chip; a status item is a glyph
-// on the bar that takes colour only when the reading is worth interrupting
-// for. Not a mode on Pill because nearly every line of Pill managed the face.
-//
-// The interface is deliberately Pill's, so the call sites moved across by
-// deleting their fill lines.
+// One entry in the right-hand status group: a glyph (or caption and value)
+// that takes colour only when the reading is worth interrupting for.
 Item {
     id: root
 
     property string icon: ""
-    // A multiplier on statusIconSize, for glyphs the font draws small inside
-    // their box. See Theme.statusIconBoost.
+    // For glyphs the font draws small in their box; see Theme.statusIconBoost.
     property real iconScale: 1.0
     property string label: ""
     property string labelPrefix: ""
     property int labelWidth: 0
 
-    // A word in place of a glyph: "CPU 7%" rather than a die and a number.
-    // Set it and the item is caption-then-value; leave it empty and the item
-    // is the glyph-and-label row everything else uses.
+    // Non-empty switches to the caption-then-value form ("CPU 7%").
     property string caption: ""
     property string tooltip: ""
     property Component iconComponent: null
     property var menuEntries: []
     property var command: null
 
-    // The colour the glyph takes when it has something to say. Left at the
-    // foreground, an item is just another readout; set to an accent, it is
-    // the one thing on the bar that changed. Callers pass an accent only for
-    // states worth that -- caps lock on, battery low, a load over its ceiling,
-    // unread notifications -- and leave it alone otherwise.
+    // Glyph colour. Callers set an accent only for states worth attention
+    // (load or battery past its limit) or a dimmed tone for "off".
     property color accent: Theme.fg
 
-    // A filled pill behind the glyph, the way macOS marks a microphone that is
-    // live. Reserved for states that are ON rather than merely notable: the
-    // input method in Hangul, caps lock, an alarm going off. A colour says
-    // "this reading moved"; a filled pill says "this is switched on", and
-    // spending the second on the first leaves nothing for the second.
+    // A filled pill behind the glyph, reserved for "switched on right now"
+    // (a ringing alarm); colour alone means "this reading moved".
     property bool active: false
     property color activeFill: Theme.accentSaffron
 
-    // A reading past its limit. Sets the weight of both lines, so a captioned
-    // item goes bold as a pair rather than having its number thicken away from
-    // its label. The colour is the caller's to set through accent.
+    // Bolds caption and value together; the colour comes from accent.
     property bool alert: false
 
-    // See Pill.unknown. The same distinction holds and for the same reason:
-    // "off" is a reading and keeps the muted colour, "not read" is not and
-    // draws the question-mark glyph instead of whatever the caller asked for.
+    // Non-empty = no reading (the text says why). Distinct from "off", which is
+    // a reading: this draws the unknown glyph instead of the caller's.
     property string unknown: ""
 
     property bool interactive: root.command !== null || root.menuEntries.length > 0
 
     signal activated
 
-    // Exposed so a caller can hang a popup off this item and keep it open
-    // while the pointer is still on it. See the clock in StatusItems.
+    // Lets a caller keep a hover popup open while on the item (the clock).
     readonly property alias hovered: hover.hovered
 
     readonly property bool unread: root.unknown !== ""
@@ -72,10 +53,8 @@ Item {
     implicitHeight: Theme.barHeight
     implicitWidth: (root.caption !== "" ? stack.implicitWidth : content.implicitWidth) + Theme.menuItemPadX * 2
 
-    // The hover highlight, the press, and the on-state fill, in that order of
-    // precedence. Inset vertically so it does not touch the hairline, and
-    // fully rounded when it is carrying a state rather than a hover: a pill
-    // reads as a badge and a rounded rectangle reads as a button.
+    // Press, on-state fill, hover. Fully rounded when filled: a pill reads as a
+    // badge, a rounded rectangle as a button.
     Rectangle {
         anchors.fill: parent
         anchors.topMargin: Theme.barInset
@@ -104,8 +83,8 @@ Item {
         }
     }
 
-    // Same rule as Pill: one surface at a time, and the tooltip stays away
-    // until the pointer leaves once the menu has been used.
+    // One surface at a time: after the menu is used, the tooltip waits until
+    // the pointer leaves.
     property bool tooltipSuppressed: false
 
     Tooltip {
@@ -151,9 +130,7 @@ Item {
         }
     }
 
-    // The captioned form: the word dimmed so the number is what is read, and
-    // the number in a fixed width so a load crossing 9 to 10 percent does not
-    // shift every item to its left.
+    // Captioned form. Fixed value width so 9% -> 10% does not shift the row.
     Row {
         id: stack
 
@@ -161,15 +138,8 @@ Item {
         visible: root.caption !== ""
         spacing: Theme.statusCaptionGap
 
-        // The same family, size and weight as the value beside it, and the
-        // same box: only the colour differs. A heavier weight was the first
-        // attempt and it changed the glyph heights enough that the two lines
-        // did not sit level, which is the one thing a caption must not do.
-        //
-        // Past the limit even the colour stops differing. Half opacity is what
-        // makes a label quieter than its number, and a label that stays quiet
-        // while the number turns red reads as a smaller, lighter word beside
-        // it rather than as one warning. Below the limit it goes back.
+        // Same weight as the value so both sit level; only opacity differs,
+        // and on alert not even that, so the pair reads as one warning.
         Text {
             anchors.verticalCenter: parent.verticalCenter
             width: Theme.statusCaptionWidth
@@ -184,12 +154,7 @@ Item {
                               : Qt.rgba(root.glyphColor.r, root.glyphColor.g, root.glyphColor.b, 0.50)
         }
 
-        // Left-aligned inside a fixed width, not right-aligned. Right kept the
-        // item's outer edge still, but it moved the number towards the caption
-        // as the number grew: "CPU 6%" sat with a gap and "BAT 100%" ran into
-        // its own label. The gap after the caption is the one that has to be
-        // constant, because it is the one the eye reads as spacing; the slack
-        // belongs on the far side where nothing is.
+        // Left-aligned: the caption gap must stay constant; slack goes outside.
         Text {
             anchors.verticalCenter: parent.verticalCenter
             width: root.labelWidth > 0 ? root.labelWidth : implicitWidth
@@ -254,9 +219,7 @@ Item {
                 verticalAlignment: Text.AlignVCenter
                 horizontalAlignment: root.labelWidth > 0 ? Text.AlignRight : Text.AlignLeft
                 text: root.unread ? "—" : root.label
-                // A status label carries names this machine did not choose: an
-                // SSID, a Bluetooth device name, a window title. All are set by
-                // someone else, and none of them may become markup.
+                // Labels can carry foreign strings; never interpret as markup.
                 textFormat: Text.PlainText
                 font.family: Theme.uiFont
                 font.pixelSize: Theme.menuBarTextSize

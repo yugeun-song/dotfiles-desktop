@@ -1,18 +1,7 @@
 #!/usr/bin/env bash
-#
-# Set the wallpaper.
-#
-# One image, at one path, under Pictures where a file manager can reach it.
-# hyprlock.conf names that path directly; hyprpaper cannot, because it expands
-# neither ~ nor $HOME, so this script hands it the resolved path over IPC. Both
-# end up at the same file, which is what keeps the desktop and the lock screen
-# from drifting apart. Changing the wallpaper means replacing the file, not
-# editing two configurations.
-#
-# The name ends in .png because both configurations name it that way. A source
-# in another format is converted rather than copied under a lying extension:
-# hyprlock decodes by content and would cope, but the next person reading the
-# configuration should not have to find that out.
+# Sets the wallpaper: one file, $DEST, read by hyprlock.conf directly and
+# handed to hyprpaper over IPC (hyprpaper expands neither ~ nor $HOME).
+# Non-PNG sources are converted so the .png name stays honest.
 #
 # Usage
 #   wallpaper.sh <image>    make <image> the wallpaper
@@ -25,10 +14,7 @@ DEST="$HOME/Pictures/Wallpapers/current.png"
 
 die() { printf 'wallpaper: %s\n' "$*" >&2; exit 1; }
 
-# hyprpaper caches by path, and the path never changes here. Preloading again
-# without unloading first hands back the old image, so the desktop keeps the
-# previous wallpaper until the next login and the lock screen does not: they
-# would disagree, which is the one thing this file exists to prevent.
+# hyprpaper caches by path, which never changes here, so unload before preload.
 reload() {
     command -v hyprpaper >/dev/null 2>&1 || {
         printf 'wallpaper: hyprpaper is not installed, nothing is drawing the desktop\n' >&2
@@ -38,24 +24,19 @@ reload() {
         printf 'wallpaper: hyprpaper is not running, it will pick this up at next start\n' >&2
         return 0
     }
-    # Run as ExecStartPost of hyprpaper.service, this arrives while hyprpaper
-    # is still coming up, and IPC is refused until it is listening. Five
-    # seconds in quarter-second steps, then the request is sent regardless
-    # so a slow start is reported by the check below rather than skipped.
+    # As ExecStartPost this races hyprpaper's IPC socket: wait up to 5 s, then
+    # send anyway so the check below reports a slow start.
     for _ in $(seq 20); do
         hyprctl hyprpaper listactive >/dev/null 2>&1 && break
         sleep 0.25
     done
-    # unload and preload are refused by this build ("invalid hyprpaper request")
-    # and only listactive and wallpaper are answered, so failures from the
-    # first two are not treated as failures. wallpaper alone loads the file,
-    # which is the whole job.
+    # This hyprpaper build refuses unload/preload ("invalid hyprpaper request");
+    # only wallpaper and listactive work, so the first two may fail.
     hyprctl hyprpaper unload all      >/dev/null 2>&1 || true
     hyprctl hyprpaper preload "$DEST" >/dev/null 2>&1 || true
     hyprctl hyprpaper wallpaper ",$DEST" >/dev/null || die "hyprpaper would not set $DEST"
 
-    # Verified rather than assumed. wallpaper answers with an empty line
-    # whether or not it worked, so the only way to know is to ask.
+    # wallpaper answers an empty line either way; confirm via listactive.
     if ! hyprctl hyprpaper listactive 2>/dev/null | grep -qF "$DEST"; then
         die "hyprpaper accepted $DEST but is not showing it"
     fi
@@ -85,9 +66,7 @@ SRC="$1"
 
 mkdir -p -- "$(dirname -- "$DEST")"
 
-# Written beside the target and renamed into place. hyprlock reads this file
-# at the moment the screen locks, and a half-written one there is a lock
-# screen with no background at the exact moment you cannot fix it.
+# Atomic rename: hyprlock may read the file at any moment.
 tmp="$DEST.new-$$"
 trap 'rm -f -- "$tmp"' EXIT
 

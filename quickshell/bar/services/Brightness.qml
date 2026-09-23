@@ -5,16 +5,10 @@ import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
 
-// Screen brightness across two very different mechanisms.
-//
-// An internal panel has a backlight class device and responds instantly. An
-// external monitor has neither; it is driven over DDC/CI on the i2c bus behind
-// the video cable, which is slow and occasionally just does not answer.
-//
-// Measured on this machine: `ddcutil detect` takes 717 ms, a getvcp 75 ms.
-// So detection runs once at startup and writes are coalesced, because holding
-// a brightness key would otherwise queue dozens of half-second round trips
-// and the display would keep stepping long after the key came up.
+// Brightness of the focused monitor: sysfs backlight for the internal panel,
+// DDC/CI over i2c for externals. DDC is slow (detect ~0.7 s, getvcp ~75 ms
+// here), so detection runs once and writes are coalesced, or a held key
+// queues round trips that keep stepping after release.
 Singleton {
     id: root
 
@@ -25,10 +19,8 @@ Singleton {
 
     readonly property string monitor: Hyprland.focusedMonitor?.name ?? ""
 
-    // A backlight class device belongs to the panel wired into the machine, so
-    // it is only the right target when that panel is the one being looked at.
-    // Falling back to it for any monitor meant a key pressed on an external
-    // that speaks no DDC would silently dim the laptop instead.
+    // The backlight is used only when the internal panel is focused, or a key
+    // on a non-DDC external would dim the laptop instead.
     function isInternal(name) {
         return /^(eDP|LVDS|DSI)(-|$)/.test(name);
     }
@@ -68,8 +60,7 @@ Singleton {
     Process {
         id: ddcDetect
 
-        // --brief keeps the output to the two lines that matter and cuts the
-        // run time roughly in half.
+        // --brief roughly halves the run time.
         command: ["ddcutil", "detect", "--brief"]
 
         property string pendingBus: ""
@@ -77,14 +68,9 @@ Singleton {
 
         stdout: SplitParser {
             onRead: line => {
-                // ddcutil heads each block with "Display N" or with "Invalid
-                // display", and that verdict is the whole point of asking it.
-                // The laptop panel is enumerated on i2c like any other output
-                // and answers nothing -- getvcp on it returns DDCRC_RETRIES --
-                // so ddcutil calls it invalid. Recording its bus anyway made
-                // the shell drive the internal panel over DDC and never touch
-                // its backlight, and the brightness keys did nothing whenever
-                // that panel held focus.
+                // Honour the "Display N" / "Invalid display" verdict: the laptop
+                // panel is enumerated on i2c but does not answer DDC, and
+                // recording its bus would bypass its backlight.
                 const head = line.trim();
                 if (/^Display\s+\d+/.test(head)) {
                     ddcDetect.pendingUsable = true;
@@ -142,10 +128,7 @@ Singleton {
                 // ddcutil --brief prints: VCP 10 C <current> <max>
                 const vcp = t.match(/^VCP\s+10\s+\S+\s+(\d+)\s+(\d+)/);
                 if (vcp) {
-                    // `|| 100` treated a real max of 0 as a missing field, and
-                    // this branch had no clamp at all where the brightnessctl
-                    // one below does -- a monitor reporting current above max
-                    // produced percent 200.
+                    // Reject max <= 0 and clamp: monitors can report current > max.
                     const max = Number(vcp[2]);
                     if (!Number.isFinite(max) || max <= 0) {
                         console.warn("[brightness] unusable VCP max:", t);
@@ -165,9 +148,7 @@ Singleton {
 
     property int pending: -1
 
-    // Not zero. A backlight at zero is a panel that shows nothing, and the way
-    // back is a key on a screen that cannot be read. One percent is still dark
-    // enough to be the bottom of the range and leaves the screen legible.
+    // Not zero: a backlight at zero is a black panel.
     readonly property int floorPercent: 1
 
     function set(value) {
@@ -180,8 +161,7 @@ Singleton {
     }
 
     function step(delta) {
-        // Before the first read there is nothing to step from; ask, and let
-        // the next press act on a real number rather than guessing.
+        // Nothing to step from yet: read, and let the next press act.
         if (root.percent < 0) {
             root.read();
             return;
@@ -189,7 +169,6 @@ Singleton {
         root.set(root.percent + delta);
     }
 
-    // One write per idle period rather than one per key repeat.
     Timer {
         id: coalesce
 
@@ -210,9 +189,7 @@ Singleton {
         id: writeProc
     }
 
-    // The focused monitor can change under us. What was a DDC bus a moment
-    // ago may now be a backlight device, and the cached percentage belongs to
-    // the other screen.
+    // The cached value belongs to the previous screen and maybe mechanism.
     onMonitorChanged: {
         root.percent = -1;
         if (root.detected)
