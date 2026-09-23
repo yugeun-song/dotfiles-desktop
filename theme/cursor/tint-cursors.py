@@ -11,12 +11,13 @@ shape stays readable on dark and light windows.
 Output goes to its own directory under ~/.local/share/icons. The source theme
 belongs to a package and is never modified (pacman would silently undo it).
 
-Usage (install.sh passes pointer.py's FILL as the tint):
+Usage (--tint defaults to pointer.py's FILL, which install.sh also passes):
     tint-cursors.py --from Oxygen_White --name Spaceduck-Sky --tint '#1d89e4'
 """
 
 import argparse
 import os
+import re
 import shutil
 import struct
 import sys
@@ -166,11 +167,22 @@ def find_theme(name):
     return None
 
 
+def pointer_fill():
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pointer.py")
+    try:
+        with open(path, encoding="utf-8") as f:
+            m = re.search(r'^FILL = "(#[0-9a-fA-F]{6})"', f.read(), re.M)
+    except OSError:
+        return None
+    return m.group(1) if m else None
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--from", dest="source", default="Oxygen_White")
     ap.add_argument("--name", default="Spaceduck-Sky")
-    ap.add_argument("--tint", default="#7dcfff")
+    fill = pointer_fill()
+    ap.add_argument("--tint", default=fill, required=fill is None)
     ap.add_argument("--comment", default="")
     args = ap.parse_args()
 
@@ -180,7 +192,7 @@ def main():
         return 1
 
     h = args.tint.lstrip("#")
-    if len(h) != 6:
+    if not re.fullmatch(r"[0-9a-fA-F]{6}", h):
         print(f"tint-cursors: --tint wants #rrggbb, got {args.tint}", file=sys.stderr)
         return 1
     rgb = tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))

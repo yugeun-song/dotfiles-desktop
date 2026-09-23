@@ -29,7 +29,7 @@ set_key "$I" icon-theme     "breeze-dark"
 # From hypr/config/env.lua via the session environment, so the cursor has one
 # source of truth. Fallbacks are for running by hand.
 set_key "$I" cursor-theme   "${XCURSOR_THEME:-Spaceduck-Sky}"
-set_key "$I" cursor-size    "${XCURSOR_SIZE:-32}"
+set_key "$I" cursor-size    "${XCURSOR_SIZE:-24}"
 set_key "$I" font-name      "Inter 11"
 set_key "$I" monospace-font-name "CaskaydiaCove Nerd Font Mono 11"
 # Surfaces as the portal's org.freedesktop.appearance color-scheme (GTK4/libadwaita).
