@@ -379,6 +379,9 @@ elif [[ -n "$cursor_tint" ]]; then
 else
     echo "install: no FILL in pointer.py; the cursor theme was not built" >&2
 fi
+mirror "$SRC/node/repl.js"           "$CONFIG/node/repl.js"
+mirror "$SRC/node/node.sh"           "$CONFIG/profile.d/node.sh"
+mirror "$SRC/iex/iex.exs"            "$HOME/.iex.exs"
 seed "$SRC/fcitx5/config"          "$CONFIG/fcitx5/config"
 seed "$SRC/fcitx5/profile"         "$CONFIG/fcitx5/profile"
 seed "$SRC/fcitx5/conf"            "$CONFIG/fcitx5/conf"

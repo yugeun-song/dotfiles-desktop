@@ -18,8 +18,26 @@ gtk/              GTK 3 and 4 settings
 kde/              Qt and KDE colours, so file dialogs match the bar
 tuigreet/         the greeter's appearance, installed only when greetd runs it
 fcitx5/           Korean input configuration
+node/             node REPL helpers and the profile.d drop-in that loads them
+iex/              the same helpers for IEx, as ~/.iex.exs
 theme/            design notes for the colour system
 ```
+
+## REPL helpers
+
+`hex`, `bin` and `oct` in the node REPL and in IEx print a value in that base.
+They take integers, floats, booleans (1 and 0) and a single character, read as
+its code point, so `hex('a') - 43` is 54. Anything else is an error.
+
+They exist only in an interactive REPL. IEx reads `~/.iex.exs` only when it
+starts a shell. For node, `~/.config/profile.d/node.sh` adds
+`--require "$HOME/.config/node/repl.js"` to `NODE_OPTIONS`, and `repl.js` defines
+nothing unless node was started as a bare REPL. Scripts, `-e`, `-p`, piped
+input and workers are left alone. `node.sh` removes the flag again when node
+or `repl.js` is missing, so a missing file never breaks node.
+
+`node.sh` depends on the shell sourcing `~/.config/profile.d/*.sh`, which
+dotfiles-terminal's `zshenv` and `bashrc` do.
 
 ## Outputs and the session
 
