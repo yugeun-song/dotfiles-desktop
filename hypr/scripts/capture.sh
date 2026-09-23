@@ -113,7 +113,7 @@ case "$MODE" in
         out=$(hyprctl activeworkspace -j | jq -r '.monitor')
         [[ -n "$out" && "$out" != "null" ]] || die "could not determine the focused monitor"
         grim -o "$out" "$FILE" || die "grim failed"
-    verify_image "$FILE"
+        verify_image "$FILE"
         finish "$FILE"
         ;;
 

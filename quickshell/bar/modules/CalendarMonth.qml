@@ -204,14 +204,6 @@ Item {
                         radius: width / 2
                         // Same fill as the workspace indicator.
                         color: Theme.fg
-
-                        // Inert: the disc toggles visible, opacity never changes.
-                        Behavior on opacity {
-                            NumberAnimation {
-                                duration: 90
-                                easing.type: Easing.OutCubic
-                            }
-                        }
                     }
 
                     HoverHandler {

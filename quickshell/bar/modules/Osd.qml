@@ -13,16 +13,14 @@ Scope {
 
     property int value: 0
     property string icon: ""
-    property color accent: Theme.accentAmber
     property bool active: false
     property int holdMs: 1400
 
     readonly property int fadeMs: 140
 
-    function show(newValue, newIcon, newAccent) {
+    function show(newValue, newIcon) {
         root.value = Math.max(0, Math.min(100, newValue));
         root.icon = newIcon;
-        root.accent = newAccent ?? Theme.accentAmber;
         root.active = true;
         hold.restart();
     }
@@ -136,8 +134,7 @@ Scope {
                         // Oversized: the brightness glyph sits well inside its
                         // em box.
                         font.pixelSize: Theme.px(24)
-                        // Ignores the caller's accent on purpose: one colour for
-                        // every readout.
+                        // One colour for every readout.
                         color: Theme.surfaceText
                     }
 

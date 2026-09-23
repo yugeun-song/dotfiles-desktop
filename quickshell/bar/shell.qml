@@ -38,7 +38,7 @@ ShellRoot {
         target: Brightness
 
         function onChanged() {
-            osd.show(Brightness.percent, Theme.iconBrightness, Theme.accentAmber);
+            osd.show(Brightness.percent, Theme.iconBrightness);
         }
     }
 
@@ -46,9 +46,7 @@ ShellRoot {
         target: Volume
 
         function onChanged() {
-            osd.show(Volume.percent,
-                     Theme.volumeIcon(Volume.percent, Volume.muted),
-                     Volume.muted ? Theme.muted : Theme.accentTeal);
+            osd.show(Volume.percent, Theme.volumeIcon(Volume.percent, Volume.muted));
         }
     }
 

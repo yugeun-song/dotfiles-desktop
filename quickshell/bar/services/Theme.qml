@@ -206,10 +206,8 @@ Singleton {
     readonly property int calendarDaySize:     root.px(13)
     readonly property int calendarWeekdaySize: root.px(11)
 
-    readonly property int chipWidth:   root.px(27)
     readonly property int chipSpacing: root.px(3)
 
-    readonly property int mediaMaxWidth:  root.px(420)
     readonly property int mediaPadding:   root.px(12)
     readonly property int mediaItemGap:   root.px(7)
 
@@ -224,8 +222,6 @@ Singleton {
     readonly property int tooltipGap:     root.px(12)
 
     readonly property int windowChipPadding:  root.px(10)
-    readonly property int windowTitleWidth:   root.px(260)
-    readonly property int windowNameWidth:    root.px(130)
 
     readonly property int notifWidth:       root.px(392)
     readonly property int notifRadius:      root.px(15)
@@ -261,10 +257,8 @@ Singleton {
     readonly property color violet: "#7a5ccc"
 
     // ---------------------------------------------------------------------
-    // Tokyo Night accents, all taking dark text. capsLock must match the p10k
-    // segment in ~/.config/zsh/caps-lock.zsh.
+    // Tokyo Night accents, all taking dark text.
     // ---------------------------------------------------------------------
-    readonly property color capsLock: "#f7768e"
     readonly property color accentRed:    "#f7768e"
     readonly property color accentOrange: "#ff9e64"
     readonly property color accentAmber:  "#e0af68"
