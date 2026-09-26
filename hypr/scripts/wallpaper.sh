@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Sets the wallpaper: one file, $DEST, read by hyprlock.conf directly and
-# handed to hyprpaper over IPC (hyprpaper expands neither ~ nor $HOME).
+# handed to hyprpaper over IPC (a path in hyprpaper.conf must exist at parse time).
 # Non-PNG sources are converted so the .png name stays honest.
 #
 # Usage
@@ -14,7 +14,7 @@ DEST="$HOME/Pictures/Wallpapers/current.png"
 
 die() { printf 'wallpaper: %s\n' "$*" >&2; exit 1; }
 
-# hyprpaper caches by path, which never changes here, so unload before preload.
+# hyprpaper 0.8 re-reads the file on every wallpaper request; its IPC has no preload.
 reload() {
     command -v hyprpaper >/dev/null 2>&1 || {
         printf 'wallpaper: hyprpaper is not installed, nothing is drawing the desktop\n' >&2
@@ -30,10 +30,6 @@ reload() {
         hyprctl hyprpaper listactive >/dev/null 2>&1 && break
         sleep 0.25
     done
-    # This hyprpaper build refuses unload/preload ("invalid hyprpaper request");
-    # only wallpaper and listactive work, so the first two may fail.
-    hyprctl hyprpaper unload all      >/dev/null 2>&1 || true
-    hyprctl hyprpaper preload "$DEST" >/dev/null 2>&1 || true
     hyprctl hyprpaper wallpaper ",$DEST" >/dev/null || die "hyprpaper would not set $DEST"
 
     # wallpaper answers an empty line either way; confirm via listactive.
@@ -47,7 +43,7 @@ case "${1-}" in
     --show)
         printf 'path      %s\n' "$DEST"
         [[ -f "$DEST" ]] && printf 'size      %s\n' "$(stat -c %s "$DEST") bytes" || printf 'size      missing\n'
-        printf 'desktop   set over ipc by this script; hyprpaper.conf cannot name a path\n'
+        printf 'desktop   set over ipc by this script; hyprpaper.conf names no path\n'
         printf 'lock      hypr/hyprlock.conf names this path directly\n'
         exit 0
         ;;

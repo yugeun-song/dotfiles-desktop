@@ -79,6 +79,9 @@ watchers, the polkit agent, hypridle) is a systemd user unit under
 `hyprland-session.target`. The compositor starts the target through
 `hypr/scripts/session-start.sh`; `hyprland-session-watch.service` stops it when
 the compositor's lock file goes away, so a logout leaves nothing behind.
+Hyprland 0.57 starts a target of the same name by itself, before the script has
+imported the session environment; `HYPRLAND_NO_SD_TARGET` in `config/env.lua`
+opts out so the script keeps that job.
 `Ctrl+Super+R` runs the start script again, which starts whatever died.
 
 The units use `Restart=always` (fcitx5 is `on-failure`): systemd counts SIGTERM
