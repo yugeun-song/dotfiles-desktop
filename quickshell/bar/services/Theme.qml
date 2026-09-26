@@ -93,6 +93,9 @@ Singleton {
 
     // One size, two weights: the app name differs by weight only.
     readonly property int menuBarTextSize: root.px(13)
+    // One step under the title: the right side is a row of readouts, and at
+    // the title's size they competed with it. Glyphs keep their own sizes.
+    readonly property int statusTextSize:  root.px(12)
     // Denser on the right: a glyph carries its own padding, a word does not.
     readonly property int menuTitleGap:  root.px(16)
     readonly property int statusItemGap: root.px(9)
@@ -129,7 +132,7 @@ Singleton {
         id: captionMetrics
 
         font.family: root.uiFont
-        font.pixelSize: root.menuBarTextSize
+        font.pixelSize: root.statusTextSize
         // The widest of the four the bar uses.
         text: "CHG"
     }
@@ -576,7 +579,7 @@ Singleton {
         id: percentMetrics
 
         font.family: root.uiFont
-        font.pixelSize: root.menuBarTextSize
+        font.pixelSize: root.statusTextSize
         text: "100%"
     }
 

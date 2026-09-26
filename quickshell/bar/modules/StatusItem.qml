@@ -149,7 +149,7 @@ Item {
             verticalAlignment: Text.AlignVCenter
             text: root.caption
             font.family: Theme.uiFont
-            font.pixelSize: Theme.menuBarTextSize
+            font.pixelSize: Theme.statusTextSize
             font.weight: root.alert ? Font.Bold : Font.Normal
             color: root.glyphColor
         }
@@ -164,7 +164,7 @@ Item {
             text: root.unread ? "—" : root.label
             textFormat: Text.PlainText
             font.family: Theme.uiFont
-            font.pixelSize: Theme.menuBarTextSize
+            font.pixelSize: Theme.statusTextSize
             font.weight: root.alert ? Font.Bold : Font.Normal
             color: root.glyphColor
         }
@@ -207,7 +207,7 @@ Item {
                 verticalAlignment: Text.AlignVCenter
                 text: root.labelPrefix
                 font.family: Theme.uiFont
-                font.pixelSize: Theme.menuBarTextSize
+                font.pixelSize: Theme.statusTextSize
                 color: root.glyphColor
             }
 
@@ -222,7 +222,7 @@ Item {
                 // Labels can carry foreign strings; never interpret as markup.
                 textFormat: Text.PlainText
                 font.family: Theme.uiFont
-                font.pixelSize: Theme.menuBarTextSize
+                font.pixelSize: Theme.statusTextSize
                 color: root.glyphColor
             }
         }
