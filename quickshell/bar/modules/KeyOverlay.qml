@@ -6,9 +6,10 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.services
 
-// Pressed keys along the bottom of the screen. Each chord is a slot that owns
-// the width (and collapses) plus a cap that animates: scaling an item inside a
-// Row leaves its gap behind, so the row would jump.
+// Pressed keys in the bottom-right corner, where they sit beside a video's
+// controls rather than over its subtitles. Each chord is a slot that owns the
+// width (and collapses) plus a cap that animates: scaling an item inside a Row
+// leaves its gap behind, so the row would jump.
 Scope {
     id: root
 
@@ -33,22 +34,39 @@ Scope {
 
             anchors {
                 bottom: true
-                left: true
                 right: true
             }
 
             // No bottom margin (restHeight spaces the row instead), so a cap
             // falling out leaves the screen rather than clipping at the edge.
+            // The right margin matches the toasts above, so the two corners
+            // share one edge.
             margins {
                 bottom: 0
+                right: Theme.edgeMarginRight
+            }
+
+            // Empty mask: the caps are display only. The surface sits over the
+            // bottom of whatever window is there (a video's recommendation
+            // column, a status line), and without the mask it swallowed every
+            // click in that area for as long as the feed was on.
+            mask: Region {
+                item: null
             }
 
             readonly property int restHeight: Theme.px(56)
+            // Room for the entrance overshoot (scale 1.08) on the outer caps.
+            readonly property int sidePad: Theme.px(8)
 
+            // Sized to what it draws, so the surface never covers more than
+            // the caps (or the failure line, which replaces them).
+            implicitWidth: Math.max(1, Math.max(row.implicitWidth, failure.visible ? failure.implicitWidth : 0) + sidePad * 2)
             implicitHeight: Math.max(1, row.implicitHeight + restHeight + Theme.px(24))
 
             // Show the feed's failure instead of an empty strip.
             Text {
+                id: failure
+
                 anchors.centerIn: parent
                 visible: KeyFeed.chords.length === 0 && KeyFeed.failure !== ""
                 text: KeyFeed.failure
@@ -60,7 +78,10 @@ Scope {
             Row {
                 id: row
 
-                anchors.horizontalCenter: parent.horizontalCenter
+                // Right-aligned: the newest cap holds the corner and older
+                // ones age out to its left.
+                anchors.right: parent.right
+                anchors.rightMargin: sidePad
                 anchors.top: parent.top
                 anchors.topMargin: Theme.px(4)
                 spacing: Theme.px(10)
