@@ -1,5 +1,11 @@
 -- Window and layer rules.
 
+-- Client maximize requests are ignored, as in upstream's default config. Since
+-- 0.49 kitty remembers whether its last closed window was maximized and asks
+-- for that state on every start, so one maximized terminal made every new one
+-- cover the workspace. SUPER+D still works: only the client's request is dropped.
+hl.window_rule({ match = { class = ".*" }, suppress_event = "maximize" })
+
 -- Dialogs and pickers float.
 hl.window_rule({ match = { class = "^(xdg-desktop-portal-gtk|xdg-desktop-portal-hyprland)$" }, float = true })
 hl.window_rule({ match = { class = "^(org.fcitx.)" }, float = true })
