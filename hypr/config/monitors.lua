@@ -44,7 +44,7 @@ MONITORS = M
 local function warn(message)
     print("monitors: " .. message)
     pcall(function()
-        hl.notification.create({ text = "monitors: " .. message, duration = 10000 })
+        hl.notification.create({ text = "monitors: " .. message, timeout = 10000 })
     end)
 end
 
@@ -172,7 +172,7 @@ local function load_settings()
                     policy.scales[#policy.scales + 1] = {
                         match = match and (match:gsub(",", "")) or nil,
                         output = output,
-                        scale = tostring(scale),
+                        scale = scale,
                     }
                 end
             end
@@ -244,7 +244,7 @@ local function scale_for(name, description)
             end
         end
     end
-    return "1"
+    return 1
 end
 
 -- ---------------------------------------------------------------------------

@@ -29,8 +29,8 @@ hl.layer_rule({ match = { namespace = "^(quickshell:launcher|quickshell:powermen
 hl.layer_rule({ match = { namespace = "^(quickshell)$" }, blur = false })
 
 -- Blur covers the layer's rectangle, not the rounded card, so corners showed
--- light squares. The island must stay pure black to read as a notch.
-hl.layer_rule({ match = { namespace = "^(quickshell:osd|quickshell:tooltip|quickshell:menu|quickshell:island)$" }, blur = false })
+-- light squares.
+hl.layer_rule({ match = { namespace = "^(quickshell:osd)$" }, blur = false })
 
 -- Idle inhibit only for fullscreen media, not a fullscreen terminal.
 hl.window_rule({ match = { class = "^(mpv|vlc)$" }, idle_inhibit = "fullscreen" })

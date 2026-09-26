@@ -309,16 +309,7 @@ Scope {
     GlobalShortcut {
         name: "powerMenu"
         description: "Session dialog: lock, sign out, sleep, restart, shut down"
-        // onPressed fires on both edges of `pressed`; toggle on press only.
-
-        onPressed: {
-
-            if (!pressed)
-
-                return;
-
-            root.toggle()
-
-        }
+        // The pressed() signal only; the release edge goes to onReleased.
+        onPressed: root.toggle()
     }
 }

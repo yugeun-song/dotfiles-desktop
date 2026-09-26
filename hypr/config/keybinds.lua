@@ -56,16 +56,17 @@ hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd("systemd-cat -t session-start " .. s
 -- movefocus wraps at the edge; this vetoes the step when nothing lies that
 -- way and otherwise lets Hyprland pick the target. A Lua callback, not a
 -- hyprctl script, so rapid presses cannot race on a stale answer.
--- The hl API fails silently (unknown filter keys dropped, bad dispatcher args
--- return nil, dispatching nil is a no-op), so every failure falls back to the
--- plain step plus one notification: wrapping beats a dead key.
+-- Unknown filter keys are dropped silently, a bad dispatcher argument returns
+-- nil (logged, but the bind still registers) and dispatching nil is a no-op,
+-- so every failure falls back to the plain step plus one notification:
+-- wrapping beats a dead key.
 
 -- Any window whose centre is strictly beyond, diagonals included.
 local beyond = {
-    l = function(w, cx, cy) return w.at.x + w.size.x / 2 < cx end,
-    r = function(w, cx, cy) return w.at.x + w.size.x / 2 > cx end,
-    u = function(w, cx, cy) return w.at.y + w.size.y / 2 < cy end,
-    d = function(w, cx, cy) return w.at.y + w.size.y / 2 > cy end,
+    left  = function(w, cx, cy) return w.at.x + w.size.x / 2 < cx end,
+    right = function(w, cx, cy) return w.at.x + w.size.x / 2 > cx end,
+    up    = function(w, cx, cy) return w.at.y + w.size.y / 2 < cy end,
+    down  = function(w, cx, cy) return w.at.y + w.size.y / 2 > cy end,
 }
 
 -- Separate so the caller's pcall covers exactly the compositor queries.
@@ -113,7 +114,7 @@ local function walk_warn(tag, text)
     end
     walk_warned[tag] = true
     pcall(function()
-        hl.notification.create({ text = "hypr: " .. text, duration = 15000 })
+        hl.notification.create({ text = "hypr: " .. text, timeout = 15000 })
     end)
 end
 
@@ -150,8 +151,9 @@ local function focus_walk(mode, dir)
     end
 end
 
-local vim_dir   = { H = "l", J = "d", K = "u", L = "r" }
-local arrow_dir = { Left = "l", Down = "d", Up = "u", Right = "r" }
+-- Full words: the one-letter aliases are accepted but undocumented.
+local vim_dir   = { H = "left", J = "down", K = "up", L = "right" }
+local arrow_dir = { Left = "left", Down = "down", Up = "up", Right = "right" }
 
 for key, dir in pairs(vim_dir) do
     hl.bind("SUPER + " .. key, focus_walk("focus", dir),
@@ -165,8 +167,8 @@ for key, dir in pairs(arrow_dir) do
     hl.bind("SUPER + SHIFT + " .. key, focus_walk("move", dir),
         { description = "Move window " .. dir })
 end
-hl.bind("SUPER + BracketLeft", focus_walk("focus", "l"))
-hl.bind("SUPER + BracketRight", focus_walk("focus", "r"))
+hl.bind("SUPER + BracketLeft", focus_walk("focus", "left"))
+hl.bind("SUPER + BracketRight", focus_walk("focus", "right"))
 
 --##! Window state
 hl.bind("SUPER + Q", hl.dsp.window.close(), { description = "Close window" })
@@ -176,12 +178,14 @@ hl.bind("SUPER + F", hl.dsp.window.fullscreen({ mode = "fullscreen", action = "t
     { description = "Fullscreen" })
 hl.bind("SUPER + D", hl.dsp.window.fullscreen({ mode = "maximized", action = "toggle" }),
     { description = "Maximize" })
-hl.bind("SUPER + ALT + F", hl.dsp.window.fullscreen_state({ internal = 0, client = 3, action = "toggle" }),
+hl.bind("SUPER + ALT + F", hl.dsp.window.fullscreen_state({ internal = 0, client = 2, action = "toggle" }),
     { description = "Tell the window it is fullscreen without making it so" })
 hl.bind("SUPER + ALT + Space", hl.dsp.window.float({ action = "toggle" }), { description = "Toggle floating" })
 hl.bind("SUPER + P", hl.dsp.window.pin(), { description = "Pin window" })
 hl.bind("SUPER + Semicolon", hl.dsp.layout("splitratio -0.1"), { repeating = true, description = "Split ratio" })
 hl.bind("SUPER + Apostrophe", hl.dsp.layout("splitratio +0.1"), { repeating = true })
+-- mouse = true is ignored on 0.56 (the drag dispatcher handles the button
+-- itself) but is what upstream's example passes, so it stays.
 hl.bind("SUPER + mouse:272", hl.dsp.window.drag(), { mouse = true, description = "Drag window" })
 hl.bind("SUPER + mouse:274", hl.dsp.window.drag(), { mouse = true })
 hl.bind("SUPER + mouse:273", hl.dsp.window.resize(), { mouse = true, description = "Resize window" })
@@ -198,9 +202,8 @@ for i = 1, 10 do
 
 end
 
--- Keypad digits are not bound. The Lua bind does not parse hyprlang's
--- "code:NN" (it registers an empty, dead bind), and keysyms differ with NumLock
--- (KP_End vs KP_1), so both sets would be needed and could double-fire.
+-- Keypad digits are not bound: keysyms differ with NumLock (KP_End vs KP_1),
+-- so both sets would be needed and could double-fire.
 
 -- Clamped walk by number (vertical keys step 5). Not r+n/r-n, which wrap from
 -- the first workspace to the last. A callback rather than a hyprctl script, so
@@ -274,11 +277,12 @@ hl.bind("SUPER + mouse_up", workspace_walk("focus", -1),
     { description = "Previous workspace" })
 hl.bind("SUPER + mouse_down", workspace_walk("focus", 1),
     { description = "Next workspace" })
--- Ctrl cycles open workspaces with r-1/r+1; wrapping is intended here, the
--- one way to reach the far end.
-hl.bind("CTRL + SUPER + mouse_up", hl.dsp.focus({ workspace = "r-1" }),
+-- Ctrl cycles the open workspaces on this monitor with m-1/m+1; wrapping is
+-- intended here, the one way to reach the far end. Not r-1/r+1: those walk
+-- ids, empty ones included, and never wrap.
+hl.bind("CTRL + SUPER + mouse_up", hl.dsp.focus({ workspace = "m-1" }),
     { description = "Previous open workspace" })
-hl.bind("CTRL + SUPER + mouse_down", hl.dsp.focus({ workspace = "r+1" }),
+hl.bind("CTRL + SUPER + mouse_down", hl.dsp.focus({ workspace = "m+1" }),
     { description = "Next open workspace" })
 -- Carrying a window is a clamped step, not a cycle.
 hl.bind("SUPER + SHIFT + mouse_up", workspace_walk("move", -1))
@@ -294,7 +298,7 @@ hl.bind("SUPER + ALT + S", hl.dsp.window.move({ workspace = "special:special", f
 --##! Zoom
 -- Clamped: the compositor accepts a zoom you cannot read your way out of.
 local function zoom_by(step)
-    local current = hl.get_config("cursor:zoom_factor")
+    local current = hl.get_config("cursor.zoom_factor")
     local next_value = current + step
     if next_value > 3.0 then
         next_value = 3.0

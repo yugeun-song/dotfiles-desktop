@@ -4,9 +4,9 @@
 
 HOME = os.getenv("HOME")
 
--- This file's own directory, not a fixed path: `require` always resolves
--- against ~/.config/hypr, so a checkout elsewhere would load nothing and still
--- pass --verify-config.
+-- This file's own directory, not a fixed path, so a checkout elsewhere loads
+-- its own modules. loadfile rather than `require` (which also resolves next to
+-- the main config on 0.56) because load_module then names the failing module.
 CONFIG = debug.getinfo(1, "S").source:sub(2):match("(.*)/[^/]*$") or (HOME .. "/.config/hypr")
 
 function file_exists(path)
@@ -39,7 +39,7 @@ function load_module(name)
     pcall(function()
         hl.notification.create({
             text = "hypr: config/" .. name .. ".lua failed: " .. tostring(runtime_err),
-            duration = 15000,
+            timeout = 15000,
         })
     end)
     error("config/" .. name .. ".lua: " .. tostring(runtime_err), 0)

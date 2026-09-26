@@ -53,3 +53,9 @@ hl.env("HYPRCURSOR_SIZE", cursor_size)
 -- Lunar Lake runs xe; a wrong VA-API driver name silently disables hardware
 -- decoding instead of erroring.
 hl.env("LIBVA_DRIVER_NAME", "iHD")
+
+-- Hyprland 0.57 starts hyprland-session.target itself, right after importing
+-- a fixed set of variables and before scripts/session-start.sh has pushed the
+-- rest of this file into the user manager. Opting out keeps the start order
+-- and the restart-on-relaunch logic with the script. Ignored on 0.56.
+hl.env("HYPRLAND_NO_SD_TARGET", "1")

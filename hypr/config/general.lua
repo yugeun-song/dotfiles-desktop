@@ -39,7 +39,8 @@ hl.config({
             natural_scroll = true,
             disable_while_typing = true,
             tap_to_click = true,
-            drag_lock = true,
+            -- An int (0..2) on 0.56; 1 is what true used to mean.
+            drag_lock = 1,
         },
     },
 
@@ -108,7 +109,9 @@ hl.config({
     },
 
     cursor = {
-        no_hardware_cursors = false,
+        -- Tri-state: 0 use them, 1 never, 2 auto (off while tearing). Tearing
+        -- is off above, so 0 and the 0.55.2 default of 2 behave the same.
+        no_hardware_cursors = 0,
         enable_hyprcursor = true,
         inactive_timeout = 5,
     },
