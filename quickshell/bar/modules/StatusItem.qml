@@ -138,8 +138,9 @@ Item {
         visible: root.caption !== ""
         spacing: Theme.statusCaptionGap
 
-        // Same weight as the value so both sit level; only opacity differs,
-        // and on alert not even that, so the pair reads as one warning.
+        // Caption and value share the plain label's size, weight and colour,
+        // so the three readouts match the words beside them; position alone
+        // tells the caption from the value. Bold on alert, as one warning.
         Text {
             anchors.verticalCenter: parent.verticalCenter
             width: Theme.statusCaptionWidth
@@ -148,10 +149,9 @@ Item {
             verticalAlignment: Text.AlignVCenter
             text: root.caption
             font.family: Theme.uiFont
-            font.pixelSize: Theme.statusCaptionSize
-            font.weight: root.alert ? Font.Bold : Font.Medium
-            color: root.alert ? root.glyphColor
-                              : Qt.rgba(root.glyphColor.r, root.glyphColor.g, root.glyphColor.b, 0.50)
+            font.pixelSize: Theme.menuBarTextSize
+            font.weight: root.alert ? Font.Bold : Font.Normal
+            color: root.glyphColor
         }
 
         // Left-aligned: the caption gap must stay constant; slack goes outside.
@@ -164,8 +164,8 @@ Item {
             text: root.unread ? "—" : root.label
             textFormat: Text.PlainText
             font.family: Theme.uiFont
-            font.pixelSize: Theme.statusValueSize
-            font.weight: root.alert ? Font.Bold : Font.Medium
+            font.pixelSize: Theme.menuBarTextSize
+            font.weight: root.alert ? Font.Bold : Font.Normal
             color: root.glyphColor
         }
     }

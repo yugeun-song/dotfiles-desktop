@@ -116,10 +116,9 @@ Singleton {
     // Hover highlight inset, proportional to the bar height.
     readonly property int barInset: Math.max(2, Math.round(root.barHeight * 0.14))
 
-    // Caption beside the value, same size, only dimmer: two stacked lines do
-    // not fit, and a slightly smaller caption looks like a font fallback.
-    readonly property int statusCaptionSize: root.px(12)
-    readonly property int statusValueSize:   root.px(12)
+    // Caption beside the value (two stacked lines do not fit), both in the
+    // bar's text size and weight so the readouts sit level with the words
+    // around them; a smaller or dimmer caption read as a different font.
     readonly property int statusCaptionGap:  root.px(6)
 
     // Captions are right-aligned in this width so the gap before each value
@@ -130,8 +129,7 @@ Singleton {
         id: captionMetrics
 
         font.family: root.uiFont
-        font.pixelSize: root.statusCaptionSize
-        font.weight: Font.Medium
+        font.pixelSize: root.menuBarTextSize
         // The widest of the four the bar uses.
         text: "CHG"
     }
@@ -578,8 +576,7 @@ Singleton {
         id: percentMetrics
 
         font.family: root.uiFont
-        font.pixelSize: root.textSize
-        font.weight: Font.Medium
+        font.pixelSize: root.menuBarTextSize
         text: "100%"
     }
 
