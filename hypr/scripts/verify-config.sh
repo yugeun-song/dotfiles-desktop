@@ -2,7 +2,9 @@
 # Parse-check the Hyprland config on a copy with execs.lua emptied, because
 # `Hyprland --verify-config` runs exec calls for real.
 # Catches parse and load-time errors, not errors inside bind callbacks (those
-# need their own pcall). Machine-local monitor_settings.lua is not copied.
+# need their own pcall). The tracked monitor_settings.lua is copied so a
+# broken preset is reported here too; the machine-local file is not (the
+# policy only warns about it).
 #
 # Usage: verify-config.sh [config-dir]     (default: the directory above this)
 
@@ -26,6 +28,7 @@ trap 'rm -rf -- "$work"' EXIT
 # -L: if the source is ever symlinked, emptying execs.lua must not hit the real file.
 cp -aL -- "$SRC/hyprland.lua" "$work/"
 cp -aL -- "$SRC/config" "$work/"
+[[ -f "$SRC/monitor_settings.lua" ]] && cp -aL -- "$SRC/monitor_settings.lua" "$work/"
 
 # Emptied, not deleted: hyprland.lua errors on a missing module.
 printf -- '-- emptied by verify-config.sh\n' > "$work/config/execs.lua"

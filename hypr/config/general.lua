@@ -123,6 +123,13 @@ hl.config({
         -- Inert with back_and_forth off; kept so the pair stays together.
         allow_workspace_cycles = false,
         scroll_event_delay = 0,
+        -- Off: the direction keys stay on the workspace in front of them. On,
+        -- a window on the other screen's workspace is a candidate whenever
+        -- its edge meets the focused one's, and at the edge focus and
+        -- windows hop to the next monitor. Only direction dispatchers read
+        -- this: the pointer, focus-follows-mouse and dragging still cross
+        -- screens, and Super+Alt+digit sends a window to any workspace.
+        window_direction_monitor_fallback = false,
     },
 
     -- Feel only; the gestures themselves are hl.gesture below.

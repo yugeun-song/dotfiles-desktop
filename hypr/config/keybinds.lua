@@ -54,8 +54,10 @@ hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd("systemd-cat -t session-start " .. s
 
 --##! Window focus
 -- movefocus wraps at the edge; this vetoes the step when nothing lies that
--- way and otherwise lets Hyprland pick the target. A Lua callback, not a
--- hyprctl script, so rapid presses cannot race on a stale answer.
+-- way and otherwise lets Hyprland pick the target, which stays on this
+-- workspace (window_direction_monitor_fallback is off in general.lua). A Lua
+-- callback, not a hyprctl script, so rapid presses cannot race on a stale
+-- answer.
 -- Unknown filter keys are dropped silently, a bad dispatcher argument returns
 -- nil (logged, but the bind still registers) and dispatching nil is a no-op,
 -- so every failure falls back to the plain step plus one notification:
@@ -208,9 +210,11 @@ end
 -- Clamped walk by number (vertical keys step 5). Not r+n/r-n, which wrap from
 -- the first workspace to the last. A callback rather than a hyprctl script, so
 -- a wheel flick cannot race two steps into one. By number, not over existing
--- workspaces: Hyprland creates an empty one on arrival.
+-- workspaces: Hyprland creates an empty one on arrival. The ceiling is
+-- config/monitors.lua's, which binds every id up to it to the external; the
+-- fallback covers a monitors module that failed to load.
 local MIN_WORKSPACE = 1
-local MAX_WORKSPACE = 100
+local MAX_WORKSPACE = (MONITORS and MONITORS.LAST_WORKSPACE) or 100
 
 local function workspace_walk(mode, step)
     return function()

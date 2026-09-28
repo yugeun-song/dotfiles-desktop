@@ -10,5 +10,5 @@ fcitx5/*_??????
 __pycache__/
 *.pyc
 
-# Per-machine; monitor_settings_example.lua is the tracked template.
-hypr/monitor_settings.lua
+# Per-machine deviations from the tracked preset hypr/monitor_settings.lua.
+hypr/monitor_settings.local.lua

@@ -131,7 +131,7 @@ mirror() {
             fi
         done < <(cd -- "$from" && find . -mindepth 1 -print0)
         # Prune files the repository dropped. Only inside this directory:
-        # local.lua and monitor_settings.lua sit a level up.
+        # local.lua and the monitor settings sit a level up.
         while IFS= read -r -d '' rel; do
             rel="${rel#./}"
             if [[ ! -e "$from/$rel" ]]; then
@@ -199,11 +199,31 @@ seed() {
 (( CHECK )) || mkdir -p "${XDG_STATE_HOME:-$HOME/.local/state}/hypr"
 mirror "$SRC/hypr/config"            "$CONFIG/hypr/config"
 mirror "$SRC/hypr/scripts"           "$CONFIG/hypr/scripts"
-# Untracked per-machine settings; the policy runs on defaults without them.
-if [[ -f "$SRC/hypr/monitor_settings.lua" ]]; then
-    mirror "$SRC/hypr/monitor_settings.lua" "$CONFIG/hypr/monitor_settings.lua"
-elif (( ! CHECK )); then
-    echo "no hypr/monitor_settings.lua: copy hypr/monitor_settings_example.lua to it for this machine's scales"
+# The tracked preset, and the untracked per-machine deviations if this
+# checkout has any; the policy runs on defaults without either. Before the
+# preset existed the installed monitor_settings.lua was one machine's own
+# file: one that differs from the preset becomes the local file (which wins
+# per field), so its values survive the change instead of being mirrored
+# over; an existing local file is kept and the old one backed up beside it.
+_old_settings="$CONFIG/hypr/monitor_settings.lua"
+_local_settings="$CONFIG/hypr/monitor_settings.local.lua"
+if [[ -f "$_old_settings" ]] && ! cmp -s "$SRC/hypr/monitor_settings.lua" "$_old_settings" \
+   && ! cmp -s "$SRC/hypr/monitor_settings_example.lua" "$_old_settings" 2>/dev/null \
+   && [[ ! -f "$SRC/hypr/monitor_settings.local.lua" ]]; then
+    if (( CHECK )); then
+        echo "DRIFT   $_old_settings is a per-machine file from before the preset; install moves it to $_local_settings"; DRIFT=1
+    elif [[ -f "$_local_settings" ]]; then
+        cp -a -- "$_old_settings" "$_local_settings.bak-$STAMP"
+        echo "kept the old $_old_settings as $_local_settings.bak-$STAMP (a local file already exists)"
+    else
+        mv -- "$_old_settings" "$_local_settings"
+        echo "moved the old $_old_settings to $_local_settings: its values still win over the preset"
+    fi
+fi
+unset _old_settings _local_settings
+mirror "$SRC/hypr/monitor_settings.lua" "$CONFIG/hypr/monitor_settings.lua"
+if [[ -f "$SRC/hypr/monitor_settings.local.lua" ]]; then
+    mirror "$SRC/hypr/monitor_settings.local.lua" "$CONFIG/hypr/monitor_settings.local.lua"
 fi
 mirror "$SRC/hypr/hyprland.lua"      "$CONFIG/hypr/hyprland.lua"
 # Installed by older versions; removed so they cannot mislead.
