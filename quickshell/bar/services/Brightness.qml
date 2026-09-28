@@ -107,13 +107,20 @@ Singleton {
 
     // ---- reading --------------------------------------------------------
 
+    // The bus is read once here and checked: between a focus change and this
+    // call the map can lack the new monitor, and an undefined bus reached
+    // ddcutil as the word "undefined" (one journal line per such read).
     function read() {
         if (!root.available)
             return;
-        if (root.mechanism === "ddc")
-            readDdc.command = ["ddcutil", "-b", root.buses[root.monitor], "getvcp", "10", "--brief"];
-        else
+        const bus = root.buses[root.monitor];
+        if (root.mechanism === "ddc") {
+            if (bus === undefined)
+                return;
+            readDdc.command = ["ddcutil", "-b", String(bus), "getvcp", "10", "--brief"];
+        } else {
             readDdc.command = ["sh", "-c", "brightnessctl -m | cut -d, -f4 | tr -d '%'"];
+        }
         readDdc.running = true;
     }
 
@@ -176,10 +183,16 @@ Singleton {
         onTriggered: {
             if (root.pending < 0 || !root.available)
                 return;
-            if (root.mechanism === "ddc")
-                writeProc.command = ["ddcutil", "-b", root.buses[root.monitor], "setvcp", "10", String(root.pending)];
-            else
+            const bus = root.buses[root.monitor];
+            if (root.mechanism === "ddc") {
+                if (bus === undefined) {
+                    root.pending = -1;
+                    return;
+                }
+                writeProc.command = ["ddcutil", "-b", String(bus), "setvcp", "10", String(root.pending)];
+            } else {
                 writeProc.command = ["brightnessctl", "--class", "backlight", "-q", "s", `${root.pending}%`];
+            }
             root.pending = -1;
             writeProc.running = true;
         }

@@ -87,9 +87,12 @@ Singleton {
             onRead: line => {
                 // Any output resets the backoff.
                 supervisor.delay = 2000;
-                const raw = line.trim();
+                // Only the line ending is cut: trim() would also eat the tab
+                // that ends "0<TAB>" (state 0, no engine name), leaving one
+                // field and a spurious warning on every unfocused input.
+                const raw = line.replace(/[\r\n]+$/, "");
                 // "-": fcitx5 did not answer (not the same as "no IM").
-                if (raw === "-") {
+                if (raw.trim() === "-") {
                     root.asOf = 0;
                     return;
                 }
