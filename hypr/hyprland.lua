@@ -18,6 +18,18 @@ function file_exists(path)
     return true
 end
 
+-- The first line of a sysfs or procfs file, or nil when it cannot be opened;
+-- the modules read connector states, the lid and PCI vendors this way.
+function read_first_line(path)
+    local f = io.open(path, "r")
+    if f == nil then
+        return nil
+    end
+    local line = f:read("l")
+    f:close()
+    return line or ""
+end
+
 -- Names the failing module; otherwise a typo gives one opaque error.
 function load_module(name)
     local path = CONFIG .. "/config/" .. name .. ".lua"

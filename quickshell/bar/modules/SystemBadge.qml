@@ -9,6 +9,27 @@ Item {
     implicitHeight: Theme.barHeight
     implicitWidth: logo.implicitWidth + Theme.menuItemPadX * 2
 
+    // The distribution's mark by /etc/os-release ID; the Material set has
+    // the common ones and Tux for the rest. Code points read from the cmap.
+    function distroGlyph(id) {
+        switch (id) {
+        case "arch":
+        case "archarm":
+        case "manjaro":
+        case "endeavouros":
+        case "cachyos":
+            return String.fromCodePoint(0xF08C7);   // md-arch
+        case "ubuntu":
+            return String.fromCodePoint(0xF0548);   // md-ubuntu
+        case "debian":
+            return String.fromCodePoint(0xF08DA);   // md-debian
+        case "fedora":
+            return String.fromCodePoint(0xF08DB);   // md-fedora
+        default:
+            return String.fromCodePoint(0xF033D);   // md-linux
+        }
+    }
+
     Rectangle {
         anchors.fill: parent
         anchors.topMargin: Theme.barInset
@@ -31,7 +52,10 @@ Item {
         anchors.centerIn: parent
         height: Theme.barLineHeight
         verticalAlignment: Text.AlignVCenter
-        text: String.fromCodePoint(0xF08C7)
+        // Mapped here, not in Theme: a singleton's function is not always
+        // callable when the first binding runs at start, and a badge that
+        // evaluated once as empty would stay empty.
+        text: root.distroGlyph(Resources.distroId)
         font.family: Theme.iconFont
         // The glyph's ink fills 0.64 of its em box.
         font.pixelSize: Math.round(Theme.menuBarTextSize / 0.64)
@@ -46,7 +70,7 @@ Item {
     Tooltip {
         anchorItem: root
         active: hover.hovered && !systemMenu.open
-        text: `Arch Linux\nKernel    ${Resources.kernel}\nUptime    ${Resources.uptimeText}`
+        text: `${Resources.distroName}\nKernel    ${Resources.kernel}\nUptime    ${Resources.uptimeText}`
     }
 
     PopupMenu {

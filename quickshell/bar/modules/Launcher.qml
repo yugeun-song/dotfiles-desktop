@@ -131,12 +131,15 @@ Scope {
             return;
         }
         // entry.command has field codes stripped but ignores Terminal=true,
-        // so wrap it in kitty ourselves. Apps.open so it survives
+        // so wrap it in a terminal ourselves. Apps.open so it survives
         // `bar --restart`.
+        // scripts/terminal.sh, not kitty by name: it runs the first terminal
+        // installed, so the launcher works on a machine without kitty.
+        const terminal = [Paths.hyprScripts + "/terminal.sh", "-e"];
         const argv = entry.command;
         if (Array.isArray(argv) && argv.length > 0) {
             if (entry.runInTerminal === true)
-                Apps.open(["kitty", "-e"].concat(argv));
+                Apps.open(terminal.concat(argv));
             else
                 Apps.open(argv);
             return;
@@ -148,7 +151,7 @@ Scope {
             return;
         }
         if (entry.runInTerminal === true)
-            Apps.open(["kitty", "-e", "sh", "-c", exec]);
+            Apps.open(terminal.concat(["sh", "-c", exec]));
         else
             Apps.open(["sh", "-c", exec]);
     }

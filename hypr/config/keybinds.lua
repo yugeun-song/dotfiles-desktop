@@ -11,6 +11,10 @@ local capture   = scripts .. "/capture.sh"
 local launch    = scripts .. "/launch.sh"
 local clipboard = scripts .. "/clipboard.sh"
 local shellkey  = scripts .. "/shell-global.sh"
+-- wpctl, then pactl, then amixer: the keys follow the audio stack present.
+local volume    = scripts .. "/volume.sh"
+-- Through launch.sh so a machine without playerctl gets a notification.
+local player    = launch .. " 'playerctl"
 
 local app = {
     browser  = launch .. " 'google-chrome-stable' 'firefox' 'chromium' 'brave' 'librewolf'",
@@ -362,15 +366,15 @@ hl.bind("SUPER + V", hl.dsp.exec_cmd(clipboard),
     { description = "Clipboard history" })
 
 --##! Media
-hl.bind("SUPER + SHIFT + P", hl.dsp.exec_cmd("playerctl play-pause"),
+hl.bind("SUPER + SHIFT + P", hl.dsp.exec_cmd(player .. " play-pause'"),
     { locked = true, description = "Play/pause" })
-hl.bind("SUPER + SHIFT + N", hl.dsp.exec_cmd("playerctl next"),
+hl.bind("SUPER + SHIFT + N", hl.dsp.exec_cmd(player .. " next'"),
     { locked = true, description = "Next track" })
-hl.bind("SUPER + SHIFT + B", hl.dsp.exec_cmd("playerctl previous"),
+hl.bind("SUPER + SHIFT + B", hl.dsp.exec_cmd(player .. " previous'"),
     { locked = true, description = "Previous track" })
-hl.bind("SUPER + SHIFT + M", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),
+hl.bind("SUPER + SHIFT + M", hl.dsp.exec_cmd(volume .. " mute"),
     { locked = true, description = "Mute" })
-hl.bind("SUPER + ALT + M", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),
+hl.bind("SUPER + ALT + M", hl.dsp.exec_cmd(volume .. " mic-mute"),
     { locked = true, description = "Mute microphone" })
 
 --##! Hardware keys
@@ -435,23 +439,23 @@ hl.bind("XF86MonBrightnessDown",
     brightness("quickshell:brightnessDown", "brightnessctl --class backlight -q s 5%-"),
     { locked = true, repeating = true, description = "Brightness down" })
 
--- Straight to wpctl: works without the shell, which shows the OSD from
--- PipeWire anyway.
-hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd("wpctl set-volume -l 1.0 @DEFAULT_AUDIO_SINK@ 2%+"),
+-- Not through the shell: the keys work without it, and the bar shows the
+-- OSD from PipeWire's own change anyway.
+hl.bind("XF86AudioRaiseVolume", hl.dsp.exec_cmd(volume .. " up"),
     { locked = true, repeating = true, description = "Volume up" })
-hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd("wpctl set-volume @DEFAULT_AUDIO_SINK@ 2%-"),
+hl.bind("XF86AudioLowerVolume", hl.dsp.exec_cmd(volume .. " down"),
     { locked = true, repeating = true, description = "Volume down" })
-hl.bind("XF86AudioMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SINK@ toggle"),
+hl.bind("XF86AudioMute", hl.dsp.exec_cmd(volume .. " mute"),
     { locked = true, description = "Mute" })
-hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),
+hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd(volume .. " mic-mute"),
     { locked = true, description = "Mute microphone" })
-hl.bind("ALT + XF86AudioMute", hl.dsp.exec_cmd("wpctl set-mute @DEFAULT_AUDIO_SOURCE@ toggle"),
+hl.bind("ALT + XF86AudioMute", hl.dsp.exec_cmd(volume .. " mic-mute"),
     { locked = true })
 
-hl.bind("XF86AudioPlay", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
-hl.bind("XF86AudioPause", hl.dsp.exec_cmd("playerctl play-pause"), { locked = true })
-hl.bind("XF86AudioNext", hl.dsp.exec_cmd("playerctl next"), { locked = true })
-hl.bind("XF86AudioPrev", hl.dsp.exec_cmd("playerctl previous"), { locked = true })
+hl.bind("XF86AudioPlay", hl.dsp.exec_cmd(player .. " play-pause'"), { locked = true })
+hl.bind("XF86AudioPause", hl.dsp.exec_cmd(player .. " play-pause'"), { locked = true })
+hl.bind("XF86AudioNext", hl.dsp.exec_cmd(player .. " next'"), { locked = true })
+hl.bind("XF86AudioPrev", hl.dsp.exec_cmd(player .. " previous'"), { locked = true })
 
 --##! Session
 -- Not SUPER+L, which is focus right.

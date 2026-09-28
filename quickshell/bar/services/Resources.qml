@@ -46,6 +46,17 @@ Singleton {
     property string kernel: "unknown"
     property real uptimeSeconds: 0
 
+    // The distribution, for the badge and its tooltip; "linux" when
+    // /etc/os-release is missing or has no ID.
+    property string distroId: "linux"
+    property string distroName: "Linux"
+
+    FileView {
+        id: osRelease
+        path: "/etc/os-release"
+        blockLoading: true
+    }
+
     readonly property string uptimeText: {
         const total = Math.floor(root.uptimeSeconds / 60);
         const days = Math.floor(total / 1440);
@@ -106,6 +117,15 @@ Singleton {
         const value = kernelFile.text().trim();
         if (value !== "")
             root.kernel = value;
+        osRelease.reload();
+        const release = osRelease.text();
+        const id = release.match(/^ID=["']?([A-Za-z0-9._-]+)["']?\s*$/m);
+        if (id)
+            root.distroId = id[1].toLowerCase();
+        const pretty = release.match(/^PRETTY_NAME=["']?([^"'\n]+)["']?\s*$/m)
+                       ?? release.match(/^NAME=["']?([^"'\n]+)["']?\s*$/m);
+        if (pretty)
+            root.distroName = pretty[1];
     }
 
     Timer {

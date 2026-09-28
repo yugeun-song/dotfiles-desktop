@@ -24,11 +24,22 @@ set_key() {
 
 I=org.gnome.desktop.interface
 
-set_key "$I" gtk-theme      "Breeze-Dark"
-set_key "$I" icon-theme     "breeze-dark"
+# Only where the theme is installed: a name GTK cannot find falls back to
+# Adwaita with a warning per program, and leaves whatever was set before.
+if [[ -d /usr/share/themes/Breeze-Dark || -d "$HOME/.themes/Breeze-Dark" || -d "${XDG_DATA_HOME:-$HOME/.local/share}/themes/Breeze-Dark" ]]; then
+    set_key "$I" gtk-theme  "Breeze-Dark"
+else
+    echo "gsettings-apply: Breeze-Dark is not installed, gtk applications keep their theme" >&2
+fi
+if [[ -d /usr/share/icons/breeze-dark || -d "${XDG_DATA_HOME:-$HOME/.local/share}/icons/breeze-dark" ]]; then
+    set_key "$I" icon-theme "breeze-dark"
+else
+    echo "gsettings-apply: breeze-dark icons are not installed, gtk applications keep their icons" >&2
+fi
 # From hypr/config/env.lua via the session environment, so the cursor has one
-# source of truth. Fallbacks are for running by hand.
-set_key "$I" cursor-theme   "${XCURSOR_THEME:-Spaceduck-Sky}"
+# source of truth; env.lua leaves the theme unset when its build is missing,
+# and then GTK keeps the system default like everything else.
+[[ -n "${XCURSOR_THEME:-}" ]] && set_key "$I" cursor-theme "$XCURSOR_THEME"
 set_key "$I" cursor-size    "${XCURSOR_SIZE:-24}"
 set_key "$I" font-name      "Inter 11"
 set_key "$I" monospace-font-name "CaskaydiaCove Nerd Font Mono 11"

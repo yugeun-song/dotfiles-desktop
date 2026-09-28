@@ -390,7 +390,37 @@ if (( ! CHECK )); then
     make_executable "$CONFIG/hypr/scripts" "the session, terminal and capture bindings" || :
 fi
 
+# What this desktop expects the machine to have, checked rather than assumed:
+# the preset is one laptop's, the next one may lack a font or a tool, and
+# every script degrades on its own but says so only when its key is pressed.
+# Advisory: nothing here changes the exit code.
+doctor() {
+    local missing=() font tool families
+    # Listed once: grep -q closing the pipe early would trip pipefail.
+    families=$(fc-list : family 2>/dev/null || true)
+    for font in "Inter" "Pretendard" "CaskaydiaCove Nerd Font"; do
+        grep -qiF -- "$font" <<<"$families" || missing+=("font $font")
+    done
+    local tools=(
+        "grim:screenshots" "slurp:region capture" "wl-copy:clipboard" "cliphist:clipboard history"
+        "brightnessctl:brightness keys on the panel" "ddcutil:brightness on external displays"
+        "playerctl:media keys" "wpctl:volume keys" "hyprlock:lock screen" "hypridle:lock before sleep"
+        "hyprpaper:wallpaper" "fcitx5:Korean input" "jq:the Displays panel and every script that reads hyprctl"
+        "python3:key overlay" "cava:visualiser" "notify-send:notifications from scripts" "kitty:terminal"
+        "inotifywait:session watch (polls every 5 s without it)"
+    )
+    for tool in "${tools[@]}"; do
+        command -v "${tool%%:*}" >/dev/null 2>&1 || missing+=("${tool%%:*} (${tool#*:})")
+    done
+    if (( ${#missing[@]} == 0 )); then
+        echo "doctor: every font and tool the desktop uses is present"
+        return 0
+    fi
+    printf 'doctor: missing %s\n' "${missing[@]}"
+}
+
 if (( CHECK )); then
+    doctor
     if [[ ! -f "$FONTCONF" ]] || ! cmp -s "$SRC/fontconfig/local.conf" "$FONTCONF"; then
         echo "DRIFT   $FONTCONF is behind $SRC/fontconfig/local.conf"; DRIFT=1
     fi
@@ -445,3 +475,6 @@ else
     echo "the greeter config was not installed. it is a system file:" >&2
     echo "  sudo install -Dm644 $SRC/tuigreet/config.toml $GREETERCONF" >&2
 fi
+
+echo
+doctor

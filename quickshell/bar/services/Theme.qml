@@ -285,11 +285,37 @@ Singleton {
 
     property bool barAtBottom: false
 
-    readonly property string uiFont:   "Inter"
-    readonly property string iconFont: "CaskaydiaCove Nerd Font Mono"
+    // The families this desktop is set up with come first; a machine without
+    // them takes the first installed alternative at start, since a family Qt
+    // cannot find renders every icon code point as tofu and every word in
+    // whatever fontconfig picks. Qt.fontFamilies() is fontconfig's list.
+    function firstInstalled(candidates, fallback) {
+        const families = Qt.fontFamilies();
+        for (const name of candidates) {
+            if (families.indexOf(name) !== -1)
+                return name;
+        }
+        return fallback;
+    }
+
+    readonly property string uiFont: root.firstInstalled(
+        ["Inter", "Inter Variable", "Noto Sans", "DejaVu Sans", "Cantarell", "Liberation Sans"], "sans-serif")
+
+    // Any Nerd Font carries the same glyph code points; the mono cut keeps
+    // the icons on one advance width.
+    readonly property string iconFont: {
+        const named = root.firstInstalled(
+            ["CaskaydiaCove Nerd Font Mono", "Symbols Nerd Font Mono", "JetBrainsMono Nerd Font Mono",
+             "FiraCode Nerd Font Mono", "Hack Nerd Font Mono"], "");
+        if (named !== "")
+            return named;
+        const any = Qt.fontFamilies().find(f => f.endsWith("Nerd Font Mono"))
+                    ?? Qt.fontFamilies().find(f => f.indexOf("Nerd Font") !== -1);
+        return any ?? "monospace";
+    }
 
     // Same file as iconFont, named for where columns must line up.
-    readonly property string monoFont: "CaskaydiaCove Nerd Font Mono"
+    readonly property string monoFont: root.iconFont
 
     // Key and modifier symbols, used by the key overlay (via KeyFeed).
     // Super is a diamond: U+2318 means Command on a Mac.
