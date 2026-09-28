@@ -10,7 +10,7 @@ import qs.services
 Row {
     id: root
 
-    readonly property string hyprScripts: (Quickshell.env("XDG_CONFIG_HOME") ?? `${Quickshell.env("HOME")}/.config`) + "/hypr/scripts"
+    readonly property string hyprScripts: Paths.hyprScripts
     readonly property var terminal: [root.hyprScripts + "/terminal.sh", "-e"]
 
     // One alert colour for every out-of-range readout (the calendar's Sunday red).
