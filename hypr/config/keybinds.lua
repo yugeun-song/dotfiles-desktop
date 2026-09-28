@@ -451,7 +451,13 @@ hl.bind("CTRL + ALT + L", hl.dsp.exec_cmd("loginctl lock-session"), { descriptio
 -- ordinary binds are not delivered then.
 hl.bind("CTRL + ALT + SHIFT + U", hl.dsp.exec_cmd("hyprctl eval 'hl.clear_crashed_lockscreen()'"),
     { locked = true, description = "Clear a crashed lock screen" })
-hl.bind("CTRL + SHIFT + ALT + SUPER + Delete", hl.dsp.exec_cmd("systemctl poweroff"),
+-- Through scripts/session-power.sh, which ends the compositor before the
+-- shutdown transaction starts (a direct poweroff with an external output lit
+-- hung this machine after userspace had finished; a sign-out first did not).
+-- The script moves itself into a transient unit outside the session target,
+-- since a child of this bind sits in the session scope and would not outlive
+-- the compositor it waits for.
+hl.bind("CTRL + SHIFT + ALT + SUPER + Delete", hl.dsp.exec_cmd(scripts .. "/session-power.sh poweroff"),
     { description = "Shut down" })
 
 --##! Lid

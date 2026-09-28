@@ -70,7 +70,7 @@ Scope {
             label: "Restart",
             icon: Theme.iconRestart,
             accent: Theme.accentAmber,
-            command: ["systemctl", "reboot"],
+            command: root.sessionPower("reboot"),
             probe: "systemctl"
         },
         {
@@ -78,10 +78,25 @@ Scope {
             label: "Shut down",
             icon: Theme.iconPower,
             accent: Theme.accentRed,
-            command: ["systemctl", "poweroff"],
+            command: root.sessionPower("poweroff"),
             probe: "systemctl"
         }
     ]
+
+    // Not `systemctl poweroff` straight from here: started inside the session
+    // with the external monitor attached, the shutdown has hung this machine
+    // after userspace was done, while signing out first never did.
+    // session-power.sh reproduces that order (request the action under a
+    // logind delay lock, end the compositor, then let it go); its header has
+    // the details. It moves itself into a transient user unit in app.slice
+    // first, because this process and its children die with
+    // hyprland-session.target the moment the compositor's lock file goes,
+    // which is before the compositor has released the GPU, and a delay lock
+    // held here would go with them. Failures are in
+    // journalctl --user -u session-power-<action>.
+    function sessionPower(action) {
+        return [Paths.hyprScripts + "/session-power.sh", action];
+    }
 
     // Probed once at startup so opening never waits on a process.
     property var available: ({})
