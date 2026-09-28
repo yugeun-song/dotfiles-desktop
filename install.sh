@@ -287,6 +287,7 @@ fi
 mirror "$SRC/node/repl.js"           "$CONFIG/node/repl.js"
 mirror "$SRC/node/node.sh"           "$CONFIG/profile.d/node.sh"
 mirror "$SRC/iex/iex.exs"            "$HOME/.iex.exs"
+mirror "$SRC/spotify/spotify-launcher.conf" "$CONFIG/spotify-launcher.conf"
 seed "$SRC/fcitx5/config"          "$CONFIG/fcitx5/config"
 seed "$SRC/fcitx5/profile"         "$CONFIG/fcitx5/profile"
 seed "$SRC/fcitx5/conf"            "$CONFIG/fcitx5/conf"
