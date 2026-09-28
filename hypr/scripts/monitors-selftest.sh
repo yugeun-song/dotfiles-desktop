@@ -179,12 +179,18 @@ expect_ws "docked: workspace 1 on the panel" "1@WAYLAND-1"
 expect_ws "docked: the workspace in use moved to the external" "3@HEADLESS-1"
 expect_panel_holds_one "docked: the panel holds workspace 1 only"
 
-# Gaps and border follow the output's share of the reference screen: the
-# 1920x1080 headless is 0.75 of 2560x1440, so gaps 4/8 and border 3 become
-# 3/6 and 2 on it.
+# Gaps and border follow the output's share of the reference screen, floored
+# at the reference: the 1920x1080 headless is 0.75 of 2560x1440, which the
+# floor lifts to 1, so gaps 4/8 and border 3 stay 4/8 and 3 on it (the scale
+# 0.5 case below is where the rule actually scales).
 # gapsIn and gapsOut print as four edges.
-fitrule=$(n workspacerules -j | jq -c '.[] | select(.workspaceString == "m[HEADLESS-1]") | [.gapsIn[0], .gapsOut[0], .borderSize]' 2>/dev/null | tail -1)
-if [[ "$fitrule" == "[3,6,2]" ]]; then echo "PASS  fit: gaps and border scaled for the headless output"; else echo "FAIL  fit: rule for m[HEADLESS-1] is [$fitrule], wanted [3,6,2]"; FAILED=1; fi
+fitrule() { n workspacerules -j | jq -c '.[] | select(.workspaceString == "m[HEADLESS-1]") | [.gapsIn[0], .gapsOut[0], .borderSize]' 2>/dev/null | tail -1; }
+expect_fit() {
+    local got
+    got=$(fitrule)
+    if [[ "$got" == "$2" ]]; then echo "PASS  fit: $1"; else echo "FAIL  fit: $1: rule for m[HEADLESS-1] is [$got], wanted $2"; FAILED=1; fi
+}
+expect_fit "gaps and border floored at the reference for the headless output" "[4,8,3]"
 
 # From the panel, a workspace that does not exist yet opens on the external.
 focus 1
@@ -401,6 +407,23 @@ printf 'name:HEADLESS-1\tscale\t2\n' | ov set || { echo "FAIL  set: scale exited
 sleep 1.2
 expect "scale 2: external at scale 2" "HEADLESS-1 disabled=false 1920x1080@60 pos=0x0 scale=2"
 expect_re "scale 2: panel placed after 960 logical pixels" 'WAYLAND-1 disabled=false [0-9x@]+ pos=960x0'
+# 960x540 logical is well under the floor: still the reference values.
+expect_fit "scale 2: gaps and border still at the reference" "[4,8,3]"
+
+# Scale 0.5: 3840x2160 logical is 1.5 of the reference, so gaps 4/8 and
+# border 3 become 6/12 and 5 (4.5 rounded up). Rounding 18 would become 27,
+# past what hl.window_rule accepts, so it stops at 20; unclamped, the refused
+# rule failed the whole eval and `ov set` exited 1 for an override that took.
+m=$(mark)
+printf 'name:HEADLESS-1\tscale\t0.5\n' | ov set || { echo "FAIL  set: scale 0.5 exited $?"; FAILED=1; }
+sleep 1.2
+expect "scale 0.5: external at scale 0.5" "HEADLESS-1 disabled=false 1920x1080@60 pos=0x0 scale=0.5"
+expect_fit "scale 0.5: gaps and border scaled up for the headless output" "[6,12,5]"
+if since "$m" | grep -q 'monitors: fit HEADLESS-1 x1.50 -> gaps 6/12/5/20'; then
+    echo "PASS  scale 0.5: rounding capped at what the rule accepts"
+else
+    echo "FAIL  scale 0.5: no fit line with rounding 20 for HEADLESS-1"; FAILED=1
+fi
 
 # A mode the output does not offer is refused with a warning; the output
 # stays on at highrr. A listed one is passed through.

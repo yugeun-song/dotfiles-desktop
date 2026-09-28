@@ -29,17 +29,23 @@ Singleton {
     // The factor a window on `screen` is drawn at: the square root of the
     // logical area ratio to the reference, so both a surface's aspect ratio
     // and the fraction of the screen it covers stay what they are on the desk
-    // monitor (the 1920x1200 panel gets 0.79). Density is not corrected: the
-    // panel is read from closer, and the same share of the screen is what
-    // was asked for, not the same millimetres. Clamped against absurd sizes
-    // on a tiny or huge logical screen. config/monitors.lua scales Hyprland's
-    // gaps, borders and rounding by the same number; keep the two in step.
+    // monitor. Density is not corrected: the panel is read from closer, and
+    // the same share of the screen is what was asked for, not the same
+    // millimetres. Floored at minFit, though: below the reference the share
+    // shrank the bar past reading size (the 1920x1200 panel came out at 0.79,
+    // an 11 px label), so a smaller screen draws at reference pixels and
+    // gives up the share instead. Capped against a huge logical screen.
+    // config/monitors.lua scales Hyprland's gaps, borders and rounding by
+    // the same number; keep the two in step.
+    readonly property real minFit: 1
+    readonly property real maxFit: 2
+
     function fit(screen): real {
         const w = screen?.width ?? 0;
         const h = screen?.height ?? 0;
         if (w <= 0 || h <= 0)
             return 1;
-        return Math.max(0.5, Math.min(2, Math.sqrt((w * h) / (root.referenceWidth * root.referenceHeight))));
+        return Math.max(root.minFit, Math.min(root.maxFit, Math.sqrt((w * h) / (root.referenceWidth * root.referenceHeight))));
     }
 
     function px(base: real): int {

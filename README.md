@@ -157,11 +157,14 @@ title, before it would overlap the groups.
 2560x1440 desk monitor; `BAR_SCALE` overrides it. Each window then draws
 itself scaled by `Theme.fit(screen)`, the square root of its screen's logical
 area over the reference's, so the bar, every popup and every panel keep the
-share of the screen and the aspect ratio they have on that monitor (the
-1920x1200 panel gets 0.79). Text stays vector-sharp under the transform.
-`config/monitors.lua` scales Hyprland's gaps, border and rounding per output
-by the same factor through monitor-selector rules; blur and shadow have no
-per-output form and stay global.
+share of the screen and the aspect ratio they have on that monitor. The
+factor is floored at 1 (`Theme.minFit`): a screen smaller than the reference
+draws at reference pixels instead of its share, since the 1920x1200 panel's
+share (0.79) left the bar too small to read. Text stays vector-sharp under
+the transform. `config/monitors.lua` scales Hyprland's gaps, border and
+rounding per output by the same factor, with the same floor, through
+monitor-selector rules (rounding stops at 20, the most a window rule
+accepts); blur and shadow have no per-output form and stay global.
 
 **Popups and notifications.** Hovering the centre chip opens the player,
 hovering the clock the month; both are `PopupWindow`s anchored to the bar (a

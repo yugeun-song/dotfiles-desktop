@@ -1283,12 +1283,24 @@ end
 -- the desktop was tuned on; every lit output gets them scaled by the square
 -- root of its logical area over the reference's, the number the bar's
 -- Theme.fit uses for its own surfaces, so what Hyprland draws keeps the same
--- share of each screen. A workspace rule with the monitor selector carries
+-- share of each screen. Floored at FIT_MIN like Theme.fit: a screen smaller
+-- than the reference keeps the reference pixels rather than the share, since
+-- the bar became unreadable at the share and the two numbers must agree for
+-- the bar's corners to match the windows'. Capped at FIT_MAX against a huge
+-- logical screen. A workspace rule with the monitor selector carries
 -- the gaps and border (the last rule for a selector wins), a window rule
 -- matched on the same selector the rounding. Blur size and shadow range have
 -- no per-output form and stay as set. Old handles are switched off before
 -- new values go in, since window rules accumulate.
 local FIT_REFERENCE = { width = 2560, height = 1440 }
+local FIT_MIN, FIT_MAX = 1, 2
+-- hl.window_rule refuses a rounding above 20 (0.56.2: "value 27 is more than
+-- the maximum of 20"). The refusal is not a Lua error: the pcall below does
+-- not catch it, and it comes back as the error of the whole eval that
+-- triggered it, so an override set from the shell reported a failure it had
+-- in fact applied. The gaps are unbounded; only the corner radius stops
+-- growing past a 1.11 fit.
+local FIT_ROUNDING_MAX = 20
 local fit_base = nil
 local fit_applied = {}
 local fit_handles = {}
@@ -1324,7 +1336,7 @@ local function fit_for(name, planned)
         return nil
     end
     local f = math.sqrt((width * height) / (FIT_REFERENCE.width * FIT_REFERENCE.height))
-    return math.max(0.5, math.min(2, f))
+    return math.max(FIT_MIN, math.min(FIT_MAX, f))
 end
 
 local fit_recheck_generation = 0
@@ -1348,8 +1360,9 @@ local function apply_fit_rules(state, planned)
             local function scaled(v)
                 return math.floor(v * f + 0.5)
             end
+            local rounding = math.min(FIT_ROUNDING_MAX, scaled(fit_base.rounding))
             local values = string.format("%d/%d/%d/%d", scaled(fit_base.gaps_in), scaled(fit_base.gaps_out),
-                scaled(fit_base.border), scaled(fit_base.rounding))
+                scaled(fit_base.border), rounding)
             if fit_applied[name] ~= values then
                 local old = fit_handles[name]
                 if old then
@@ -1373,7 +1386,7 @@ local function apply_fit_rules(state, planned)
                 ok, handle = pcall(hl.window_rule, {
                     name = "fit-rounding-" .. name,
                     match = { workspace = selector },
-                    rounding = scaled(fit_base.rounding),
+                    rounding = rounding,
                 })
                 if ok and handle then
                     handles[#handles + 1] = handle
