@@ -211,6 +211,27 @@ Singleton {
     readonly property int notifLabelSize:   root.px(11)
     readonly property real notifTracking:   root.scale * 1.25
 
+    // ---------------------------------------------------------------------
+    // Displays panel (modules/Displays.qml).
+    // ---------------------------------------------------------------------
+    // Wide enough for five preset tiles in a row and a mode list beside its
+    // label; the card still fits the laptop panel's logical width.
+    readonly property int displaysWidth:         root.px(880)
+    readonly property int displaysPad:           root.px(26)
+    // Tall enough for a 16:10 panel beside a 16:9 desk monitor without
+    // shrinking the numbers past legibility.
+    readonly property int displaysCanvasHeight:  root.px(210)
+    // Pictogram plus a one-line label.
+    readonly property int displaysTileHeight:    root.px(96)
+    // Label column of the settings rows, fitted to "Rotation".
+    readonly property int displaysLabelWidth:    root.px(92)
+    readonly property int displaysRowHeight:     root.px(36)
+    // Long enough to glance at every screen, short enough not to linger.
+    readonly property int displaysIdentifyMs:    2000
+    // A dark screen needs time to be noticed and reached; twice what GNOME
+    // gives, since the panel may be the screen that went dark.
+    readonly property int displaysRevertSeconds: 30
+
     readonly property int centreWidth:      root.px(452)
     readonly property int centreRadius:     root.px(16)
     readonly property int centrePad:        root.px(13)

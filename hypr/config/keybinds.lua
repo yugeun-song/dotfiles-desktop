@@ -329,6 +329,16 @@ hl.bind("SUPER + N", hl.dsp.global("quickshell:notifications"),
 hl.bind("SUPER + Y", hl.dsp.global("quickshell:keyOverlay"),
     { description = "Show the keys being pressed" })
 
+--##! Displays
+-- The output panel in the bar: presets (laptop only, external only, extend,
+-- mirror), per-output mode, scale and rotation, written to the override file
+-- config/monitors.lua reads. XF86Display is the laptop's own display key;
+-- Super+O because Super+P is taken by pin.
+hl.bind("XF86Display", hl.dsp.global("quickshell:displays"),
+    { description = "Display settings" })
+hl.bind("SUPER + O", hl.dsp.global("quickshell:displays"),
+    { description = "Display settings" })
+
 --##! Capture
 hl.bind("Print", hl.dsp.exec_cmd(capture .. " screen"),
     { description = "Capture: focused monitor" })

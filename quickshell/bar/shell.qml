@@ -19,6 +19,8 @@ ShellRoot {
 
     Cheatsheet {}
 
+    Displays {}
+
     // Instantiating these starts the notification daemon: a singleton is only
     // created on first reference, otherwise the bus name stays unowned.
     NotificationToasts {}
