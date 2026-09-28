@@ -119,17 +119,31 @@ mirror() {
         mkdir -p "$to"
         # Write beside and rename over. bash reads a running script lazily, so
         # overwriting session-watch.sh in place corrupts it mid-run; Hyprland
-        # reloads on write and could read a half-copied module.
-        while IFS= read -r -d '' rel; do
-            rel="${rel#./}"
-            if [[ -d "$from/$rel" && ! -L "$from/$rel" ]]; then
-                mkdir -p "$to/$rel"
-            else
+        # reloads on write and could read a half-copied module. New files go
+        # in before changed ones: quickshell reloads on every write, and a
+        # module updated to use a component that has not landed yet fails
+        # that reload (harmless, it reloads again, but it logs an error).
+        local pass
+        for pass in new changed; do
+            while IFS= read -r -d '' rel; do
+                rel="${rel#./}"
+                if [[ -d "$from/$rel" && ! -L "$from/$rel" ]]; then
+                    mkdir -p "$to/$rel"
+                    continue
+                fi
+                if [[ "$pass" == new && -e "$to/$rel" ]] || [[ "$pass" == changed && ! -e "$to/$rel" ]]; then
+                    continue
+                fi
+                # Only files that differ are rewritten: every write is a
+                # reload for quickshell and Hyprland.
+                if [[ "$pass" == changed ]] && cmp -s -- "$from/$rel" "$to/$rel"; then
+                    continue
+                fi
                 mkdir -p "$(dirname "$to/$rel")"
                 cp -a -- "$from/$rel" "$to/$rel.new-$$"
                 mv -T -- "$to/$rel.new-$$" "$to/$rel"
-            fi
-        done < <(cd -- "$from" && find . -mindepth 1 -print0)
+            done < <(cd -- "$from" && find . -mindepth 1 -print0)
+        done
         # Prune files the repository dropped. Only inside this directory:
         # local.lua and the monitor settings sit a level up.
         while IFS= read -r -d '' rel; do
