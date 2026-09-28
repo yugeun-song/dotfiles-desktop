@@ -55,11 +55,14 @@ Item {
         sourceComponent: PopupWindow {
             id: popup
 
+            // The tip's share of the bar's screen, as on the reference output.
+            readonly property real fit: Theme.fit(root.QsWindow.window?.screen)
+
             visible: true
             color: "transparent"
             grabFocus: false
-            implicitWidth: body.implicitWidth
-            implicitHeight: body.implicitHeight
+            implicitWidth: Math.round(body.implicitWidth * popup.fit)
+            implicitHeight: Math.round(body.implicitHeight * popup.fit)
 
             anchor {
                 window: root.QsWindow.window
@@ -79,6 +82,8 @@ Item {
             Rectangle {
                 id: body
 
+                scale: popup.fit
+                transformOrigin: Item.TopLeft
                 implicitWidth: label.implicitWidth + Theme.tooltipPadX * 2
                 implicitHeight: label.implicitHeight + Theme.tooltipPadY * 2
                 radius: Theme.tooltipRadius

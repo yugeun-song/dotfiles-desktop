@@ -13,56 +13,34 @@ Singleton {
     // ---------------------------------------------------------------------
     // Every dimension is px() of one scale, so proportions hold when it changes.
     // ---------------------------------------------------------------------
-    // One scale for every bar, from the leftmost output so it does not depend on
-    // bar load order. Usually one output is on (monitors.lua disables the panel
-    // when docked); per-screen sizing would need px() out of this singleton.
-    readonly property var referenceScreen: {
-        const list = Quickshell.screens;
-        if (!list || list.length === 0)
-            return null;
-        let best = list[0];
-        for (let i = 1; i < list.length; i++) {
-            const s = list[i];
-            if (s.x < best.x || (s.x === best.x && s.y < best.y))
-                best = s;
-        }
-        return best;
-    }
-
+    // One scale, for the reference output: the 2560x1440 desk monitor these
+    // sizes were tuned on. Every window then draws itself scaled by fit() for
+    // the screen it is on, so a surface keeps the share of the screen it has
+    // there. Per-screen sizing in whole pixels would need px() out of this
+    // singleton and every token with it; a scaled scene graph keeps text
+    // vector-sharp and costs one transform.
     readonly property real baseScale: 1.12
+    readonly property int referenceWidth: 2560
     readonly property int referenceHeight: 1440
 
-    // Physical size of a logical pixel. Hyprland has already applied the
-    // fractional scale, so on the 2880x1800 laptop at 1.5 a logical pixel is
-    // 1.5 physical ones and the bar must grow there, not shrink.
-    readonly property real referenceLogicalMm: 0.235   // 2560x1440 at 27 inches
-
-    // physicalPixelDensity is already logical px per mm (1920/302mm on the
-    // laptop), so the compositor scale is inside it. Do not multiply by
-    // devicePixelRatio: that applies the scale twice, and Qt rounds 1.5 up to 2.
-    readonly property real logicalMm: {
-        const density = root.referenceScreen?.physicalPixelDensity ?? 0;   // logical px per mm
-        if (!density)
-            return root.referenceLogicalMm;
-        return 1 / density;
-    }
-
-    // Density correction is deliberately partial: a smaller panel is also read
-    // from closer, which nearly cancels it. 0.10 lands the laptop at ~36 units
-    // (the square root gave 42 and read oversized); the cost is that scale 1.5
-    // vs 2 now differs by about a fifth. The rows term keeps short panels shorter.
-    readonly property real densityExponent: 0.10
-    readonly property real densityFactor:
-        Math.pow(root.referenceLogicalMm / root.logicalMm, root.densityExponent)
-
-    readonly property real autoScale: {
-        const height = root.referenceScreen?.height ?? root.referenceHeight;
-        const rows = Math.pow(height / root.referenceHeight, 0.35);
-        return Math.max(0.85, Math.min(1.60, root.baseScale * rows * root.densityFactor));
-    }
-
     readonly property real scaleOverride: Number(Quickshell.env("BAR_SCALE") ?? 0)
-    readonly property real scale: root.scaleOverride > 0 ? root.scaleOverride : root.autoScale
+    readonly property real scale: root.scaleOverride > 0 ? root.scaleOverride : root.baseScale
+
+    // The factor a window on `screen` is drawn at: the square root of the
+    // logical area ratio to the reference, so both a surface's aspect ratio
+    // and the fraction of the screen it covers stay what they are on the desk
+    // monitor (the 1920x1200 panel gets 0.79). Density is not corrected: the
+    // panel is read from closer, and the same share of the screen is what
+    // was asked for, not the same millimetres. Clamped against absurd sizes
+    // on a tiny or huge logical screen. config/monitors.lua scales Hyprland's
+    // gaps, borders and rounding by the same number; keep the two in step.
+    function fit(screen): real {
+        const w = screen?.width ?? 0;
+        const h = screen?.height ?? 0;
+        if (w <= 0 || h <= 0)
+            return 1;
+        return Math.max(0.5, Math.min(2, Math.sqrt((w * h) / (root.referenceWidth * root.referenceHeight))));
+    }
 
     function px(base: real): int {
         return Math.round(base * root.scale);
@@ -140,7 +118,7 @@ Singleton {
     // Characters of a window name, hence px(); the screen share is only a
     // ceiling (a pure share cut the laptop, where the name is set larger).
     readonly property int appNameWidth: Math.min(
-        Math.round((root.referenceScreen?.width ?? 1920) * 0.16), root.px(228))
+        Math.round(root.referenceWidth * 0.16), root.px(228))
     readonly property int workspaceTextSize: root.px(12)
     // Same cell for one and two digits, so the row does not reflow at 10.
     readonly property int workspaceMinWidth: root.px(19)
@@ -176,7 +154,7 @@ Singleton {
     // The media chip in the bar, and the player it opens.
     // ---------------------------------------------------------------------
     // Width cap for the chip; Bar.qml narrows it further to the free room.
-    readonly property int mediaChipWidth: Math.round((root.referenceScreen?.width ?? 1920) * 0.20)
+    readonly property int mediaChipWidth: Math.round(root.referenceWidth * 0.20)
 
     // Wide and shallow: a squarer card left more space above and below.
     readonly property int mediaCardWidth:  root.px(540)

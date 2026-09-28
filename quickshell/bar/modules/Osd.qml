@@ -55,12 +55,10 @@ Scope {
         active: root.mounted
 
         PanelWindow {
-            // The focused screen, as in the launcher.
-            screen: {
-                const name = Hyprland.focusedMonitor?.name ?? "";
-                const match = Quickshell.screens.find(s => s.name === name);
-                return match ?? Quickshell.screens[0] ?? null;
-            }
+            // The focused screen (services/Screens.qml says why not the default).
+            screen: Screens.focused
+
+            id: win
 
             color: "transparent"
             exclusiveZone: 0
@@ -72,15 +70,18 @@ Scope {
             WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
             WlrLayershell.namespace: "quickshell:osd"
 
-            implicitWidth: card.implicitWidth
-            implicitHeight: card.implicitHeight
+            // The card's share of this screen, as on the reference output.
+            readonly property real fit: Theme.fit(win.screen)
+
+            implicitWidth: Math.round(card.implicitWidth * win.fit)
+            implicitHeight: Math.round(card.implicitHeight * win.fit)
 
             anchors {
                 top: true
             }
 
             margins {
-                top: Theme.px(6)
+                top: Math.round(Theme.px(6) * win.fit)
             }
 
             // Empty mask: clicks pass through.
@@ -97,6 +98,8 @@ Scope {
 
                 Component.onCompleted: card.shown = Qt.binding(() => root.active)
 
+                scale: win.fit
+                transformOrigin: Item.TopLeft
                 implicitWidth: Theme.px(210)
                 implicitHeight: Theme.px(44)
                 radius: Theme.px(12)

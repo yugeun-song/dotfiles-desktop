@@ -24,6 +24,8 @@ Scope {
         active: KeyFeed.enabled
 
         PanelWindow {
+            id: win
+
             color: "transparent"
 
             // Must never take the keyboard from the window being typed into.
@@ -31,6 +33,9 @@ Scope {
             exclusionMode: ExclusionMode.Ignore
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.namespace: "quickshell:keys"
+
+            // The caps' share of this screen, as on the reference output.
+            readonly property real fit: Theme.fit(win.screen)
 
             anchors {
                 bottom: true
@@ -43,7 +48,7 @@ Scope {
             // share one edge.
             margins {
                 bottom: 0
-                right: Theme.edgeMarginRight
+                right: Math.round(Theme.edgeMarginRight * win.fit)
             }
 
             // Empty mask: the caps are display only. The surface sits over the
@@ -59,15 +64,18 @@ Scope {
             readonly property int sidePad: Theme.px(8)
 
             // Sized to what it draws, so the surface never covers more than
-            // the caps (or the failure line, which replaces them).
-            implicitWidth: Math.max(1, Math.max(row.implicitWidth, failure.visible ? failure.implicitWidth : 0) + sidePad * 2)
-            implicitHeight: Math.max(1, row.implicitHeight + restHeight + Theme.px(24))
+            // the caps (or the failure line, which replaces them). Reference
+            // pixels times the factor: the caps and the line are scaled below.
+            implicitWidth: Math.max(1, Math.round((Math.max(row.implicitWidth, failure.visible ? failure.implicitWidth : 0) + sidePad * 2) * win.fit))
+            implicitHeight: Math.max(1, Math.round((row.implicitHeight + restHeight + Theme.px(24)) * win.fit))
 
             // Show the feed's failure instead of an empty strip.
             Text {
                 id: failure
 
                 anchors.centerIn: parent
+                scale: win.fit
+                transformOrigin: Item.Center
                 visible: KeyFeed.chords.length === 0 && KeyFeed.failure !== ""
                 text: KeyFeed.failure
                 font.family: Theme.uiFont
@@ -79,11 +87,15 @@ Scope {
                 id: row
 
                 // Right-aligned: the newest cap holds the corner and older
-                // ones age out to its left.
+                // ones age out to its left. Scaled about that corner; anchor
+                // margins are not under the transform, so they carry the
+                // factor themselves.
                 anchors.right: parent.right
-                anchors.rightMargin: sidePad
+                anchors.rightMargin: Math.round(sidePad * win.fit)
                 anchors.top: parent.top
-                anchors.topMargin: Theme.px(4)
+                anchors.topMargin: Math.round(Theme.px(4) * win.fit)
+                scale: win.fit
+                transformOrigin: Item.TopRight
                 spacing: Theme.px(10)
 
                 Repeater {

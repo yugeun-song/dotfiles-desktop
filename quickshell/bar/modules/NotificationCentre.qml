@@ -47,6 +47,8 @@ Scope {
         active: Notifications.centreOpen
 
         PanelWindow {
+            id: win
+
             color: "transparent"
             focusable: true
 
@@ -64,9 +66,14 @@ Scope {
                 right: true
             }
 
-            // Keys handlers must sit on an item: a PanelWindow never takes focus.
-            Item {
-                anchors.fill: parent
+            // The card's share of this screen, as on the reference output.
+            readonly property real fit: Theme.fit(win.screen)
+
+            // Keys handlers must sit on an item: a PanelWindow never takes
+            // focus. This one is also the stage, so the bar-height margin and
+            // the row cap keep their share of the screen.
+            FittedStage {
+                fit: win.fit
                 focus: true
 
                 Keys.onPressed: event => {

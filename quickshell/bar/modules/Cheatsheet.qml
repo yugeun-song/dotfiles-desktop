@@ -169,9 +169,14 @@ Scope {
                 right: true
             }
 
-            // A PanelWindow never takes focus itself; Keys must live on a child.
-            Item {
-                anchors.fill: parent
+            // The sheet's share of this screen, as on the reference output.
+            readonly property real fit: Theme.fit(win.screen)
+
+            // A PanelWindow never takes focus itself; Keys must live on a
+            // child. This one is also the stage, so the card's caps and
+            // margins keep their share of the screen.
+            FittedStage {
+                fit: win.fit
                 focus: true
 
                 Keys.onPressed: event => {

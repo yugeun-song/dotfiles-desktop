@@ -136,13 +136,11 @@ Scope {
         PanelWindow {
             id: overlay
 
-            // Pinned to the focused screen: quickshell's default pick can be a
-            // disabled, parked output.
-            screen: {
-                const name = Hyprland.focusedMonitor?.name ?? "";
-                const match = Quickshell.screens.find(s => s.name === name);
-                return match ?? Quickshell.screens[0] ?? null;
-            }
+            // The focused screen (services/Screens.qml says why not the default).
+            screen: Screens.focused
+
+            // The dialog's share of this screen, as on the reference output.
+            readonly property real fit: Theme.fit(overlay.screen)
 
             color: "transparent"
             exclusionMode: ExclusionMode.Ignore
@@ -173,6 +171,8 @@ Scope {
                 id: dialog
 
                 anchors.centerIn: parent
+                scale: overlay.fit
+                transformOrigin: Item.Center
                 implicitWidth: column.implicitWidth + Theme.px(48)
                 implicitHeight: column.implicitHeight + Theme.px(40)
                 radius: Theme.px(18)

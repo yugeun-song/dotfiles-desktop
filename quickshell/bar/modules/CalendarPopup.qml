@@ -41,11 +41,16 @@ Item {
         active: root.shown
 
         sourceComponent: PopupWindow {
+            id: popup
+
+            // The card's share of the bar's screen, as on the reference output.
+            readonly property real fit: Theme.fit(root.QsWindow.window?.screen)
+
             visible: true
             color: "transparent"
             grabFocus: false
-            implicitWidth: card.implicitWidth
-            implicitHeight: card.implicitHeight
+            implicitWidth: Math.round(card.implicitWidth * popup.fit)
+            implicitHeight: Math.round(card.implicitHeight * popup.fit)
 
             anchor {
                 window: root.QsWindow.window
@@ -61,6 +66,8 @@ Item {
             Rectangle {
                 id: card
 
+                scale: popup.fit
+                transformOrigin: Item.TopLeft
                 implicitWidth: month.implicitWidth + Theme.popupPad * 2
                 implicitHeight: month.implicitHeight + Theme.popupPad * 2
                 radius: Theme.surfaceRadius

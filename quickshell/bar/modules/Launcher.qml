@@ -157,13 +157,13 @@ Scope {
         active: root.open
 
         PanelWindow {
-            // Follow the focused monitor; quickshell's default pick can be a
-            // disabled, parked output.
-            screen: {
-                const name = Hyprland.focusedMonitor?.name ?? "";
-                const match = Quickshell.screens.find(s => s.name === name);
-                return match ?? Quickshell.screens[0] ?? null;
-            }
+            id: win
+
+            // The focused screen (services/Screens.qml says why not the default).
+            screen: Screens.focused
+
+            // The card's share of this screen, as on the reference output.
+            readonly property real fit: Theme.fit(win.screen)
 
             color: "transparent"
             exclusionMode: ExclusionMode.Ignore
@@ -193,6 +193,10 @@ Scope {
                 anchors.horizontalCenter: parent.horizontalCenter
                 anchors.top: parent.top
                 anchors.topMargin: Math.round(parent.height * 0.09)
+                // Scaled about its top centre: the 9% offset is already a
+                // share of the screen, the width and rows are not.
+                scale: win.fit
+                transformOrigin: Item.Top
                 width: Theme.px(560)
                 implicitHeight: body.implicitHeight + Theme.px(20)
                 radius: Theme.surfaceRadius

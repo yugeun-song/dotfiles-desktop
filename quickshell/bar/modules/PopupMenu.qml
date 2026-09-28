@@ -80,10 +80,13 @@ Item {
                     root.dismiss();
             }
 
+            // The menu's share of the bar's screen, as on the reference output.
+            readonly property real fit: Theme.fit(root.QsWindow.window?.screen)
+
             color: "transparent"
             grabFocus: true
-            implicitWidth: body.implicitWidth
-            implicitHeight: body.implicitHeight
+            implicitWidth: Math.round(body.implicitWidth * popup.fit)
+            implicitHeight: Math.round(body.implicitHeight * popup.fit)
 
             anchor {
                 window: root.QsWindow.window
@@ -99,6 +102,8 @@ Item {
             Rectangle {
                 id: body
 
+                scale: popup.fit
+                transformOrigin: Item.TopLeft
                 implicitWidth: root.menuWidth
                 implicitHeight: column.implicitHeight + Theme.px(14)
                 radius: Theme.tooltipRadius

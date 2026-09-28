@@ -53,6 +53,8 @@ Scope {
         active: root.live.length > 0 && !Notifications.centreOpen
 
         PanelWindow {
+            id: win
+
             color: "transparent"
 
             // A focusable toast would swallow the user's next keystroke.
@@ -62,25 +64,31 @@ Scope {
             WlrLayershell.layer: WlrLayer.Overlay
             WlrLayershell.namespace: "quickshell:notifications"
 
+            // The stack's share of this screen, as on the reference output.
+            readonly property real fit: Theme.fit(win.screen)
+
             anchors {
                 top: true
                 right: true
             }
 
             margins {
-                right: Theme.edgeMarginRight
-                top: Theme.px(8)
+                right: Math.round(Theme.edgeMarginRight * win.fit)
+                top: Math.round(Theme.px(8) * win.fit)
             }
 
-            implicitWidth: Theme.notifWidth
+            implicitWidth: Math.round(Theme.notifWidth * win.fit)
             // Rounded up: Text reports fractional heights, and a surface a
             // fraction short clips the card's bottom border.
-            implicitHeight: Math.max(1, Math.ceil(stack.implicitHeight))
+            implicitHeight: Math.max(1, Math.ceil(stack.implicitHeight * win.fit))
 
+            // Laid out at the reference width and scaled to the window.
             Column {
                 id: stack
 
-                width: parent.width
+                width: Theme.notifWidth
+                scale: win.fit
+                transformOrigin: Item.TopLeft
                 spacing: Theme.notifStackGap
 
                 Repeater {
