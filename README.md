@@ -71,8 +71,9 @@ workspaces but not one being created; 100 is the ceiling the keybinds share.
 outputs as numbered rectangles (Identify flashes the numbers), the layout
 presets (laptop only, external only, extend left or right, mirror) with the
 current one marked, the workspace scheme (preset, panel first, blocks,
-dynamic), and for the selected output power, mode, scale, rotation and side.
-Apply writes `~/.local/state/hypr/monitor-overrides` through
+dynamic), and for the selected output power, mode, scale, rotation, side and
+its screensaver (below). Apply writes `~/.local/state/hypr/monitor-overrides`
+through
 `hypr/scripts/monitor-override.sh` (`show | set < lines | clear | revert`) and
 re-evaluates; a 30 s countdown reverts unless Keep is pressed (Esc reverts at
 once), so a mode the screen cannot show undoes itself. The file is one line
@@ -175,6 +176,31 @@ server: toasts stack under its right edge, history is behind `Super+N`, a
 toast dwells 5 s (20 s critical), drag right dismisses, click runs the default
 action. `Super+/` lists every binding with a description, `Super+Y` shows the
 keys being pressed.
+
+**Screensaver.** Off everywhere unless a display's switch in the Displays
+panel is turned on, with a time from 1 minute to a day (Apply writes it; the
+revert countdown does not cover it). After that long with nothing done on
+the display, a black layer showing the date and time, moved once a minute,
+covers it, and only it: the output stays on, nothing is locked, and the
+other displays are untouched. "Nothing done" is derived,
+since Wayland has no per-output idle: input goes to the focused monitor, so
+a display is in use while it is focused and the seat is not idle. The
+compositor's idle notification (inhibitors respected) covers the focused
+display and the seat as a whole; for a display focus has left, the bar keeps
+its own clock and, when it runs out, checks `hyprctl clients` for a window
+on it that inhibits idle (a film on the external while the panel is typed
+on) before covering it. Moving the pointer onto the display or switching to
+one of its workspaces (`Super+digit`) uncovers it at once; a key or click
+uncovers the focused display and leaves the others as they are. The saver
+never asks for the lock and sits under the session lock, which the
+compositor draws over every layer, so `Ctrl+Alt+L` locks everything as
+usual with a saver up. Inhibitors the compositor does not know about (a
+browser that only holds the D-Bus screensaver inhibit) are not seen; a
+window rule with `idle_inhibit` (rules.lua has one for mpv and vlc) makes
+one visible. Times live in `~/.local/state/quickshell/bar/screensaver`, one
+`<selector> TAB <minutes>` line per display with the overrides' selectors.
+`qs -p ~/.config/quickshell/bar ipc call screensaver preview <output> 10`
+shows it for ten seconds.
 
 Before editing the QML: Nerd Font glyphs are written as code points, because
 the Material ranges are astral and turn into tofu when re-encoded; quickshell's

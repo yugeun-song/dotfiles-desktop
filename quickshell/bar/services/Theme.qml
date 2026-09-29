@@ -238,6 +238,25 @@ Singleton {
     // gives, since the panel may be the screen that went dark.
     readonly property int displaysRevertSeconds: 30
 
+    // ---------------------------------------------------------------------
+    // The screensaver (modules/ScreensaverWindows.qml): black, a clock that moves.
+    // ---------------------------------------------------------------------
+    // The lock screen's sizes (88 and 19), a step larger for the distance a
+    // screen at rest is read from.
+    readonly property int saverTimeSize: root.px(96)
+    readonly property int saverDateSize: root.px(19)
+    // Keeps the clock off the edges of the screen, where a bezel would sit
+    // on it.
+    readonly property int saverMargin:   root.px(96)
+    readonly property int saverFadeMs:   500
+    // How often a display held back by an idle inhibitor is asked about
+    // again: nothing announces the inhibitor going away.
+    readonly property int saverRecheckMs: 60000
+    // The bar's ink and its dimmed readouts; the clock moves every minute,
+    // which is what an OLED panel needs, so the ink need not be faint.
+    readonly property color saverTime: root.fg
+    readonly property color saverDate: root.surfaceFaint
+
     readonly property int centreWidth:      root.px(452)
     readonly property int centreRadius:     root.px(16)
     readonly property int centrePad:        root.px(13)

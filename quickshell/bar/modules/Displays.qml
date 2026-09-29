@@ -278,6 +278,61 @@ Scope {
         root.resetPendingOnLoad = false;
         root.pending = root.currentMap();
         root.pendingScheme = root.currentScheme;
+        root.pendingSaver = root.currentSaverMap();
+    }
+
+    // ---- the screensaver (services/Screensaver.qml's file) ------------
+    // Minutes per connector, 0 for off. Pending like the fields above and
+    // written by Apply, so the panel has one way of taking a change; the
+    // countdown does not cover it, since a screensaver time is nothing a
+    // screen can fail to show.
+    property var pendingSaver: ({})
+    // The last number a display had while on, so the switch brings it back.
+    property var saverMemory: ({})
+
+    function currentSaverMap() {
+        const map = {};
+        for (const o of root.outputs)
+            map[o.name] = Screensaver.minutesOf(o.name, o.description);
+        return map;
+    }
+
+    function saverKey(map) {
+        return root.outputs.map(o => `${o.name}=${map[o.name] ?? 0}`).join(" ");
+    }
+
+    readonly property string currentSaverKey: root.saverKey(root.currentSaverMap())
+    readonly property string pendingSaverKey: root.saverKey(root.pendingSaver)
+    readonly property bool saverDirty: root.pendingSaverKey !== root.currentSaverKey
+
+    function setSaver(name, minutes) {
+        const next = Object.assign({}, root.pendingSaver);
+        next[name] = minutes;
+        root.pendingSaver = next;
+        if (minutes > 0) {
+            const memory = Object.assign({}, root.saverMemory);
+            memory[name] = minutes;
+            root.saverMemory = memory;
+        }
+        root.hint = "";
+    }
+
+    function applySaver() {
+        const changes = [];
+        for (const o of root.outputs) {
+            const want = root.pendingSaver[o.name] ?? 0;
+            if (want === Screensaver.minutesOf(o.name, o.description))
+                continue;
+            // The selector the overrides use for this output; the other
+            // forms are dropped so one line speaks for it. Twins (a shared
+            // description) keep theirs.
+            const aliases = ["name:" + o.name];
+            if (o.description !== "" && !root.sharedDescription(o.description))
+                aliases.push(o.description);
+            changes.push({ selector: root.selectorFor(o), minutes: want, aliases: aliases });
+        }
+        if (changes.length > 0)
+            Screensaver.setMany(changes);
     }
 
     // ---- the workspace scheme (the file's "*" line) --------------------
@@ -440,7 +495,7 @@ Scope {
 
     readonly property string pendingTsv: root.toTsv(root.pending, root.pendingScheme)
     readonly property string currentTsv: root.toTsv(root.currentMap(), root.currentScheme)
-    readonly property bool dirty: root.pendingTsv !== root.currentTsv
+    readonly property bool dirty: root.pendingTsv !== root.currentTsv || root.saverDirty
 
     function pendingOf(name) {
         return root.pending[name] ?? {};
@@ -642,6 +697,15 @@ Scope {
         const why = root.refusal(root.pending);
         if (why !== "") {
             root.hint = why;
+            return;
+        }
+        if (root.saverDirty)
+            root.applySaver();
+        // Only the screensaver changed: nothing for the compositor, and
+        // nothing to count down over.
+        if (root.pendingTsv === root.currentTsv) {
+            root.resetPendingOnLoad = true;
+            root.refresh();
             return;
         }
         root.busy = true;
@@ -873,6 +937,15 @@ Scope {
         description: "Display settings: outputs, modes, scale, presets"
 
         onPressed: root.toggle()
+    }
+
+    Connections {
+        target: Screensaver
+
+        function onErrorChanged() {
+            if (Screensaver.error !== "")
+                root.hint = Screensaver.error;
+        }
     }
 
     // ---- pieces -----------------------------------------------------------
@@ -1965,6 +2038,194 @@ Scope {
                                             active: side === modelData.value
                                             onClicked: root.setField(settings.name, "side", modelData.value)
                                         }
+                                    }
+                                }
+                            }
+
+                            // Screensaver: the bar's own setting, not an
+                            // override, but pending and applied like the
+                            // rest so the panel has one way of taking a
+                            // change. A switch, as Power: the number is a
+                            // separate choice from whether it is on.
+                            Item {
+                                id: saverRow
+
+                                width: parent.width
+                                height: Theme.displaysRowHeight
+
+                                readonly property int minutes: root.pendingSaver[settings.name] ?? 0
+                                readonly property bool on: saverRow.minutes > 0
+                                // What the switch would turn on: the last
+                                // number this display had, else the default.
+                                readonly property int remembered: root.saverMemory[settings.name] ?? Screensaver.defaultMinutes
+
+                                function toggle() {
+                                    root.setSaver(settings.name, saverRow.on ? 0 : saverRow.remembered);
+                                }
+
+                                // - and + walk the listed steps and stop at
+                                // the ends; the wheel moves by a minute for
+                                // a number between them.
+                                function step(delta) {
+                                    const cur = saverRow.minutes;
+                                    if (cur <= 0)
+                                        return;
+                                    const steps = Screensaver.steps;
+                                    let next = cur;
+                                    if (delta > 0) {
+                                        next = steps.find(v => v > cur) ?? Math.min(Screensaver.maxMinutes, cur + 1);
+                                    } else {
+                                        for (const v of steps) {
+                                            if (v < cur)
+                                                next = v;
+                                        }
+                                    }
+                                    next = Math.max(Screensaver.minMinutes, Math.min(Screensaver.maxMinutes, next));
+                                    if (next !== cur)
+                                        root.setSaver(settings.name, next);
+                                }
+
+                                function nudge(delta) {
+                                    const cur = saverRow.minutes;
+                                    if (cur <= 0)
+                                        return;
+                                    const next = Math.max(Screensaver.minMinutes, Math.min(Screensaver.maxMinutes, cur + delta));
+                                    if (next !== cur)
+                                        root.setSaver(settings.name, next);
+                                }
+
+                                Text {
+                                    anchors.left: parent.left
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    text: "Screensaver"
+                                    font.family: Theme.uiFont
+                                    font.pixelSize: Theme.px(13)
+                                    color: Theme.surfaceDim
+                                }
+
+                                Row {
+                                    anchors.left: parent.left
+                                    anchors.leftMargin: Theme.displaysLabelWidth
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    spacing: Theme.px(12)
+
+                                    // One switch with both states written on
+                                    // it: a press anywhere on it toggles, and
+                                    // the lit half slides to the new state.
+                                    // Two chips read as two settings; one
+                                    // frame reads as one choice.
+                                    Rectangle {
+                                        id: saverSwitch
+
+                                        readonly property int pad: Theme.px(3)
+                                        readonly property int halfWidth: Math.max(offLabel.implicitWidth, onLabel.implicitWidth) + Theme.px(22)
+
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        width: saverSwitch.halfWidth * 2 + saverSwitch.pad * 2
+                                        height: Theme.px(30)
+                                        radius: Theme.px(8)
+                                        color: switchHover.hovered ? Theme.surfaceRaisedHover : Theme.surfaceRaised
+
+                                        // The lit half.
+                                        Rectangle {
+                                            x: saverSwitch.pad + (saverRow.on ? saverSwitch.halfWidth : 0)
+                                            y: saverSwitch.pad
+                                            width: saverSwitch.halfWidth
+                                            height: saverSwitch.height - saverSwitch.pad * 2
+                                            radius: Theme.px(6)
+                                            color: Theme.accentIndigo
+
+                                            Behavior on x {
+                                                NumberAnimation {
+                                                    duration: 120
+                                                    easing.type: Easing.OutCubic
+                                                }
+                                            }
+                                        }
+
+                                        Text {
+                                            id: offLabel
+
+                                            x: saverSwitch.pad + (saverSwitch.halfWidth - offLabel.implicitWidth) / 2
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "Off"
+                                            font.family: Theme.uiFont
+                                            font.pixelSize: Theme.px(13)
+                                            font.weight: Font.Medium
+                                            color: saverRow.on ? Theme.fg : Theme.ink
+                                        }
+
+                                        Text {
+                                            id: onLabel
+
+                                            x: saverSwitch.pad + saverSwitch.halfWidth + (saverSwitch.halfWidth - onLabel.implicitWidth) / 2
+                                            anchors.verticalCenter: parent.verticalCenter
+                                            text: "On"
+                                            font.family: Theme.uiFont
+                                            font.pixelSize: Theme.px(13)
+                                            font.weight: Font.Medium
+                                            color: saverRow.on ? Theme.ink : Theme.fg
+                                        }
+
+                                        HoverHandler {
+                                            id: switchHover
+                                        }
+
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: saverRow.toggle()
+                                        }
+                                    }
+
+                                    Row {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: Theme.px(8)
+                                        // Dimmed while off: the number is
+                                        // what the switch would bring back.
+                                        opacity: saverRow.on ? 1 : 0.4
+
+                                        Chip {
+                                            label: "−"
+                                            enabled: saverRow.on && saverRow.minutes > Screensaver.minMinutes
+                                            onClicked: saverRow.step(-1)
+                                        }
+
+                                        Rectangle {
+                                            width: Theme.px(110)
+                                            height: Theme.px(30)
+                                            radius: Theme.px(8)
+                                            color: Theme.surfaceRaised
+                                            anchors.verticalCenter: parent.verticalCenter
+
+                                            Text {
+                                                anchors.centerIn: parent
+                                                text: `${saverRow.on ? saverRow.minutes : saverRow.remembered} min`
+                                                font.family: Theme.uiFont
+                                                font.pixelSize: Theme.px(13)
+                                                font.weight: Font.Medium
+                                                color: Theme.fg
+                                            }
+
+                                            WheelHandler {
+                                                enabled: saverRow.on
+                                                onWheel: event => saverRow.nudge(event.angleDelta.y > 0 ? 1 : -1)
+                                            }
+                                        }
+
+                                        Chip {
+                                            label: "+"
+                                            enabled: saverRow.on && saverRow.minutes < Screensaver.maxMinutes
+                                            onClicked: saverRow.step(1)
+                                        }
+                                    }
+
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        text: "the clock, alone on black, after that long with nothing done on this display"
+                                        font.family: Theme.uiFont
+                                        font.pixelSize: Theme.px(12)
+                                        color: Theme.muted
                                     }
                                 }
                             }

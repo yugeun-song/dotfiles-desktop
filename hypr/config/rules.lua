@@ -32,5 +32,10 @@ hl.layer_rule({ match = { namespace = "^(quickshell)$" }, blur = false })
 -- light squares.
 hl.layer_rule({ match = { namespace = "^(quickshell:osd)$" }, blur = false })
 
+-- The screensaver is an opaque black layer: blur would cost a pass, and the
+-- default popin reads wrong on a screen-sized surface. Never above_lock: the
+-- lock screen must draw over it, since a screensaver is not a lock.
+hl.layer_rule({ match = { namespace = "^(quickshell:screensaver)$" }, blur = false, animation = "fade" })
+
 -- Idle inhibit only for fullscreen media, not a fullscreen terminal.
 hl.window_rule({ match = { class = "^(mpv|vlc)$" }, idle_inhibit = "fullscreen" })

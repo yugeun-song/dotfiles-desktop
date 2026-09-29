@@ -35,6 +35,9 @@ case "${1:-}" in
         command -v "$(runner)" >/dev/null 2>&1 || { echo "bar: quickshell is not installed" >&2; exit 1; }
         [[ -f "$CONFIG_DIR/shell.qml" ]] || { echo "bar: no shell.qml under $CONFIG_DIR" >&2; exit 1; }
         cd "$HOME" 2>/dev/null || cd /
+        # The bar's own state (the screensaver times) lives here; quickshell
+        # writes the file but cannot make the directory.
+        mkdir -p -- "${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/bar" 2>/dev/null || true
         exec "$(runner)" -n --log-rules "$LOG_RULES" -p "$CONFIG_DIR"
         ;;
     *)
