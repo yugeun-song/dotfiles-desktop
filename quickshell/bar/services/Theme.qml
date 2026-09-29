@@ -167,19 +167,28 @@ Singleton {
     // No height token: popups are content plus popupPad on all four sides.
     // Shared with the calendar.
     readonly property int popupPad: root.px(18)
-    readonly property int mediaGap:        root.px(10)
 
     readonly property int mediaArtSize:   root.px(52)
     readonly property int mediaTitleSize: root.px(15)
     readonly property int mediaSubSize:   root.px(12)
     readonly property int mediaTimeSize:  root.px(11)
     readonly property int mediaProgressHeight: root.px(14)
+    // Thin, as in the Spotify player the card follows; the knob that appears
+    // on hover is what the pointer aims at.
+    readonly property int mediaTrackHeight: Math.max(3, root.px(4))
+    readonly property int mediaKnobSize:    root.px(12)
 
-    // Graded rather than uniform: play-pause largest, skip either side of it,
-    // shuffle and repeat smallest at the ends.
-    readonly property int mediaControlMain: root.px(22)
-    readonly property int mediaControlSkip: root.px(18)
-    readonly property int mediaControlEdge: root.px(14)
+    // Graded rather than uniform: play-pause a filled disc, skip either side
+    // of it, shuffle and repeat smallest at the ends. The controls sit close
+    // together in the middle, each in a cell wider than its glyph so the gaps
+    // between them still click.
+    readonly property int mediaDiscSize:    root.px(36)
+    // The drawn play and pause mark, about a third of the disc as in Spotify's.
+    readonly property int mediaDiscGlyph:   root.px(13)
+    readonly property int mediaControlSkip: root.px(24)
+    readonly property int mediaControlEdge: root.px(21)
+    readonly property int mediaControlCell: root.px(32)
+    readonly property int mediaControlGap:  root.px(18)
 
     // Calendar popup. The heading-to-grid gap sets its width; the day is at
     // display size so the date reads at a glance.
