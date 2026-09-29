@@ -37,6 +37,10 @@ hl.layer_rule({ match = { namespace = "^(quickshell:osd)$" }, blur = false })
 -- lock screen must draw over it, since a screensaver is not a lock.
 hl.layer_rule({ match = { namespace = "^(quickshell:screensaver)$" }, blur = false, animation = "fade" })
 
+-- The key strip is recreated on the other screen whenever the typing moves
+-- there; a popin on each move flashed the caps already up.
+hl.layer_rule({ match = { namespace = "^(quickshell:keys)$" }, no_anim = true })
+
 -- The Identify badges go over every other layer of their level (the
 -- Displays card, a screensaver), so a numbered screen can always be read.
 hl.layer_rule({ match = { namespace = "^(quickshell:displays-identify)$" }, order = 2 })

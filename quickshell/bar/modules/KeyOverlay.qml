@@ -33,6 +33,14 @@ Scope {
         PanelWindow {
             id: win
 
+            // The screen being typed on, and only that one: the caps belong
+            // beside the window they went to. Without a screen the compositor
+            // placed the strip once, on the monitor focused at Super+Y, and it
+            // stayed there while the typing moved to the other screen. Not the
+            // focused monitor either, which follows the pointer across an empty
+            // stretch of the other screen while the keys still go here.
+            screen: Screens.keyboard
+
             color: "transparent"
 
             // Must never take the keyboard from the window being typed into.

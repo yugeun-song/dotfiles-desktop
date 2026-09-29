@@ -177,7 +177,7 @@ and a short allowlist of hosts (`Theme.artHosts`), since a browser's
 server: toasts stack under its right edge, history is behind `Super+N`, a
 toast dwells 5 s (20 s critical), drag right dismisses, click runs the default
 action. `Super+/` lists every binding with a description, `Super+Y` shows the
-keys being pressed, near the bottom-right corner.
+keys being pressed, near the bottom-right corner of the screen they go to.
 The player card follows the desktop Spotify player below the title: a filled
 disc for play and pause between the skips, shuffle and repeat marked with a
 dot while on, and the elapsed and whole time either side of a thin bar that
