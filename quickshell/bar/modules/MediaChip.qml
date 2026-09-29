@@ -4,7 +4,8 @@ import QtQuick
 import qs.services
 
 // What is playing, centred in the bar in the bar's own type. Width is capped
-// by the room between the groups. Hovering opens the player card.
+// by the room between the groups. Hovering opens the player card under this
+// chip only; the line itself reads the same on every screen.
 Item {
     id: root
 
@@ -73,7 +74,7 @@ Item {
         anchors.topMargin: Theme.barInset
         anchors.bottomMargin: Theme.barInset
         radius: Theme.menuItemRadius
-        color: Media.open ? Theme.menuHover : "transparent"
+        color: card.shown ? Theme.menuHover : "transparent"
 
         Behavior on color {
             ColorAnimation {
@@ -127,10 +128,13 @@ Item {
     }
 
     HoverHandler {
-        onHoveredChanged: Media.chipHovered = hovered
+        id: hover
     }
 
     MediaPopup {
+        id: card
+
         anchorItem: root
+        anchorHovered: hover.hovered
     }
 }
