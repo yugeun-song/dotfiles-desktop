@@ -41,5 +41,11 @@ hl.layer_rule({ match = { namespace = "^(quickshell:screensaver)$" }, blur = fal
 -- Displays card, a screensaver), so a numbered screen can always be read.
 hl.layer_rule({ match = { namespace = "^(quickshell:displays-identify)$" }, order = 2 })
 
+-- The capture overlays (slurp's namespace is "selection") appear and vanish
+-- at once. With the popin they came up 100 ms late, and Hyprland releases
+-- every held button when an overlay that takes the keyboard maps, so a drag
+-- begun before that was lost.
+hl.layer_rule({ match = { namespace = "^(selection|hyprpicker)$" }, no_anim = true })
+
 -- Idle inhibit only for fullscreen media, not a fullscreen terminal.
 hl.window_rule({ match = { class = "^(mpv|vlc)$" }, idle_inhibit = "fullscreen" })
