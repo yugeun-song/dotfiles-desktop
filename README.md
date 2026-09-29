@@ -177,7 +177,7 @@ and a short allowlist of hosts (`Theme.artHosts`), since a browser's
 server: toasts stack under its right edge, history is behind `Super+N`, a
 toast dwells 5 s (20 s critical), drag right dismisses, click runs the default
 action. `Super+/` lists every binding with a description, `Super+Y` shows the
-keys being pressed.
+keys being pressed, near the bottom-right corner.
 
 **Screensaver.** Off everywhere unless a display's switch in the Displays
 panel is turned on, with a time from 1 minute to a day (Apply writes it; the

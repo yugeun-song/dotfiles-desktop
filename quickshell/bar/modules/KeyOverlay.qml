@@ -6,10 +6,17 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.services
 
-// Pressed keys in the bottom-right corner, where they sit beside a video's
-// controls rather than over its subtitles. Each chord is a slot that owns the
-// width (and collapses) plus a cap that animates: scaling an item inside a Row
-// leaves its gap behind, so the row would jump.
+// Pressed keys near the bottom-right corner, where they sit beside a video's
+// controls rather than over its subtitles.
+//
+// The surface is a strip of fixed size, not sized to the caps. Hyprland
+// places a layer from the size it asks for and draws the buffer it has, so
+// a surface that grew and shrank with its content jumped by the difference
+// for a frame at every change; anchored to the right edge, every jump landed
+// on every cap, and the collapse that closed a gap resized it on each frame
+// of the animation. Inside the strip the caps are laid out right to left,
+// newest at the corner: the oldest leaving moves nothing, and a new cap
+// arriving slides the others left, animated in one place.
 Scope {
     id: root
 
@@ -44,11 +51,9 @@ Scope {
 
             // No bottom margin (restHeight spaces the row instead), so a cap
             // falling out leaves the screen rather than clipping at the edge.
-            // The right margin matches the toasts above, so the two corners
-            // share one edge.
             margins {
                 bottom: 0
-                right: Math.round(Theme.edgeMarginRight * win.fit)
+                right: Math.round(Theme.keysMarginRight * win.fit)
             }
 
             // Empty mask: the caps are display only. The surface sits over the
@@ -63,11 +68,34 @@ Scope {
             // Room for the entrance overshoot (scale 1.08) on the outer caps.
             readonly property int sidePad: Theme.px(8)
 
-            // Sized to what it draws, so the surface never covers more than
-            // the caps (or the failure line, which replaces them). Reference
-            // pixels times the factor: the caps and the line are scaled below.
-            implicitWidth: Math.max(1, Math.round((Math.max(row.implicitWidth, failure.visible ? failure.implicitWidth : 0) + sidePad * 2) * win.fit))
-            implicitHeight: Math.max(1, Math.round((row.implicitHeight + restHeight + Theme.px(24)) * win.fit))
+            // The taller of the two cap kinds, measured off hidden caps, so
+            // the strip has one height whichever glyphs are up.
+            readonly property int capHeight: Math.max(probeText.implicitHeight, probeIcon.implicitHeight)
+
+            // Reference pixels; the stage below is scaled by the factor. Held
+            // to the screen on a narrow one.
+            readonly property int stripWidth: Math.max(Theme.px(120),
+                Math.min(Theme.keysWidth, Math.floor((win.screen?.width ?? Theme.keysWidth) / win.fit) - Theme.keysMarginRight * 2))
+            readonly property int stripHeight: win.capHeight + win.restHeight + Theme.px(24)
+
+            implicitWidth: Math.max(1, Math.round((win.stripWidth + win.sidePad * 2) * win.fit))
+            implicitHeight: Math.max(1, Math.round(win.stripHeight * win.fit))
+
+            KeyCap {
+                id: probeText
+
+                visible: false
+                mods: "⌃"
+                text: "X"
+            }
+
+            KeyCap {
+                id: probeIcon
+
+                visible: false
+                iconGlyph: true
+                text: Theme.iconPlay
+            }
 
             // Show the feed's failure instead of an empty strip.
             Text {
@@ -83,130 +111,146 @@ Scope {
                 color: Theme.accentRed
             }
 
-            Row {
-                id: row
+            // Reference pixels, scaled about the corner the caps hold.
+            Item {
+                id: stage
 
-                // Right-aligned: the newest cap holds the corner and older
-                // ones age out to its left. Scaled about that corner; anchor
-                // margins are not under the transform, so they carry the
-                // factor themselves.
                 anchors.right: parent.right
-                anchors.rightMargin: Math.round(sidePad * win.fit)
                 anchors.top: parent.top
-                anchors.topMargin: Math.round(Theme.px(4) * win.fit)
+                width: win.stripWidth + win.sidePad * 2
+                height: win.stripHeight
                 scale: win.fit
                 transformOrigin: Item.TopRight
-                spacing: Theme.px(10)
 
-                Repeater {
-                    // ScriptModel diffs by id. A plain array would rebuild every
-                    // delegate on each push, replaying entrances and restarting
-                    // dwell timers so nothing aged out while typing.
-                    model: ScriptModel {
-                        values: KeyFeed.chords
-                        objectProp: "id"
+                Row {
+                    id: row
+
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.leftMargin: win.sidePad
+                    anchors.rightMargin: win.sidePad
+                    anchors.top: parent.top
+                    anchors.topMargin: Theme.px(4)
+                    height: win.capHeight
+                    // First item at the right edge: the model is newest first.
+                    layoutDirection: Qt.RightToLeft
+                    spacing: Theme.px(10)
+
+                    // The slide when a new cap takes the corner. Nothing else
+                    // moves a cap: the oldest is the leftmost, so its leaving
+                    // changes no other position.
+                    move: Transition {
+                        NumberAnimation {
+                            properties: "x"
+                            duration: Theme.keysSlideMs
+                            easing.type: Easing.OutCubic
+                        }
                     }
 
-                    Item {
-                        id: slot
-
-                        required property var modelData
-
-                        implicitWidth: chord.implicitWidth
-                        implicitHeight: chord.implicitHeight
-                        width: implicitWidth
-                        height: implicitHeight
-
-                        // Run by the dwell timer: cap falls out, then the slot
-                        // width collapses so the row closes smoothly.
-                        SequentialAnimation {
-                            id: leaving
-
-                            ParallelAnimation {
-                                NumberAnimation {
-                                    target: chord
-                                    property: "y"
-                                    // Fully past the screen edge.
-                                    to: chord.height + Theme.px(80)
-                                    duration: 340
-                                    easing.type: Easing.InCubic
-                                }
-                                NumberAnimation {
-                                    target: chord
-                                    property: "opacity"
-                                    to: 0
-                                    duration: 340
-                                    easing.type: Easing.InQuad
-                                }
-                                NumberAnimation {
-                                    target: chord
-                                    property: "scale"
-                                    to: 0.9
-                                    duration: 340
-                                    easing.type: Easing.InQuad
-                                }
-                            }
-                            NumberAnimation {
-                                target: slot
-                                property: "width"
-                                to: 0
-                                duration: 160
-                                easing.type: Easing.OutCubic
-                            }
-                            ScriptAction {
-                                script: KeyFeed.drop(slot.modelData.id)
-                            }
+                    Repeater {
+                        // ScriptModel diffs by id. A plain array would rebuild every
+                        // delegate on each push, replaying entrances and restarting
+                        // dwell timers so nothing aged out while typing.
+                        model: ScriptModel {
+                            values: KeyFeed.chords.slice().reverse()
+                            objectProp: "id"
                         }
 
-                        Timer {
-                            running: true
-                            interval: KeyFeed.dwellMs
+                        Item {
+                            id: slot
 
-                            onTriggered: leaving.start()
-                        }
+                            required property var modelData
 
-                        Row {
-                            id: chord
+                            width: chord.implicitWidth
+                            height: win.capHeight
 
-                            spacing: Theme.px(4)
-                            transformOrigin: Item.Bottom
-
-                            // Small overshoot so it reads as a keystrike.
-                            Component.onCompleted: entering.start()
-
+                            // Run by the dwell timer: the cap falls out, then
+                            // the chord is dropped from the feed.
                             SequentialAnimation {
-                                id: entering
+                                id: leaving
 
                                 ParallelAnimation {
                                     NumberAnimation {
                                         target: chord
+                                        property: "y"
+                                        // Fully past the screen edge.
+                                        to: win.stripHeight
+                                        duration: 340
+                                        easing.type: Easing.InCubic
+                                    }
+                                    NumberAnimation {
+                                        target: chord
                                         property: "opacity"
-                                        from: 0
-                                        to: 1
-                                        duration: 90
+                                        to: 0
+                                        duration: 340
+                                        easing.type: Easing.InQuad
                                     }
                                     NumberAnimation {
                                         target: chord
                                         property: "scale"
-                                        from: 0.6
-                                        to: 1.08
-                                        duration: 110
-                                        easing.type: Easing.OutQuad
+                                        to: 0.9
+                                        duration: 340
+                                        easing.type: Easing.InQuad
                                     }
                                 }
-                                NumberAnimation {
-                                    target: chord
-                                    property: "scale"
-                                    to: 1
-                                    duration: 130
-                                    easing.type: Easing.OutBack
+                                ScriptAction {
+                                    script: KeyFeed.drop(slot.modelData.id)
                                 }
                             }
 
-                            KeyCap {
-                                mods: KeyFeed.symbolsFor(slot.modelData.mods)
-                                text: KeyFeed.keyLabel(slot.modelData.key)
-                                iconGlyph: KeyFeed.keyIsIcon(slot.modelData.key)
+                            Timer {
+                                running: true
+                                interval: KeyFeed.dwellMs
+
+                                onTriggered: leaving.start()
+                            }
+
+                            Row {
+                                id: chord
+
+                                // Bottom-aligned in the slot: an icon cap is a
+                                // little taller than a text one.
+                                y: win.capHeight - chord.height
+                                spacing: Theme.px(4)
+                                transformOrigin: Item.Bottom
+
+                                // Small overshoot so it reads as a keystrike.
+                                Component.onCompleted: entering.start()
+
+                                SequentialAnimation {
+                                    id: entering
+
+                                    ParallelAnimation {
+                                        NumberAnimation {
+                                            target: chord
+                                            property: "opacity"
+                                            from: 0
+                                            to: 1
+                                            duration: 90
+                                        }
+                                        NumberAnimation {
+                                            target: chord
+                                            property: "scale"
+                                            from: 0.6
+                                            to: 1.08
+                                            duration: 110
+                                            easing.type: Easing.OutQuad
+                                        }
+                                    }
+                                    NumberAnimation {
+                                        target: chord
+                                        property: "scale"
+                                        to: 1
+                                        duration: 130
+                                        easing.type: Easing.OutBack
+                                    }
+                                }
+
+                                KeyCap {
+                                    mods: KeyFeed.symbolsFor(slot.modelData.mods)
+                                    text: KeyFeed.keyLabel(slot.modelData.key)
+                                    iconGlyph: KeyFeed.keyIsIcon(slot.modelData.key)
+                                }
                             }
                         }
                     }

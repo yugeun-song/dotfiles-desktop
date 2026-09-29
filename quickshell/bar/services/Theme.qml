@@ -239,6 +239,17 @@ Singleton {
     readonly property int displaysRevertSeconds: 30
 
     // ---------------------------------------------------------------------
+    // The key overlay (modules/KeyOverlay.qml): a strip of fixed size.
+    // ---------------------------------------------------------------------
+    // Five caps of ordinary width with their gaps; a wider chord clips the
+    // oldest, which is on its way out.
+    readonly property int keysWidth:       root.px(600)
+    // In from the corner: at the toasts' edge margin the caps read as
+    // pressed against the bezel.
+    readonly property int keysMarginRight: root.px(64)
+    readonly property int keysSlideMs:     140
+
+    // ---------------------------------------------------------------------
     // The screensaver (modules/ScreensaverWindows.qml): black, a clock that moves.
     // ---------------------------------------------------------------------
     // The lock screen's sizes (88 and 19), a step larger for the distance a
