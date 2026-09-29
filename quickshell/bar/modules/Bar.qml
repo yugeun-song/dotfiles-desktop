@@ -81,10 +81,12 @@ PanelWindow {
 
                 Workspaces {
                     anchors.verticalCenter: parent.verticalCenter
+                    screen: root.modelData
                 }
 
                 AppTitle {
                     anchors.verticalCenter: parent.verticalCenter
+                    screen: root.modelData
                 }
             }
 

@@ -51,7 +51,8 @@ Singleton {
         return last?.workspace?.active ? last : null;
     }
 
-    // The screen holding the focused window, else the focused monitor.
+    // The screen holding the focused window, else the focused monitor. The
+    // bars mark it as the screen in use.
     readonly property var windowScreen: {
         const name = root.focusedWindow?.monitor?.name ?? "";
         const match = name !== "" ? Quickshell.screens.find(s => s.name === name) : null;
@@ -88,6 +89,17 @@ Singleton {
             case "closelayer":
                 if (root.keyboardPanels.indexOf(event.data) !== -1)
                     focus.panelsOpen = Math.max(0, focus.panelsOpen - 1);
+                break;
+            // quickshell 0.3.1 puts a workspacev2 on whichever monitor it last
+            // saw focused. Switching workspace while the pointer rests on the
+            // other screen, Hyprland re-checks the pointer first and sends a
+            // focusedmon for that screen before the workspacev2, so the panel's
+            // bar came to mark the external's workspace (seen in a nested
+            // session). Rereading the monitors puts every workspace back on its
+            // own screen; asked for at once, the answer lands within a few
+            // milliseconds, before the misplaced indicator has visibly moved.
+            case "workspacev2":
+                Hyprland.refreshMonitors();
                 break;
             }
         }

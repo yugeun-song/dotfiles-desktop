@@ -10,10 +10,26 @@ import qs.services
 //
 // The indicator's edges animate at different speeds (150 ms / 520 ms) so it
 // stretches toward the destination and reads as one moving object.
+//
+// Each bar marks the workspace its own screen shows. With the focused one on
+// every bar, the panel's bar lit a number the panel was not showing, and the
+// pointer crossing onto the other screen moved both indicators. Which screen
+// is in use is told by the fill instead: solid where the focused window is,
+// a quiet tint on the other screens. Which workspaces hold windows is the
+// same on every bar.
 Item {
     id: root
 
-    readonly property int activeId: Hyprland.focusedWorkspace?.id ?? 1
+    // Set by Bar.qml.
+    property var screen: null
+
+    readonly property var monitor: {
+        const name = root.screen?.name ?? "";
+        return (Hyprland.monitors?.values ?? []).find(m => m.name === name) ?? null;
+    }
+
+    readonly property int activeId: root.monitor?.activeWorkspace?.id ?? Hyprland.focusedWorkspace?.id ?? 1
+    readonly property bool inUse: (Screens.windowScreen?.name ?? "") === (root.screen?.name ?? "")
     readonly property int groupSize: 10
 
     // Special workspaces have negative ids; the row keeps its current group.
@@ -104,8 +120,22 @@ Item {
         height: indicator.height
         radius: indicator.radius
         visible: indicator.visible
+        opacity: indicator.opacity
         color: Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.18 + root.stretch * 0.22)
         scale: 1 + root.stretch * 0.04
+    }
+
+    // The fill on a screen not in use. The type there is light: dark type
+    // needs the solid fill behind it.
+    Rectangle {
+        x: indicator.x
+        y: indicator.y
+        width: indicator.width
+        height: indicator.height
+        radius: indicator.radius
+        visible: indicator.visible
+        opacity: 1 - indicator.opacity
+        color: Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.22)
     }
 
     Rectangle {
@@ -117,6 +147,14 @@ Item {
         height: parent.height - Theme.barInset * 2
         radius: height / 2
         visible: root.activeId >= root.firstId && root.activeId <= root.lastId
+        opacity: root.inUse ? 1 : 0
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: 160
+                easing.type: Easing.OutCubic
+            }
+        }
 
         gradient: Gradient {
             orientation: Gradient.Horizontal
@@ -157,7 +195,8 @@ Item {
             const step = wheel.notch > 0 ? -1 : 1;
             wheel.notch = 0;
 
-            const current = Hyprland.focusedWorkspace?.id ?? 0;
+            // From this screen's workspace, the one under the wheel.
+            const current = root.activeId;
             if (current < wheel.minWorkspace)
                 return;
 
@@ -216,10 +255,18 @@ Item {
                     font.pixelSize: Theme.workspaceTextSize
                     // Current is bolder; occupied vs empty is told by opacity.
                     font.weight: cell.current ? Font.DemiBold : Font.Normal
-                    // Dark on the indicator, light off it.
-                    color: cell.current ? Theme.bg
+                    // Dark on the solid indicator, light off it and on the tint.
+                    color: cell.current && root.inUse ? Theme.bg
+                           : cell.current ? Theme.fg
                            : cell.busy ? Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.70)
                                        : Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.32)
+
+                    Behavior on color {
+                        ColorAnimation {
+                            duration: 160
+                            easing.type: Easing.OutCubic
+                        }
+                    }
                 }
 
                 HoverHandler {

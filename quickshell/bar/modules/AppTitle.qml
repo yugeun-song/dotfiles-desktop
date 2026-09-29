@@ -2,21 +2,27 @@ pragma ComponentBehavior: Bound
 
 import QtQuick
 import Quickshell
-import Quickshell.Hyprland
 import qs.services
 
 // The focused window's application name, last in the left group because it is
 // the only part whose width changes.
+//
+// Named on the bar of the screen holding that window and left out on the
+// others: beside each bar's own workspace number, a name on every bar put a
+// window next to a screen that was not showing it. Found through keyboard
+// focus, not the focused workspace, which follows the pointer: resting it on
+// the other screen's bar blanked the name while the typing went on.
 //
 // No global menu: Wayland has no protocol for one, and only Qt/KDE apps export
 // menus over D-Bus (Chrome, Firefox, kitty and foot do not).
 Item {
     id: root
 
-    readonly property var focusedWindow: {
-        const windows = Hyprland.focusedWorkspace?.toplevels?.values ?? [];
-        return windows.find(w => w.activated) ?? null;
-    }
+    // Set by Bar.qml.
+    property var screen: null
+
+    readonly property var focusedWindow: (Screens.windowScreen?.name ?? "") === (root.screen?.name ?? "")
+                                         ? Screens.focusedWindow : null
 
     readonly property string appId: root.focusedWindow?.wayland?.appId
                                     ?? root.focusedWindow?.lastIpcObject?.class ?? ""

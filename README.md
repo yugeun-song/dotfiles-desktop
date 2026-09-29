@@ -152,9 +152,31 @@ right    caps lock, input method, alarm, network, bluetooth,
 No `File / Edit / View` menu: Wayland has no global menu protocol. Status
 items are glyphs and short readouts; colour appears only past a limit (CPU
 and memory at 90%, battery at 10%). The workspace row shows the block of ten
-containing the current one, so its width never changes; scrolling it walks
-the workspaces. The centre chip stays centred but drops its meter, then its
-title, before it would overlap the groups.
+containing its screen's workspace, so its width never changes; scrolling it
+walks the workspaces. The centre chip stays centred but drops its meter, then
+its title, before it would overlap the groups.
+
+**Several screens.** Each screen has its own bar, and what they share
+follows from what each part describes:
+
+```
+the same on every bar    what is playing, the status readouts, the clock,
+                         which workspaces hold windows
+this screen's own        the workspace it shows (solid where the focused
+                         window is, a tint on the others); the focused
+                         window's name, on its own screen's bar only
+where the pointer is     the player card, the month, tooltips, menus: under
+                         the item hovered or clicked, on that bar alone
+where the keys go        the key overlay: the screen of the window being
+                         typed into, or of the shell's own panel while one
+                         holds the keyboard
+```
+
+Summoned surfaces (launcher, power menu, cheat sheet, history, displays,
+OSD) open on the compositor's focused monitor. That monitor also changes when
+the pointer crosses onto another screen, while the keyboard stays with its
+window; the key overlay and the bars' focus marks follow the keyboard, so
+resting the pointer on the other screen's bar moves neither.
 
 **Sizing.** Every dimension is `Theme.px()` of one scale, tuned on the
 2560x1440 desk monitor; `BAR_SCALE` overrides it. Each window then draws
