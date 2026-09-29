@@ -90,6 +90,7 @@ fi
 # replaced underneath it.
 mirror() {
     local from="$1" to="$2" rel
+    MIRROR_CHANGED=0
     if [[ ! -e "$from" ]]; then
         echo "missing source: $from" >&2
         exit 1
@@ -113,6 +114,7 @@ mirror() {
         echo "unchanged $to"
         return 0
     fi
+    MIRROR_CHANGED=1
     mkdir -p "$(dirname "$to")"
     if [[ -d "$from" ]]; then
         [[ -e "$to" && ! -d "$to" ]] && rm -f "$to"
@@ -164,6 +166,35 @@ mirror() {
 }
 
 mirror "$SRC/quickshell/bar"         "$CONFIG/quickshell/bar"
+# The reloads on write above can miss files: quickshell reads the whole tree
+# when a reload starts and watches again only when it ends, and a file
+# renamed over a watched one sometimes went unseen altogether. An install
+# that changed a singleton and its users together left the running bar on
+# the old singleton. One more reload, asked for after the last file, reads
+# the finished tree. A reload still under way builds the shell over several
+# turns of its event loop, its IPC targets appearing one by one, so the
+# "shell" target is looked for a few times before the bar is taken for one
+# from before the call.
+if (( ! CHECK && MIRROR_CHANGED )) && command -v qs >/dev/null 2>&1; then
+    _bar_state=none
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        _bar_targets=$(qs -p "$CONFIG/quickshell/bar" ipc show 2>/dev/null) || { _bar_state=none; break; }
+        if grep -qx "target shell" <<<"$_bar_targets"; then
+            _bar_state=ready
+            break
+        fi
+        _bar_state=old
+        sleep 0.3
+    done
+    case "$_bar_state" in
+        ready)
+            qs -p "$CONFIG/quickshell/bar" ipc call shell reload >/dev/null 2>&1 \
+                && echo "reloaded the running bar" ;;
+        old)
+            echo "the running bar cannot be asked to reload yet; run: bar --restart" >&2 ;;
+    esac
+    unset _bar_targets _bar_state
+fi
 # For what a program owns: copied once, never overwritten. fcitx5, KDE and GTK
 # save by rename() over the target, which replaces a symlink rather than
 # following it. To take a change back, copy it into the repository; to push one

@@ -1,6 +1,7 @@
 import QtQuick
 import Quickshell
 import Quickshell.Hyprland
+import Quickshell.Io
 import "modules"
 import qs.services
 
@@ -67,5 +68,17 @@ ShellRoot {
         description: "Screen brightness down"
 
         onPressed: Brightness.step(-5)
+    }
+
+    // install.sh asks for this once every file is in place. The reloads on
+    // write miss files (see install.sh), and modules changed together with
+    // a singleton came up against the old singleton. Deferred so the call
+    // returns before the shell it runs in is replaced.
+    IpcHandler {
+        target: "shell"
+
+        function reload(): void {
+            Qt.callLater(() => Quickshell.reload(false));
+        }
     }
 }
