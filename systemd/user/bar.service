@@ -32,3 +32,10 @@ RestartSec=1
 RestartSteps=5
 RestartMaxDelaySec=30
 Slice=session.slice
+# Huge pages only where a program asks for them. Under the kernel default
+# (always) the bar held 110 MiB of anonymous memory a minute after a start,
+# 58 MiB of it in 2 MB pages, and 153 MiB after three hours; with madvise it
+# held 57 MiB a minute after a start. Programs started from the launcher
+# inherit this. Ignored by systemd before 260 and by kernels without the
+# madvise mode.
+MemoryTHP=madvise

@@ -15,3 +15,5 @@ ExecStart=%E/hypr/scripts/polkit-agent.sh
 Restart=always
 RestartSec=1
 Slice=session.slice
+# See bar.service.
+MemoryTHP=madvise

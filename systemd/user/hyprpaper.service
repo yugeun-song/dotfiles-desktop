@@ -21,3 +21,5 @@ ExecStartPost=-%E/hypr/scripts/wallpaper.sh --reload
 Restart=always
 RestartSec=1
 Slice=session.slice
+# See bar.service.
+MemoryTHP=madvise
