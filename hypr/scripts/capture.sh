@@ -10,7 +10,11 @@
 #
 # Lines 4-10 are the usage text printed by the `*)` case below.
 # Every shot goes to both clipboard and file. Only one slurp/hyprpicker at a
-# time: two overlays both grab the pointer and the desktop looks frozen.
+# time: two overlays both grab the pointer and the desktop looks frozen. A
+# lock (flock, non-blocking) is taken before anything else, so a key pressed
+# again while a capture is still preparing or waiting for the drag does
+# nothing; a check for a running slurp alone missed the presses that landed
+# before slurp was up.
 # ============================================================================
 
 set -uo pipefail
@@ -58,7 +62,9 @@ crop_from_frame() {
     lw=$(hyprctl -j monitors 2>/dev/null \
          | jq -r '[.[] | (.x + (.width / .scale))] | max // empty') || lw=""
     if [[ -n "$lw" && "$lw" != "null" ]]; then
-        ratio=$(magick identify -format '%w' "$frame" 2>/dev/null \
+        # -ping reads the header only; without it the whole frame is decoded
+        # for one number.
+        ratio=$(magick identify -ping -format '%w' "$frame" 2>/dev/null \
                 | awk -v l="$lw" '{ printf "%.6f", (l > 0 ? $1 / l : 1) }')
     else
         ratio=1
@@ -92,6 +98,18 @@ selection_running() {
     pgrep -x slurp >/dev/null 2>&1 || pgrep -x hyprpicker >/dev/null 2>&1
 }
 
+# Held on fd 9 for the rest of the script (the drag included), so a repeat
+# press finds it taken and leaves. Silent: the press was a repeat, not an
+# error, and a notification per press would be its own nuisance.
+take_lock() {
+    local dir="${XDG_RUNTIME_DIR:-/tmp}"
+    exec 9>"$dir/capture-${USER:-$(id -un)}.lock" || return 0
+    if ! flock -n 9; then
+        echo "capture: a capture is already in progress" >&2
+        exit 0
+    fi
+}
+
 finish() {
     local f="$1"
     [[ -s "$f" ]] || die "produced an empty file"
@@ -119,14 +137,20 @@ case "$MODE" in
 
     region|region-edit)
         need grim slurp magick
+        take_lock
         selection_running && die "a selection is already in progress"
         # The frame is captured BEFORE slurp runs, then cropped. Capturing
         # after slurp exits races the compositor removing its overlay, and the
         # shot contains slurp's own rectangle.
-        frame=$(mktemp --suffix=.png) || die "could not make a temporary file"
+        # As PPM, not PNG: the frame is every output at physical size, and
+        # encoding that as PNG took 1.7 s on two screens (0.06 s as PPM),
+        # all of it before the drag could start; decoding it again for the
+        # crop took another 0.3 s. Some 40 MB in the temp dir for a second.
+        # Only its presence is checked here: a bad frame fails the crop.
+        frame=$(mktemp --suffix=.ppm) || die "could not make a temporary file"
         trap 'rm -f "$frame"' EXIT
-        grim "$frame" || die "grim failed"
-        verify_image "$frame"
+        grim -t ppm "$frame" || die "grim failed"
+        [[ -s "$frame" ]] || die "grim wrote an empty frame"
 
         geom=$(slurp -d \
             -F "$SLURP_FONT" \
@@ -157,6 +181,7 @@ case "$MODE" in
 
     color)
         need hyprpicker wl-copy
+        take_lock
         selection_running && die "a picker is already open"
         hex=$(hyprpicker -a -n 2>/dev/null) || die "hyprpicker failed"
         [[ -n "$hex" ]] || exit 0
