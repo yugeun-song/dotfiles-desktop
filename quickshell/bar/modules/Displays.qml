@@ -520,6 +520,44 @@ Scope {
         root.hint = "";
     }
 
+    // The panel's side as the picture should draw it: the pending choice
+    // when it differs from the one in force, else nothing (the geometry
+    // the compositor reports is drawn as it is).
+    readonly property string pendingSide: {
+        const panel = root.panel;
+        if (!panel || root.externals.length === 0)
+            return "";
+        const want = root.value(panel.name, "side");
+        const now = root.currentMap()[panel.name]?.side ?? "auto";
+        if (want === now)
+            return "";
+        return want === "auto" ? "right" : want;
+    }
+
+    // One wheel notch moves the built-in panel one side round the first
+    // external, clockwise for wheel down. The only arrangement the policy
+    // takes is the panel's side, so the picture offers that and not free
+    // placement. Notches are counted so a touchpad's fine steps do not
+    // race round.
+    property real wheelBalance: 0
+
+    function wheelSide(delta) {
+        const panel = root.panel;
+        if (!panel || root.externals.length === 0)
+            return;
+        root.wheelBalance += delta;
+        const order = ["right", "below", "left", "above"];
+        while (Math.abs(root.wheelBalance) >= 120) {
+            const step = root.wheelBalance > 0 ? -1 : 1;
+            root.wheelBalance -= step < 0 ? 120 : -120;
+            const cur = root.value(panel.name, "side");
+            let i = order.indexOf(cur === "auto" ? "right" : cur);
+            if (i < 0)
+                i = 0;
+            root.setField(panel.name, "side", order[(i + step + order.length) % order.length]);
+        }
+    }
+
     function setField(name, field, v) {
         const next = root.clonePending();
         if (!next[name])
@@ -860,14 +898,18 @@ Scope {
             implicitWidth: Math.round(badge.side * badgeWindow.fit)
             implicitHeight: Math.round(badge.side * badgeWindow.fit)
 
+            // Bottom-right, clear of the card in the middle of the focused
+            // screen. rules.lua orders this namespace over the other layers
+            // of its level, so the number shows through the card and a
+            // screensaver alike.
             anchors {
                 bottom: true
-                left: true
+                right: true
             }
 
             margins {
                 bottom: Math.round(Theme.px(40) * badgeWindow.fit)
-                left: Math.round(Theme.px(40) * badgeWindow.fit)
+                right: Math.round(Theme.px(40) * badgeWindow.fit)
             }
 
             // Empty mask: clicks pass through.
@@ -1262,6 +1304,10 @@ Scope {
                             border.width: 1
                             border.color: Theme.surfaceLine
 
+                            WheelHandler {
+                                onWheel: event => root.wheelSide(event.angleDelta.y)
+                            }
+
                             Item {
                                 id: stage
 
@@ -1269,14 +1315,18 @@ Scope {
                                 anchors.margins: Theme.px(18)
 
                                 // Boxes in stage coordinates, one per output.
-                                readonly property var boxes: stage.place(root.outputs, stage.width, stage.height)
+                                readonly property var boxes: stage.place(root.outputs, stage.width, stage.height, root.pendingSide)
 
                                 // Enabled outputs keep their logical geometry
                                 // (x, y, size over scale, sides swapped when
                                 // rotated); disabled ones queue up to the
                                 // right at their last size. The whole is
-                                // scaled to fit and centred.
-                                function place(list, w, h) {
+                                // scaled to fit and centred. A pending side
+                                // for the panel that differs from the one in
+                                // force is drawn as it will be, beside the
+                                // first external, so the wheel shows its
+                                // effect before Apply.
+                                function place(list, w, h, side) {
                                     if (list.length === 0 || w <= 0 || h <= 0)
                                         return [];
                                     const gap = 24;
@@ -1294,10 +1344,34 @@ Scope {
                                         const lw = pw > 0 ? pw / o.scale : 1920;
                                         const lh = ph > 0 ? ph / o.scale : 1080;
                                         raw.push({ o: o, x: o.x, y: o.y, w: lw, h: lh });
-                                        minX = Math.min(minX, o.x);
-                                        minY = Math.min(minY, o.y);
-                                        maxX = Math.max(maxX, o.x + lw);
-                                        maxY = Math.max(maxY, o.y + lh);
+                                    }
+                                    const panel = raw.find(r => r.o.internal);
+                                    const external = raw.find(r => !r.o.internal && r.o.mirrorOf === "");
+                                    if (side !== "" && panel && external && panel !== external) {
+                                        switch (side) {
+                                        case "left":
+                                            panel.x = external.x - panel.w;
+                                            panel.y = external.y;
+                                            break;
+                                        case "right":
+                                            panel.x = external.x + external.w;
+                                            panel.y = external.y;
+                                            break;
+                                        case "above":
+                                            panel.x = external.x;
+                                            panel.y = external.y - panel.h;
+                                            break;
+                                        case "below":
+                                            panel.x = external.x;
+                                            panel.y = external.y + external.h;
+                                            break;
+                                        }
+                                    }
+                                    for (const r of raw) {
+                                        minX = Math.min(minX, r.x);
+                                        minY = Math.min(minY, r.y);
+                                        maxX = Math.max(maxX, r.x + r.w);
+                                        maxY = Math.max(maxY, r.y + r.h);
                                     }
                                     if (raw.length === 0) {
                                         minX = 0; minY = 0; maxX = 0; maxY = 0;
@@ -1348,6 +1422,23 @@ Scope {
                                         width: box.geometry.w
                                         height: box.geometry.h
                                         radius: Theme.px(6)
+
+                                        // A wheel step moves the panel around
+                                        // the external; a glide reads as a
+                                        // move, a jump as a redraw.
+                                        Behavior on x {
+                                            NumberAnimation {
+                                                duration: 160
+                                                easing.type: Easing.OutCubic
+                                            }
+                                        }
+
+                                        Behavior on y {
+                                            NumberAnimation {
+                                                duration: 160
+                                                easing.type: Easing.OutCubic
+                                            }
+                                        }
                                         color: box.active ? Theme.accentIndigo
                                                           : (boxHover.hovered ? Theme.surfaceRaisedHover : Theme.surfaceRaised)
                                         border.width: 1
@@ -2310,7 +2401,7 @@ Scope {
                             width: parent.width
                             text: root.hint !== "" ? root.hint
                                   : root.countdown > 0 ? "enter keeps, esc reverts"
-                                  : "digits select a display, enter applies, esc closes"
+                                  : "digits select a display, the wheel over the picture moves the panel, enter applies, esc closes"
                             font.family: Theme.uiFont
                             font.pixelSize: Theme.px(11)
                             color: root.hint !== "" ? Theme.accentAmber : Theme.muted

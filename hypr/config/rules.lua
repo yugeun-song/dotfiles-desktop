@@ -37,5 +37,9 @@ hl.layer_rule({ match = { namespace = "^(quickshell:osd)$" }, blur = false })
 -- lock screen must draw over it, since a screensaver is not a lock.
 hl.layer_rule({ match = { namespace = "^(quickshell:screensaver)$" }, blur = false, animation = "fade" })
 
+-- The Identify badges go over every other layer of their level (the
+-- Displays card, a screensaver), so a numbered screen can always be read.
+hl.layer_rule({ match = { namespace = "^(quickshell:displays-identify)$" }, order = 2 })
+
 -- Idle inhibit only for fullscreen media, not a fullscreen terminal.
 hl.window_rule({ match = { class = "^(mpv|vlc)$" }, idle_inhibit = "fullscreen" })

@@ -68,12 +68,14 @@ then name order. One rule per id, because a range selector binds existing
 workspaces but not one being created; 100 is the ceiling the keybinds share.
 
 **The Displays panel.** `Super+O`, or the laptop's display key, opens it: the
-outputs as numbered rectangles (Identify flashes the numbers), the layout
-presets (laptop only, external only, extend left or right, mirror) with the
-current one marked, the workspace scheme (preset, panel first, blocks,
-dynamic), and for the selected output power, mode, scale, rotation, side and
-its screensaver (below). Apply writes `~/.local/state/hypr/monitor-overrides`
-through
+outputs as numbered rectangles (Identify shows each number in its screen's
+bottom-right corner, over every other layer; the wheel over the picture
+moves the panel round the external, which is the one arrangement the policy
+takes), the layout presets (laptop
+only, external only, extend left or right, mirror) with the current one
+marked, the workspace scheme (preset, panel first, blocks, dynamic), and for
+the selected output power, mode, scale, rotation, side and its screensaver
+(below). Apply writes `~/.local/state/hypr/monitor-overrides` through
 `hypr/scripts/monitor-override.sh` (`show | set < lines | clear | revert`) and
 re-evaluates; a 30 s countdown reverts unless Keep is pressed (Esc reverts at
 once), so a mode the screen cannot show undoes itself. The file is one line
