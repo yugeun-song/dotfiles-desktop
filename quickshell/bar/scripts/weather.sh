@@ -10,12 +10,26 @@
 #   --icon     icon glyph only, for a status bar
 #   --bar      one line of compact JSON, for the status bar shell to parse
 #
+# Option
+#   --refresh  ask the network even when the cache is fresh (the bar's click);
+#              a failed fetch still falls back to the cache
+#
 # Requires: curl, jq
 #
 set -uo pipefail
 
 for dep in curl jq; do
     command -v "$dep" >/dev/null 2>&1 || { echo "weather.sh: $dep is required" >&2; exit 1; }
+done
+
+MODE=""
+REFRESH=0
+for arg in "$@"; do
+    if [[ "$arg" == --refresh ]]; then
+        REFRESH=1
+    elif [[ -z "$MODE" ]]; then
+        MODE="$arg"
+    fi
 done
 
 # Location. Coordinates: https://open-meteo.com/en/docs (geocoding section).
@@ -47,10 +61,13 @@ cache_mtime() {
     stat -c %Y "$CACHE_FILE" 2>/dev/null || echo 0
 }
 
+# A cache stamped in the future is not fresh: one of the two clocks was wrong.
+# After a hard power-off the RTC restarts at the firmware's build date, and the
+# clock is only right again once NTP answers.
 cache_fresh() {
     [[ -s "$CACHE_FILE" ]] || return 1
     local age=$(( $(date +%s) - $(cache_mtime) ))
-    (( age < CACHE_TTL ))
+    (( age >= 0 && age < CACHE_TTL ))
 }
 
 # Validate content: a truncated cache can still look fresh.
@@ -61,11 +78,14 @@ cache_read() {
     printf '%s' "$cached"
 }
 
-# Sets $json and $FETCHED (when the reading was obtained). A live body uses
-# now, not the cache mtime, since the cache write may be skipped.
+# Sets $json, $FETCHED (when the reading was obtained) and $LIVE (0 when the
+# fetch failed and an expired cache stands in). A live body uses now, not the
+# cache mtime, since the cache write may be skipped. The bar retries on LIVE=0
+# rather than judging by FETCHED, which is only as right as the clock.
 get_json() {
-    if cache_fresh && json=$(cache_read); then
+    if (( ! REFRESH )) && cache_fresh && json=$(cache_read); then
         FETCHED=$(cache_mtime)
+        LIVE=1
         return 0
     fi
     local body tmp
@@ -77,11 +97,13 @@ get_json() {
         fi
         json=$body
         FETCHED=$(date +%s)
+        LIVE=1
         return 0
     fi
     # Fetch failed: serve the stale cache.
     if json=$(cache_read); then
         FETCHED=$(cache_mtime)
+        LIVE=0
         return 0
     fi
     return 1
@@ -133,6 +155,7 @@ wmo_icon() {
 
 json=""
 FETCHED=0
+LIVE=0
 get_json || { echo "weather.sh: fetch failed and no usable cache at $CACHE_FILE" >&2; exit 1; }
 
 code=$(printf '%s' "$json" | jq -r '.current.weather_code')
@@ -140,7 +163,7 @@ isday=$(printf '%s' "$json" | jq -r '.current.is_day')
 temp=$(printf '%s' "$json" | jq -r '.current.temperature_2m | round')
 feels=$(printf '%s' "$json" | jq -r '.current.apparent_temperature | round')
 
-case "${1:-}" in
+case "$MODE" in
     --json)
         printf '%s\n' "$json"
         ;;
@@ -149,9 +172,11 @@ case "${1:-}" in
         ;;
     --bar)
         # Single line for the bar's line parser.
-        printf '%s' "$json" | jq -c --arg place "$WEATHER_NAME" --argjson fetched "$FETCHED" '{
+        printf '%s' "$json" | jq -c --arg place "$WEATHER_NAME" --argjson fetched "$FETCHED" \
+            --argjson live "$( (( LIVE )) && echo true || echo false )" '{
             place:    $place,
             fetched:  $fetched,
+            live:     $live,
             code:     .current.weather_code,
             temp:     (.current.temperature_2m | round),
             feels:    (.current.apparent_temperature | round),

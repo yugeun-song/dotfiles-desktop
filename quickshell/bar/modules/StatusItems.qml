@@ -251,10 +251,22 @@ Row {
     }
 
     // A stale reading stays visible, marked unknown, so the failure reads as
-    // the feed's rather than the bar's. 1 h = four missed 15 min polls.
+    // the feed's rather than the bar's. 1 h = four missed 15 min polls. A
+    // click fetches at once, past the cache and the retry backoff: a network
+    // that came up slowly (a phone hotspot at boot) should not leave the chip
+    // grey until the next scheduled try.
     StatusItem {
         visible: Weather.ready
-        unknown: Weather.unknown || Theme.stale(Weather.asOf, 3600000)
+        unknown: {
+            const why = Weather.unknown || Theme.stale(Weather.asOf, 3600000);
+            if (why === "")
+                return "";
+            const lines = [why];
+            if (Weather.lastError !== "")
+                lines.push(Weather.lastError);
+            lines.push(Weather.fetching ? "Fetching now" : "Click to refresh");
+            return lines.join("\n");
+        }
         icon: Theme.weatherIcon(Weather.code, Weather.day)
         iconScale: Theme.statusIconBoostWeather
         // The place stays: unlike the machine readouts, the number needs it.
@@ -273,8 +285,12 @@ Row {
                 lines.push(`Wind      ${Weather.wind} km/h`);
             if (Weather.place !== "")
                 lines.push(`Location  ${Weather.place}`);
+            lines.push(Weather.fetching ? "Fetching now" : "Click to refresh");
             return lines.join("\n");
         }
+
+        interactive: true
+        onActivated: Weather.refresh()
     }
 
     // Outer edge, no glyph.

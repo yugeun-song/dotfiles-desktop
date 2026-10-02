@@ -45,31 +45,78 @@ Singleton {
         return "";
     }
 
+    readonly property bool fetching: fetch.running
+
+    // The last complaint from weather.sh or curl ("Could not resolve host"),
+    // cleared by a live reading; the tooltip shows it while the chip is stale.
+    property string lastError: ""
+
     // Consecutive failures; drives the retry backoff so an early boot does
-    // not wait for the 15-minute tick.
+    // not wait for the next poll.
     property int failures: 0
 
-    // Just above weather.sh's 10-minute cache; older means stale fallback.
-    readonly property int liveWithin: 660000
+    // What the current run printed, judged on its own: `data` keeps the last
+    // payload, which after a run that printed nothing would speak for an
+    // older one.
+    property var received: null
+    property bool refreshQueued: false
 
-    // Judge success by payload age, not exit code: the stale-cache fallback
-    // exits 0.
+    // Wall-clock age at which the poll asks again. Above weather.sh's
+    // 10-minute cache, so each poll reaches the network.
+    readonly property int pollEvery: 900000
+
+    // Success is the script's own `live` flag, not the payload's age: after a
+    // hard power-off the clock runs on the last shutdown time until NTP
+    // answers, so a stale cache served before that looked recent, no retry was
+    // scheduled, and the chip went grey once the clock jumped ahead.
     function settle(): void {
-        if (root.ready && Date.now() - root.asOf < root.liveWithin) {
+        const got = root.received;
+        root.received = null;
+        if (got?.live === true) {
             root.failures = 0;
-            return;
+            root.lastError = "";
+            retry.stop();
+        } else {
+            root.failures = Math.min(root.failures + 1, 5);
+            retry.restart();
         }
-        root.failures = Math.min(root.failures + 1, 5);
-        retry.restart();
+        if (root.refreshQueued) {
+            root.refreshQueued = false;
+            root.start(true);
+        }
+    }
+
+    function start(force: bool): void {
+        if (fetch.running)
+            return;
+        root.received = null;
+        fetch.command = [Quickshell.shellPath("scripts/weather.sh"), "--bar"].concat(force ? ["--refresh"] : []);
+        fetch.running = true;
+    }
+
+    // The chip's click: past the cache and the backoff, now or right after the
+    // run in flight.
+    function refresh(): void {
+        root.failures = 0;
+        retry.stop();
+        if (fetch.running)
+            root.refreshQueued = true;
+        else
+            root.start(true);
     }
 
     // Refetch when the link comes up. If Net's backend is None (NetworkManager
     // absent at startup) this never fires and the retry backoff is the fallback.
     readonly property bool online: Net.wifiConnected || Net.wiredConnected
 
+    // A new link starts the backoff over: failures from before it (a hotspot
+    // still coming up at boot) would otherwise put the next try minutes away.
     onOnlineChanged: {
-        if (root.online)
-            fetch.running = true;
+        if (!root.online)
+            return;
+        root.failures = 0;
+        retry.stop();
+        root.start(false);
     }
 
     Process {
@@ -86,7 +133,9 @@ Singleton {
                 if (trimmed === "")
                     return;
                 try {
-                    root.data = JSON.parse(trimmed);
+                    const parsed = JSON.parse(trimmed);
+                    root.data = parsed;
+                    root.received = parsed;
                 } catch (error) {
                     console.warn("[weather] could not parse:", trimmed);
                 }
@@ -95,7 +144,11 @@ Singleton {
 
         // quickshell closes stderr unless something reads it.
         stderr: SplitParser {
-            onRead: line => console.warn("[weather]", line)
+            onRead: line => {
+                console.warn("[weather]", line);
+                if (line.trim() !== "")
+                    root.lastError = line.trim();
+            }
         }
     }
 
@@ -104,15 +157,24 @@ Singleton {
 
         interval: 30000 * Math.pow(2, root.failures - 1)
         repeat: false
-        onTriggered: fetch.running = true
+        onTriggered: root.start(false)
     }
 
-    // Above the script's 10-minute cache; faster polls would only hit it.
+    // A minute's check against the wall clock instead of a 15-minute timer:
+    // Qt's timers run on the monotonic clock, which stands still in suspend
+    // and never sees NTP move the wall clock. A reading stamped more than a
+    // minute in the future is as suspect as an old one.
     Timer {
-        interval: 900000
+        interval: 60000
         running: true
         repeat: true
         triggeredOnStart: true
-        onTriggered: fetch.running = true
+        onTriggered: {
+            if (fetch.running || retry.running)
+                return;
+            const age = Date.now() - root.asOf;
+            if (!root.ready || age >= root.pollEvery || age < -60000)
+                root.start(false);
+        }
     }
 }
