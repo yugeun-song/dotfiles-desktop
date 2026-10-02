@@ -29,7 +29,14 @@ if [[ "$was" == "2" ]]; then
     fi
 fi
 
-hyprlock "$@"
+# Sizes per screen: see lock-fit.sh. Without its copy hyprlock reads
+# hyprlock.conf, which draws the reference output's sizes on every screen.
+fitted=()
+if conf=$("$(dirname -- "${BASH_SOURCE[0]}")/lock-fit.sh"); then
+    fitted=(-c "$conf")
+fi
+
+hyprlock "${fitted[@]}" "$@"
 rc=$?
 
 [[ "$was" == "2" ]] && fcitx5-remote -o >/dev/null 2>&1

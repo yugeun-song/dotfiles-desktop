@@ -189,7 +189,14 @@ share (0.79) left the bar too small to read. Text stays vector-sharp under
 the transform. `config/monitors.lua` scales Hyprland's gaps, border and
 rounding per output by the same factor, with the same floor, through
 monitor-selector rules (rounding stops at 20, the most a window rule
-accepts); blur and shadow have no per-output form and stay global.
+accepts); blur and shadow have no per-output form and stay global. The lock
+screen uses the same factor and bounds, counted in each output's own pixels,
+since hyprlock ignores the compositor scale: `hypr/scripts/lock-fit.sh`
+writes the copy `lock.sh` locks with, every block of `hyprlock.conf` once per
+output with its lengths scaled. The panel's 2880x1800 pixels give 1.19, so
+the time covers the same share of the panel as of the desk monitor; the bar,
+floored on the panel's 1920x1200 logical size, is drawn there at 1 times the
+1.5 scale, a larger share.
 
 **Popups and notifications.** Hovering the centre chip opens the player,
 hovering the clock the month; both are `PopupWindow`s anchored to the bar (a
