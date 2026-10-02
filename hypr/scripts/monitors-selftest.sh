@@ -168,6 +168,14 @@ expect_no_flip() {
 sleep 2
 expect "alone: panel on" "WAYLAND-1 disabled=false"
 
+# Session end with nothing beside the panel: prepare_exit must not take the
+# last lit screen. cancel_exit before docking, or every docked case below
+# would see the panel go off.
+n eval 'MONITORS.prepare_exit()' >/dev/null
+sleep 1.2
+expect "session end alone: panel stays on" "WAYLAND-1 disabled=false"
+n eval 'MONITORS.cancel_exit()' >/dev/null
+
 # The workspace in use when an external arrives moves to it; the panel keeps 1.
 focus 3
 sleep 0.3
@@ -244,6 +252,30 @@ sleep 1.2
 expect "lid open: panel back on" "WAYLAND-1 disabled=false"
 expect_ws "lid open: workspace 1 back on the panel" "1@WAYLAND-1"
 expect_panel_holds_one "lid open: the panel holds workspace 1 only"
+
+# Session end beside an external (session-power.sh before a sign-out or a
+# power-off): the panel goes off in its own emission, as with the lid, and
+# comes back when the power-off is refused (cancel_exit).
+m=$(mark)
+n eval 'MONITORS.prepare_exit()' >/dev/null
+sleep 1.2
+expect "session end: panel off" "WAYLAND-1 disabled=true"
+expect "session end: external still on" "HEADLESS-1 disabled=false"
+expect_panel_holds_none "session end: no workspace left on the panel"
+# The off emission itself may not be logged: apply() prints a stage only when
+# its summary changes, and the lid case above left "WAYLAND-1:off". The panel
+# being off with no disabled rule in the lighting emission shows the split.
+if since "$m" | grep -q 'monitors: session end -> .*WAYLAND-1:off'; then
+    echo "FAIL  session end: the panel was darkened in the same emission that lit the external"
+    FAILED=1
+else
+    echo "PASS  session end: the lighting emission carried no disabled rule"
+fi
+n eval 'MONITORS.cancel_exit()' >/dev/null
+sleep 1.2
+expect "session end cancelled: panel back on" "WAYLAND-1 disabled=false"
+expect_ws "session end cancelled: workspace 1 back on the panel" "1@WAYLAND-1"
+expect_panel_holds_one "session end cancelled: the panel holds workspace 1 only"
 
 m=$(mark)
 n reload >/dev/null

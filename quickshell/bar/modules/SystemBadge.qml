@@ -90,10 +90,10 @@ Item {
             {
                 label: "Sign out",
                 icon: Theme.iconLogout,
-                // Lua call syntax: hyprctl wraps it in hl.dispatch(...); a bare
-                // "exit" evaluates to nil and is refused silently.
+                // The same path as the power menu's: session-power.sh turns
+                // the panel off first when an external is lit beside it.
                 detail: "end the session",
-                action: () => Apps.open(["hyprctl", "dispatch", "hl.dsp.exit()"])
+                action: () => Apps.open([Paths.hyprScripts + "/session-power.sh", "logout"])
             }
         ]
     }

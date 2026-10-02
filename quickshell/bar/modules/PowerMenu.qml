@@ -40,9 +40,11 @@ Scope {
             label: "Sign out",
             icon: Theme.iconLogout,
             accent: Theme.accentSky,
-            // Lua syntax: hyprctl wraps this as hl.dispatch(<arg>), so a bare
-            // "exit" evaluates to nil and is silently refused.
-            command: ["hyprctl", "dispatch", "hl.dsp.exit()"],
+            // Through session-power.sh like restart and shut down: with the
+            // panel and an external both lit it turns the panel off first,
+            // since a power-off from the greeter after a session that ended
+            // with both lit has needed an EC reset here. See its header.
+            command: root.sessionPower("logout"),
             probe: "hyprctl"
         },
         {

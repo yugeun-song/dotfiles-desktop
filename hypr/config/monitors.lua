@@ -797,6 +797,10 @@ end
 -- Set by the lid binds, and at load from ACPI (see lid above).
 local lid_closed = false
 
+-- Set by M.prepare_exit() while the session is about to end (see Session end
+-- below): the panel beside a lit external goes off as with the lid shut.
+local exiting = false
+
 -- Connector states read at load (see plan).
 local sysfs = {}
 
@@ -994,7 +998,9 @@ local function plan(state, at_load, quiet)
 
     -- The panel. Beside a lit external it goes off with the lid shut, where
     -- it would hold workspace 1 out of sight, when keep_internal is off
-    -- (enabled = true undoes that, the lid it cannot), or when overridden off.
+    -- (enabled = true undoes that, the lid it cannot), when overridden off,
+    -- or while the session ends (prepare_exit, which enabled = true cannot
+    -- undo either).
     local internals = {}
     for name in pairs(known) do
         if classify(name) == "internal" then
@@ -1003,7 +1009,7 @@ local function plan(state, at_load, quiet)
     end
     for _, name in ipairs(sorted_keys(internals)) do
         local override = override_for(name)
-        local off = externals_present and (lid_closed or override.enabled == false
+        local off = externals_present and (lid_closed or exiting or override.enabled == false
             or (not keep_internal() and override.enabled ~= true))
         if override.enabled == false and not externals_present and #p.off > 0 and not kept_warned and not quiet then
             kept_warned = true
@@ -1630,6 +1636,34 @@ function M.resume()
         end
     end
     schedule("resume", policy.settle_removed_ms)
+end
+
+-- ---------------------------------------------------------------------------
+-- Session end.
+-- ---------------------------------------------------------------------------
+-- scripts/session-power.sh calls prepare_exit before a sign-out or power-off
+-- while an external is lit, and cancel_exit when the power-off is refused.
+-- The panel goes off in the policy's own separate modeset, as the lid takes
+-- it, so the session ends on the external alone.
+--
+-- Why: on the Lunar Lake laptop this was written on, a power-off with HDMI
+-- attached sometimes never reaches S5 and only an EC reset (a long power
+-- button hold) ends it. In September 2026, seven sign-outs that ended on the
+-- external alone were each followed by a clean power-off from the greeter;
+-- of three that ended with the panel lit as well, two were not. The sample
+-- is small and the mechanism unknown: this reproduces the state that held,
+-- it does not fix a cause.
+function M.prepare_exit()
+    exiting = true
+    M.evaluate("session end", false)
+end
+
+function M.cancel_exit()
+    if not exiting then
+        return
+    end
+    exiting = false
+    M.evaluate("session end cancelled", false)
 end
 
 -- ---------------------------------------------------------------------------
