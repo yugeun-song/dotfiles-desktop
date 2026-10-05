@@ -243,7 +243,16 @@ leaves the others dark, and reaches the window under it. Once every display
 is off, the first key or pointer motion turns them all on (Hyprland's
 `*_enables_dpms`, which `config/monitors.lua` keeps from waking a dark
 display while another is lit). A display turned on by anything else (that
-wake, a resume, the lid) starts its clocks over. The saver never asks for
+wake, a resume, the lid) starts its clocks over. Nothing goes dark while the
+Displays panel is open, since its changes and their revert countdown need
+screens that can be seen, and a display being shared (a call, a recording)
+stays up while the share lasts; a shared window keeps every display up.
+Hyprland reports any screencopy as a share until half a second after its
+last frame, so a share counts after two seconds, and one that only asks for
+changed frames of a still screen is not seen. When the bar stops, its unit
+lights whatever the saver left off. Captures leave an output that is off
+out, since it would never send a frame: a region over one is black there,
+and a window is cut to the lit outputs. The saver never asks for
 the lock, and `Ctrl+Alt+L` locks as usual. Inhibitors the compositor does
 not know about (a browser that only holds the D-Bus screensaver inhibit)
 are not seen; a window rule with `idle_inhibit` (rules.lua has one for mpv

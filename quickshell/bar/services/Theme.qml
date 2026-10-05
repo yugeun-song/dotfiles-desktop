@@ -268,6 +268,9 @@ Singleton {
     // A display's state read this soon after asking for it to go dark may
     // predate the request, so it is not taken as the display woken.
     readonly property int saverSettleMs: 5000
+    // A screencopy counts as a screen share once it has lasted this long; a
+    // screenshot's ends half a second after its one frame.
+    readonly property int saverShareMs: 2000
 
     readonly property int centreWidth:      root.px(452)
     readonly property int centreRadius:     root.px(16)

@@ -52,6 +52,10 @@ import qs.services
 // over (*_enables_dpms in general.lua): the first key or pointer motion
 // turns them all on. A display turned on by anything but this module (that
 // wake, a resume, the lid) counts as used, so both its clocks start over.
+//
+// Nothing goes dark while the Displays panel is open (`paused`), and a
+// display being shared stays up while the share lasts (`shares`). When the
+// bar stops, bar.service lights whatever it left off (MONITORS.saver_release).
 Scope {
     id: root
 
@@ -87,6 +91,76 @@ Scope {
         onTriggered: root.previewName = ""
     }
 
+    // Every display stays up while this is set. shell.qml sets it while the
+    // Displays panel is open: its changes, and the countdown that reverts
+    // them, are only safe on screens the user can see.
+    property bool paused: false
+
+    // Screen sharing (a call, a recording) shows a display to someone, so it
+    // must not go dark: a shared output is held up, and a shared window holds
+    // every display, since its frames are drawn with its monitor's. Hyprland
+    // reports any screencopy as a share until half a second after its last
+    // frame, a screenshot included, so a share counts once it has lasted.
+    // Keys are "type,name" as screencastv2 gives them (type monitor, region
+    // or window; name the output, or the window's title), values when the
+    // share began.
+    property var shares: ({})
+    // Those that have lasted, as { type, name }.
+    property var lasting: []
+    readonly property bool shareHoldsAll: root.lasting.some(s => s.type === "window")
+    readonly property var shareHolds: root.lasting.filter(s => s.type !== "window").map(s => s.name)
+
+    Connections {
+        target: Hyprland
+
+        function onRawEvent(event) {
+            if (event.name !== "screencastv2")
+                return;
+            // "<1|0>,<type>,<name>"; a window title may hold commas.
+            const data = String(event.data);
+            const a = data.indexOf(",");
+            const b = a < 0 ? -1 : data.indexOf(",", a + 1);
+            if (b < 0)
+                return;
+            const key = data.slice(a + 1);
+            const next = Object.assign({}, root.shares);
+            if (data.slice(0, a) === "1") {
+                if (!(key in next))
+                    next[key] = Date.now();
+            } else {
+                delete next[key];
+            }
+            root.shares = next;
+            root.settleShares();
+        }
+    }
+
+    Timer {
+        id: shareTimer
+
+        onTriggered: root.settleShares()
+    }
+
+    function settleShares() {
+        const now = Date.now();
+        const lasting = [];
+        let wait = 0;
+        for (const key of Object.keys(root.shares)) {
+            const left = Theme.saverShareMs - (now - root.shares[key]);
+            if (left <= 0) {
+                const at = key.indexOf(",");
+                lasting.push({ type: key.slice(0, at), name: key.slice(at + 1) });
+            } else if (wait === 0 || left < wait) {
+                wait = left;
+            }
+        }
+        root.lasting = lasting;
+        if (wait > 0) {
+            shareTimer.interval = wait + 50;
+            shareTimer.restart();
+        }
+    }
+
     Variants {
         model: Quickshell.screens
 
@@ -97,7 +171,8 @@ Scope {
 
             readonly property string name: slot.modelData?.name ?? ""
             readonly property int minutes: Screensaver.minutesByName[slot.name] ?? 0
-            readonly property bool armed: slot.minutes >= Screensaver.minMinutes
+            readonly property bool held: root.paused || root.shareHoldsAll || root.shareHolds.includes(slot.name)
+            readonly property bool armed: slot.minutes >= Screensaver.minMinutes && !slot.held
             readonly property bool focused: (Hyprland.focusedMonitor?.name ?? "") === slot.name
             readonly property var monitor: Hyprland.monitors.values.find(m => m.name === slot.name) ?? null
 
@@ -144,8 +219,11 @@ Scope {
                 }
             }
 
-            // A new number starts both clocks over.
-            onMinutesChanged: {
+            // A new number, or the end of a hold, starts both clocks over.
+            onMinutesChanged: slot.startOver()
+            onArmedChanged: slot.startOver()
+
+            function startOver() {
                 slot.away = false;
                 slot.blocked = false;
                 slot.slept = false;

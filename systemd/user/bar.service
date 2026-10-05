@@ -27,6 +27,11 @@ WorkingDirectory=%h
 ExecStartPre=-/bin/sh -c 'pgrep -x qs >/dev/null || pgrep -x quickshell >/dev/null || rm -rf -- "${XDG_RUNTIME_DIR}/quickshell/by-id"/*'
 # bin/bar --once resolves qs vs quickshell and carries the log rules.
 ExecStart=%h/.local/bin/bar --once
+# The bar is what wakes a display its screensaver turned off. With the bar
+# gone (a crash, a restart, a give-up after five starts) such an output would
+# stay off whatever is done on it, so every stop lights them again. Bounded,
+# and harmless once the compositor itself is gone at the end of a session.
+ExecStopPost=-/bin/sh -c 'timeout 2 hyprctl eval "if MONITORS and MONITORS.saver_release then MONITORS.saver_release() end" >/dev/null 2>&1'
 Restart=always
 RestartSec=1
 RestartSteps=5

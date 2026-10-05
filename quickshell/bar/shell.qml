@@ -20,10 +20,15 @@ ShellRoot {
 
     Cheatsheet {}
 
-    Displays {}
+    Displays {
+        id: displays
+    }
 
-    // Inert until a display is given a time in the Displays panel.
-    ScreensaverDpms {}
+    // Inert until a display is given a time in the Displays panel, and held
+    // off while that panel is open.
+    ScreensaverDpms {
+        paused: displays.open
+    }
 
     // Instantiating these starts the notification daemon: a singleton is only
     // created on first reference, otherwise the bus name stays unowned.

@@ -1681,6 +1681,19 @@ function M.saver(name, off)
     end
 end
 
+-- Lights every output that is off but the panel in a shut lid. bar.service
+-- runs it whenever the bar stops, since nothing else would wake an output
+-- the screensaver left off.
+function M.saver_release()
+    for _, monitor in ipairs(hl.get_monitors()) do
+        local name = monitor.name
+        if name and not monitor.dpms_status and classify(name) ~= "synthetic"
+            and not (lid_closed and classify(name) == "internal") then
+            hl.dispatch(hl.dsp.dpms({ action = "enable", monitor = name }))
+        end
+    end
+end
+
 -- ---------------------------------------------------------------------------
 -- Session end.
 -- ---------------------------------------------------------------------------
