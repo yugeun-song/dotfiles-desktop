@@ -900,7 +900,8 @@ Scope {
 
             // Bottom-right, clear of the card in the middle of the focused
             // screen. rules.lua orders this namespace over the other layers
-            // of its level, so the number shows through the card.
+            // of its level, so the number shows through the card and the
+            // screensaver's black alike.
             anchors {
                 bottom: true
                 right: true

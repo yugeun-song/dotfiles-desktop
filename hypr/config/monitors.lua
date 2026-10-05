@@ -1654,18 +1654,26 @@ end
 -- ---------------------------------------------------------------------------
 -- Screensaver.
 -- ---------------------------------------------------------------------------
--- The bar's screensaver (quickshell/bar/modules/ScreensaverDpms.qml)
--- decides when a display is unused and calls this to turn it off or back on.
+-- The bar's screensaver (quickshell/bar/modules/ScreensaverDpms.qml) blacks
+-- an unused display out by itself and calls this only once nobody is at the
+-- keys, to turn a display off, and when it is used again, to turn it back on.
 -- DPMS only: the output stays enabled with its workspaces and windows, and
 -- nothing is suspended or locked. While another output is lit, input does
 -- not wake the dark one (rearm_dpms); the bar wakes it when focus reaches it.
 -- Once every output is dark, the first key or pointer motion wakes them all.
 -- The panel in a shut lid stays dark whatever the bar asks.
-function M.saver(name, dark)
+--
+-- Each call stalls the whole compositor (0.56.2, aquamarine 0.15.1, measured
+-- on the Lunar Lake panel 2026-10-05): the commit is a blocking modeset on
+-- the main thread (about 0.4 s off, 0.6 s on), and every change of an
+-- output's enabled state makes aquamarine probe every connector again (up
+-- to 1.1 s). Hence the bar's black for a display unused while someone works
+-- on another.
+function M.saver(name, off)
     if type(name) ~= "string" or not hl.get_monitor(name) then
         return
     end
-    if dark then
+    if off then
         hl.dispatch(hl.dsp.dpms({ action = "disable", monitor = name }))
         rearm_dpms()
     elseif not (lid_closed and classify(name) == "internal") then

@@ -36,9 +36,20 @@ hl.layer_rule({ match = { namespace = "^(quickshell:osd)$" }, blur = false })
 -- there; a popin on each move flashed the caps already up.
 hl.layer_rule({ match = { namespace = "^(quickshell:keys)$" }, no_anim = true })
 
+-- Hyprland draws the layers of a level by descending order, so the lowest
+-- order is drawn last, on top (0.56.2, Renderer.cpp arrangeLayersForMonitor).
+
+-- The screensaver's black: a 1x1 transparent layer whose dim_around fills
+-- its output with #000000 (decoration.dim_around = 1.0, general.lua). Below
+-- zero so it covers every other overlay, toasts included. No animation:
+-- waking is the black going at once. Never above_lock: the lock screen must
+-- still draw over it, since a screensaver is not a lock.
+hl.layer_rule({ match = { namespace = "^(quickshell:screensaver)$" }, dim_around = true, no_anim = true, order = -10 })
+
 -- The Identify badges go over every other layer of their level (the
--- Displays card), so a numbered screen can always be read.
-hl.layer_rule({ match = { namespace = "^(quickshell:displays-identify)$" }, order = 2 })
+-- Displays card, the screensaver's black), so a numbered screen can always
+-- be read.
+hl.layer_rule({ match = { namespace = "^(quickshell:displays-identify)$" }, order = -20 })
 
 -- The capture overlays (slurp's namespace is "selection") appear and vanish
 -- at once. With the popin they came up 100 ms late, and Hyprland releases

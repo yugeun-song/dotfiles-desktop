@@ -215,10 +215,17 @@ shows a knob under the pointer.
 **Screensaver.** Off everywhere unless a display's switch in the Displays
 panel is turned on, with a time from 1 minute to a day (Apply writes it; the
 revert countdown does not cover it). After that long with nothing done on
-the display, that display alone is turned off (DPMS). Nothing is drawn, not
-even black, since a backlit panel glows in a dark room whatever it shows.
-The output stays enabled with its windows, nothing is locked or suspended,
-and every program keeps running. "Nothing done" is derived,
+the display, it goes dark in one of two stages, and nothing but black is
+ever shown. While someone works on another display, Hyprland fills it with
+an exact #000000 (a 1x1 layer with `dim_around` at full strength), which an
+OLED panel shows as pixels switched off; it costs no modeset and comes and
+goes at once. Once nobody is at the keys, it is turned off (DPMS), since a
+backlit panel glows even when black. Every DPMS change stalls the whole
+compositor for half a second to a second and a half (a blocking modeset,
+then aquamarine probing every connector), so off waits for an empty seat,
+and a display that is off stays off until it is used rather than waking
+to black. The output stays enabled with its windows, nothing is locked or
+suspended, and every program keeps running. "Nothing done" is derived,
 since Wayland has no per-output idle: input goes to the focused monitor, so
 a display is in use while it is focused and the seat is not idle. The
 compositor's idle notification, counting input alone, covers the focused
@@ -226,25 +233,25 @@ display and the seat as a whole; for a display focus has left, the bar keeps
 its own clock. When either runs out, the bar checks `hyprctl clients` for a
 window that inhibits idle (anywhere for the seat; on that display for the
 other, such as a film on the external while the panel is typed on) before
-turning anything off. The bar asks rather than using the compositor's
+darkening anything. The bar asks rather than using the compositor's
 inhibitor-aware notification because Hyprland restarts that one on every
 focus change, so a window opening or closing at night turned the screen
 back on. Moving the pointer onto a display or switching to one of its
-workspaces (`Super+digit`) turns it on; a key or click turns on the focused
-display and leaves the others off, and reaches the window under it, since
-nothing covers a dark display. Once every display is off, the first key or
-pointer motion turns them all on (Hyprland's `*_enables_dpms`, which
-`config/monitors.lua` keeps from waking a dark display while another is
-lit). A display turned on by anything else (that wake, a resume, the lid)
-starts its clocks over and goes off again after its time. The saver never
-asks for the lock, and `Ctrl+Alt+L` locks as usual. Inhibitors the
-compositor does not know about (a browser that only holds the D-Bus
-screensaver inhibit) are not seen; a window rule with `idle_inhibit`
-(rules.lua has one for mpv and vlc) makes one visible. Times live in
+workspaces (`Super+digit`) lights it, at once from black and after the
+panel's power-up from off; a key or click lights the focused display and
+leaves the others dark, and reaches the window under it. Once every display
+is off, the first key or pointer motion turns them all on (Hyprland's
+`*_enables_dpms`, which `config/monitors.lua` keeps from waking a dark
+display while another is lit). A display turned on by anything else (that
+wake, a resume, the lid) starts its clocks over. The saver never asks for
+the lock, and `Ctrl+Alt+L` locks as usual. Inhibitors the compositor does
+not know about (a browser that only holds the D-Bus screensaver inhibit)
+are not seen; a window rule with `idle_inhibit` (rules.lua has one for mpv
+and vlc) makes one visible. Times live in
 `~/.local/state/quickshell/bar/screensaver`, one `<selector> TAB <minutes>`
 line per display with the overrides' selectors.
 `qs -p ~/.config/quickshell/bar ipc call screensaver preview <output> 10`
-turns a display off for ten seconds.
+shows the black for ten seconds, `previewOff` turns the display off.
 
 Before editing the QML: Nerd Font glyphs are written as code points, because
 the Material ranges are astral and turn into tofu when re-encoded; quickshell's

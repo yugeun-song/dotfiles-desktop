@@ -61,6 +61,12 @@ hl.config({
             range = 12,
             render_power = 2,
         },
+        -- Full strength: the bar's screensaver blacks a display out with a
+        -- dim_around layer rule (rules.lua), so Hyprland itself draws an
+        -- exact #000000 over the output, and no client buffer the size of
+        -- the screen is needed. Nothing else uses dim_around; a window rule
+        -- that did would black out everything around its window.
+        dim_around = 1.0,
     },
 
     animations = {
@@ -172,6 +178,10 @@ hl.animation({ leaf = "windowsMove",         enabled = true, speed = 1.0,  bezie
 hl.animation({ leaf = "fade",                enabled = true, speed = 1.0,  bezier = "emphasizedDecel" })
 hl.animation({ leaf = "fadeIn",              enabled = true, speed = 1.0,  bezier = "emphasizedDecel" })
 hl.animation({ leaf = "fadeOut",             enabled = true, speed = 0.65, bezier = "emphasizedDecel" })
+-- Off: a DPMS wake already waits five frames, after the panel has taken half
+-- a second to power up (measured 2026-10-05), and a fade only delays the
+-- picture further. Going off happens behind the screensaver's black anyway.
+hl.animation({ leaf = "fadeDpms",            enabled = false })
 
 hl.animation({ leaf = "border",              enabled = true, speed = 3.3,  bezier = "emphasizedDecel" })
 

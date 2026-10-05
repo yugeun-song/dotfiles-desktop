@@ -6,7 +6,8 @@ import Quickshell.Io
 import Quickshell.Hyprland
 
 // The screensaver's per-display setting: after how many minutes without input
-// on a display it is turned off, 0 for never. Off everywhere by default, on
+// on a display the saver takes it (black while someone works on another, off
+// when nobody is at the keys), 0 for never. Off everywhere by default, on
 // this machine and on the next one: the file is state (XDG_STATE_HOME), never
 // installed or tracked, and a missing file means off. The Displays panel
 // writes it; modules/ScreensaverDpms.qml reads the resolved minutes from here.

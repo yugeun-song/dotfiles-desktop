@@ -7,25 +7,34 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.services
 
-// A screensaver per display that turns the display off (DPMS, through
-// MONITORS.saver in hypr/config/monitors.lua) once nothing has been done on
-// it for its set number of minutes (services/Screensaver.qml; off unless
-// set). It shows nothing: the screens are left on overnight in a room
-// someone sleeps in, where a backlit panel glows even showing black and a
-// clock is a light of its own. The output stays enabled and keeps its
-// windows, and nothing else stops: no suspend, no lock, programs run on
-// behind the dark screen.
+// A screensaver per display, in two stages, once the display has gone
+// unused for its set number of minutes (services/Screensaver.qml; off unless
+// set). Nothing but black is ever shown: the screens are left on overnight
+// in a room someone sleeps in, where a clock is a light of its own. The
+// output stays enabled and keeps its windows, and nothing else stops: no
+// suspend, no lock, programs run on behind the dark screen.
 //
-// Wayland has no per-output idle, so "nothing done on this display" is
-// derived: input goes to the focused monitor (the pointer's, and the
-// keyboard's through the focused window), so a display is in use exactly
-// while it is the focused monitor and the seat is not idle. Hence two
-// clocks per display. The seat clock is the compositor's (ext-idle-notify):
-// no input for the display's minutes means every display is unused, this
-// one included, unless a visible window anywhere inhibits idle (a film).
-// The away clock starts when focus leaves the display and is cancelled when
-// it returns; when it runs out the display is unused unless a window on it
-// inhibits idle (a film on the external while the panel is typed on).
+//   black  The display is unused while someone works on another. Hyprland
+//          fills it with #000000 (a 1x1 layer with dim_around, rules.lua),
+//          which an OLED panel shows as pixels switched off. No modeset, so
+//          it comes and goes at once.
+//   off    Nobody is at the keys. DPMS, through MONITORS.saver in
+//          hypr/config/monitors.lua, since a backlit panel glows even when
+//          black. Every DPMS change stalls the whole compositor for half a
+//          second to a second and a half (see M.saver), which is why off
+//          waits for an empty seat, and why a display that is off stays off
+//          until it is used instead of waking to black.
+//
+// Wayland has no per-output idle, so "unused" is derived: input goes to the
+// focused monitor (the pointer's, and the keyboard's through the focused
+// window), so a display is in use exactly while it is the focused monitor
+// and the seat is not idle. Hence two clocks per display. The seat clock is
+// the compositor's (ext-idle-notify): no input for the display's minutes
+// means every display is unused, this one included, unless a visible window
+// anywhere inhibits idle (a film). The away clock starts when focus leaves
+// the display and is cancelled when it returns; when it runs out the display
+// is unused unless a window on it inhibits idle (a film on the external
+// while the panel is typed on).
 //
 // Both clocks ask `hyprctl clients` about inhibitors when they run out. The
 // compositor's inhibitor-aware clock would do the seat's asking itself, but
@@ -36,29 +45,41 @@ import qs.services
 // not wake them.
 //
 // Moving the pointer onto a dark display or switching to a workspace on it
-// (Super+digit) makes it the focused monitor and turns it on; a press or
-// click anywhere wakes the seat and turns the focused display on, and the
-// others stay dark until they are used. Once every display is dark the
-// compositor's own wake takes over (*_enables_dpms in general.lua): the
-// first key or pointer motion turns them all on. A display turned on by
-// anything but this module (that wake, a resume, the lid) counts as used,
-// so both its clocks start over and it goes dark again after its minutes.
+// (Super+digit) makes it the focused monitor and lights it: at once from
+// black, after the panel's power-up from off. A press or click anywhere
+// wakes the seat and lights the focused display; the others stay dark until
+// they are used. Once every display is off, the compositor's own wake takes
+// over (*_enables_dpms in general.lua): the first key or pointer motion
+// turns them all on. A display turned on by anything but this module (that
+// wake, a resume, the lid) counts as used, so both its clocks start over.
 Scope {
     id: root
 
-    // Turns a display off for a while, from a shell:
+    // Either stage for a while, from a shell:
     //   qs -p ~/.config/quickshell/bar ipc call screensaver preview eDP-1 10
+    //   qs -p ~/.config/quickshell/bar ipc call screensaver previewOff eDP-1 10
     IpcHandler {
         target: "screensaver"
 
         function preview(name: string, seconds: int): void {
-            root.previewName = name;
-            previewTimer.interval = Math.max(1, seconds || 10) * 1000;
-            previewTimer.restart();
+            root.startPreview(name, seconds, "black");
+        }
+
+        function previewOff(name: string, seconds: int): void {
+            root.startPreview(name, seconds, "off");
         }
     }
 
     property string previewName: ""
+    // "black" or "off".
+    property string previewStage: "black"
+
+    function startPreview(name, seconds, stage) {
+        root.previewName = name;
+        root.previewStage = stage;
+        previewTimer.interval = Math.max(1, seconds || 10) * 1000;
+        previewTimer.restart();
+    }
 
     Timer {
         id: previewTimer
@@ -80,29 +101,46 @@ Scope {
             readonly property bool focused: (Hyprland.focusedMonitor?.name ?? "") === slot.name
             readonly property var monitor: Hyprland.monitors.values.find(m => m.name === slot.name) ?? null
 
+            readonly property bool previewing: root.previewName === slot.name
+
             // The seat clock has run out and no window inhibited idle at the
             // last look; cleared by input.
             property bool rested: false
+            // Went off for an empty seat and has not been used since. Never
+            // written from the wantOff handler (ask), which would make a
+            // binding loop of wantOff.
+            property bool slept: false
             // The away clock has run out; cleared when focus returns.
             property bool away: false
             // A window on this display inhibited idle at the last look.
             property bool blocked: false
-            // When this display was last asked to go dark.
-            property real darkSince: 0
+            // This module turned the display off and has not turned it on.
+            property bool off: false
+            // When this display was last asked to turn off.
+            property real offSince: 0
 
-            readonly property bool dark: root.previewName === slot.name
-                || (slot.armed && (slot.rested || (slot.away && !slot.focused && !slot.blocked)))
+            // Unused while someone works elsewhere: black.
+            readonly property bool unused: slot.armed && slot.away && !slot.focused && !slot.blocked
+            readonly property bool wantOff: (slot.previewing && root.previewStage === "off")
+                || (slot.armed && (slot.rested || (slot.slept && slot.unused)))
+            readonly property bool dark: slot.wantOff || slot.unused || slot.previewing
 
-            onDarkChanged: slot.ask(slot.dark)
+            onWantOffChanged: slot.ask(slot.wantOff)
 
-            // A display an earlier instance left dark (a reload, a crash)
-            // would otherwise stay dark with nothing here knowing of it.
+            onRestedChanged: {
+                if (slot.rested)
+                    slot.slept = true;
+            }
+
+            // A display an earlier instance left off (a reload, a crash)
+            // would otherwise stay off with nothing here knowing of it.
             Component.onCompleted: slot.ask(false)
 
             onFocusedChanged: {
                 if (slot.focused) {
                     slot.away = false;
                     slot.blocked = false;
+                    slot.slept = false;
                 }
             }
 
@@ -110,6 +148,7 @@ Scope {
             onMinutesChanged: {
                 slot.away = false;
                 slot.blocked = false;
+                slot.slept = false;
             }
 
             // A Lua dispatch on the IPC socket, no process. The name goes
@@ -118,12 +157,13 @@ Scope {
             // without MONITORS.saver (install.sh reloads the bar before the
             // compositor) is passed over: a failing dispatch puts an error
             // bar on screen until the next reload.
-            function ask(dark) {
+            function ask(off) {
                 if (!/^[A-Za-z0-9._-]+$/.test(slot.name))
                     return;
-                if (dark)
-                    slot.darkSince = Date.now();
-                Hyprland.dispatch(`function() if MONITORS and MONITORS.saver then MONITORS.saver("${slot.name}", ${dark}) end end`);
+                slot.off = off;
+                if (off)
+                    slot.offSince = Date.now();
+                Hyprland.dispatch(`function() if MONITORS and MONITORS.saver then MONITORS.saver("${slot.name}", ${off}) end end`);
             }
 
             IdleMonitor {
@@ -144,10 +184,13 @@ Scope {
                         return;
                     }
                     slot.rested = false;
-                    // Input after an idle spell. If every display was dark,
+                    // The input was on this display, or it is in use anyway.
+                    if (!slot.unused)
+                        slot.slept = false;
+                    // Input after an idle spell. If every display was off,
                     // the compositor has just turned them all on; reading
                     // the state now lets reconcile see it at once.
-                    if (slot.dark)
+                    if (slot.off)
                         Hyprland.refreshMonitors();
                 }
             }
@@ -263,11 +306,11 @@ Scope {
             }
 
             // Nothing announces a DPMS change either: while this display is
-            // meant to be dark, its real state is read now and then.
+            // off, its real state is read now and then.
             Timer {
                 interval: Theme.saverRecheckMs
                 repeat: true
-                running: slot.dark
+                running: slot.off
 
                 onTriggered: Hyprland.refreshMonitors()
             }
@@ -280,23 +323,46 @@ Scope {
                 }
             }
 
-            // Lit while meant to be dark, and not in a reading that may
+            // On while meant to be off, and not in a reading that may
             // predate this module's own request: something else turned it
             // on, which counts as use. Both clocks start over; the seat's by
             // re-creating the idle notification, since only input resets it.
             function reconcile() {
-                if (!slot.dark || slot.monitor?.lastIpcObject?.dpmsStatus !== true)
+                if (!slot.off || slot.monitor?.lastIpcObject?.dpmsStatus !== true)
                     return;
-                if (Date.now() - slot.darkSince < Theme.saverSettleMs)
+                if (Date.now() - slot.offSince < Theme.saverSettleMs)
                     return;
-                if (root.previewName === slot.name) {
+                if (slot.previewing) {
                     previewTimer.stop();
                     root.previewName = "";
                 }
                 slot.rested = false;
+                slot.slept = false;
                 slot.away = false;
                 slot.blocked = false;
                 restart.restart();
+            }
+
+            // The black: Hyprland fills the output with #000000 around this
+            // one pixel (dim_around, rules.lua), so nothing the size of the
+            // screen is allocated here. Kept while off as well, so that off
+            // begins and ends behind black rather than over the desktop.
+            LazyLoader {
+                active: slot.dark
+
+                PanelWindow {
+                    screen: slot.modelData
+                    color: "transparent"
+                    implicitWidth: 1
+                    implicitHeight: 1
+                    exclusionMode: ExclusionMode.Ignore
+                    focusable: false
+                    WlrLayershell.layer: WlrLayer.Overlay
+                    WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
+                    WlrLayershell.namespace: "quickshell:screensaver"
+                    // Not even its one pixel takes the pointer.
+                    mask: Region {}
+                }
             }
         }
     }

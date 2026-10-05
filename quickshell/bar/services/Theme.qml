@@ -259,7 +259,7 @@ Singleton {
     readonly property int keysSlideMs:     140
 
     // ---------------------------------------------------------------------
-    // The screensaver (modules/ScreensaverDpms.qml): the display turned off.
+    // The screensaver (modules/ScreensaverDpms.qml): black, then off.
     // ---------------------------------------------------------------------
     // How often the saver asks again about what changes without an event:
     // an idle inhibitor going away, a dark display turned on by something
