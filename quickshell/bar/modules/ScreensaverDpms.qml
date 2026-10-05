@@ -26,9 +26,11 @@ import qs.services
 //          until it is used instead of waking to black.
 //
 // Wayland has no per-output idle, so "unused" is derived: input goes to the
-// focused monitor (the pointer's, and the keyboard's through the focused
-// window), so a display is in use exactly while it is the focused monitor
-// and the seat is not idle. Hence two clocks per display. The seat clock is
+// pointer's screen (Hyprland's focused monitor) and to the screen of the
+// window taking the keys, which Hyprland leaves behind when the pointer
+// crosses onto another screen's bar or empty space. A display is in use
+// exactly while it is one of those and the seat is not idle. Hence two
+// clocks per display. The seat clock is
 // the compositor's (ext-idle-notify): no input for the display's minutes
 // means every display is unused, this one included, unless a visible window
 // anywhere inhibits idle (a film). The away clock starts when focus leaves
@@ -101,9 +103,12 @@ Scope {
     // every display, since its frames are drawn with its monitor's. Hyprland
     // reports any screencopy as a share until half a second after its last
     // frame, a screenshot included, so a share counts once it has lasted.
-    // Keys are "type,name" as screencastv2 gives them (type monitor, region
-    // or window; name the output, or the window's title), values when the
-    // share began.
+    // Keyed "monitor,<output>" or "region,<output>" as screencastv2 gives
+    // them, and "window," for every window share: Hyprland names those by
+    // the window's title as it is when the window is next resized, so a
+    // share may stop under another name than it started with. Values are
+    // { since, count }: when the first of the shares under the key began,
+    // and how many are on (Hyprland sends one start and one stop each).
     property var shares: ({})
     // Those that have lasted, as { type, name }.
     property var lasting: []
@@ -122,13 +127,18 @@ Scope {
             const b = a < 0 ? -1 : data.indexOf(",", a + 1);
             if (b < 0)
                 return;
-            const key = data.slice(a + 1);
+            const type = data.slice(a + 1, b);
+            const key = type === "window" ? "window," : data.slice(a + 1);
             const next = Object.assign({}, root.shares);
+            const entry = next[key];
             if (data.slice(0, a) === "1") {
-                if (!(key in next))
-                    next[key] = Date.now();
-            } else {
-                delete next[key];
+                next[key] = entry ? { since: entry.since, count: entry.count + 1 } : { since: Date.now(), count: 1 };
+            } else if (entry) {
+                // A stop with no start seen began before this instance.
+                if (entry.count > 1)
+                    next[key] = { since: entry.since, count: entry.count - 1 };
+                else
+                    delete next[key];
             }
             root.shares = next;
             root.settleShares();
@@ -146,7 +156,7 @@ Scope {
         const lasting = [];
         let wait = 0;
         for (const key of Object.keys(root.shares)) {
-            const left = Theme.saverShareMs - (now - root.shares[key]);
+            const left = Theme.saverShareMs - (now - root.shares[key].since);
             if (left <= 0) {
                 const at = key.indexOf(",");
                 lasting.push({ type: key.slice(0, at), name: key.slice(at + 1) });
@@ -173,7 +183,11 @@ Scope {
             readonly property int minutes: Screensaver.minutesByName[slot.name] ?? 0
             readonly property bool held: root.paused || root.shareHoldsAll || root.shareHolds.includes(slot.name)
             readonly property bool armed: slot.minutes >= Screensaver.minMinutes && !slot.held
+            // In use: the pointer's screen (Hyprland's focused monitor), or
+            // the one the keys go to, which keeps its window when the pointer
+            // rests on another screen's bar or empty space (Screens.keyboard).
             readonly property bool focused: (Hyprland.focusedMonitor?.name ?? "") === slot.name
+                || (Screens.keyboard?.name ?? "") === slot.name
             readonly property var monitor: Hyprland.monitors.values.find(m => m.name === slot.name) ?? null
 
             readonly property bool previewing: root.previewName === slot.name

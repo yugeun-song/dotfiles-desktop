@@ -226,8 +226,9 @@ then aquamarine probing every connector), so off waits for an empty seat,
 and a display that is off stays off until it is used rather than waking
 to black. The output stays enabled with its windows, nothing is locked or
 suspended, and every program keeps running. "Nothing done" is derived,
-since Wayland has no per-output idle: input goes to the focused monitor, so
-a display is in use while it is focused and the seat is not idle. The
+since Wayland has no per-output idle: input goes to the pointer's screen and
+to the screen of the window taking the keys, so a display is in use while it
+is one of those and the seat is not idle. The
 compositor's idle notification, counting input alone, covers the focused
 display and the seat as a whole; for a display focus has left, the bar keeps
 its own clock. When either runs out, the bar checks `hyprctl clients` for a
