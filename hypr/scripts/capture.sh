@@ -153,15 +153,23 @@ finish() {
 # output, run together, instead of one for the whole layout, which is drawn
 # at the highest scale: that enlarged and blurred the lower-scale outputs and
 # took longer (70 ms against 40 ms on two screens).
+# An output that is off (DPMS, as the bar's screensaver leaves an unused
+# display) draws no frames, so grim waited for one until its deadline and
+# every region shot failed. It is left out: there is nothing on it to see,
+# and a selection reaching onto it gets black there, as where no output lies.
 grab_frames() {
-    local i name x y scale busy=0 pids=() failed=()
-    NAMES=() XS=() YS=() SCALES=() FWS=() FHS=()
-    while read -r name x y scale; do
+    local i name x y scale lit busy=0 pids=() failed=()
+    NAMES=() XS=() YS=() SCALES=() FWS=() FHS=() DARK=()
+    while read -r name x y scale lit; do
+        if [[ "$lit" == false ]]; then
+            DARK+=("$name")
+            continue
+        fi
         NAMES+=("$name") XS+=("$x") YS+=("$y") SCALES+=("$scale")
     done < <(timeout "$GRAB_TIMEOUT" hyprctl -j monitors 2>/dev/null | jq -r \
         '.[] | select(.disabled != true and (.mirrorOf // "none") == "none")
-             | "\(.name) \(.x) \(.y) \(.scale)"' 2>/dev/null)
-    (( ${#NAMES[@]} )) || die "hyprctl listed no outputs"
+             | "\(.name) \(.x) \(.y) \(.scale) \(.dpmsStatus != false)"' 2>/dev/null)
+    (( ${#NAMES[@]} )) || die "hyprctl listed no lit outputs"
 
     for i in "${!NAMES[@]}"; do
         timeout "$GRAB_TIMEOUT" grim -t ppm -o "${NAMES[i]}" "$RUN/frame.$$.$i.ppm" \
@@ -283,7 +291,10 @@ cut_selection() {
         }')
     case $? in
         0) ;;
-        3) die "the selection lies on no captured output" ;;
+        3)
+            (( ${#DARK[@]} )) && die "the selection lies on no lit output (off: ${DARK[*]})"
+            die "the selection lies on no captured output"
+            ;;
         *) die "could not plan the crop" ;;
     esac
     mapfile -t args <<<"$plan"
