@@ -259,23 +259,15 @@ Singleton {
     readonly property int keysSlideMs:     140
 
     // ---------------------------------------------------------------------
-    // The screensaver (modules/ScreensaverWindows.qml): black, a clock that moves.
+    // The screensaver (modules/ScreensaverDpms.qml): the display turned off.
     // ---------------------------------------------------------------------
-    // The lock screen's sizes (88 and 19), a step larger for the distance a
-    // screen at rest is read from.
-    readonly property int saverTimeSize: root.px(96)
-    readonly property int saverDateSize: root.px(19)
-    // Keeps the clock off the edges of the screen, where a bezel would sit
-    // on it.
-    readonly property int saverMargin:   root.px(96)
-    readonly property int saverFadeMs:   500
-    // How often a display held back by an idle inhibitor is asked about
-    // again: nothing announces the inhibitor going away.
+    // How often the saver asks again about what changes without an event:
+    // an idle inhibitor going away, a dark display turned on by something
+    // else.
     readonly property int saverRecheckMs: 60000
-    // The bar's ink and its dimmed readouts; the clock moves every minute,
-    // which is what an OLED panel needs, so the ink need not be faint.
-    readonly property color saverTime: root.fg
-    readonly property color saverDate: root.surfaceFaint
+    // A display's state read this soon after asking for it to go dark may
+    // predate the request, so it is not taken as the display woken.
+    readonly property int saverSettleMs: 5000
 
     readonly property int centreWidth:      root.px(452)
     readonly property int centreRadius:     root.px(16)

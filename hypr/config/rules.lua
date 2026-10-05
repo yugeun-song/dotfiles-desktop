@@ -32,17 +32,12 @@ hl.layer_rule({ match = { namespace = "^(quickshell)$" }, blur = false })
 -- light squares.
 hl.layer_rule({ match = { namespace = "^(quickshell:osd)$" }, blur = false })
 
--- The screensaver is an opaque black layer: blur would cost a pass, and the
--- default popin reads wrong on a screen-sized surface. Never above_lock: the
--- lock screen must draw over it, since a screensaver is not a lock.
-hl.layer_rule({ match = { namespace = "^(quickshell:screensaver)$" }, blur = false, animation = "fade" })
-
 -- The key strip is recreated on the other screen whenever the typing moves
 -- there; a popin on each move flashed the caps already up.
 hl.layer_rule({ match = { namespace = "^(quickshell:keys)$" }, no_anim = true })
 
 -- The Identify badges go over every other layer of their level (the
--- Displays card, a screensaver), so a numbered screen can always be read.
+-- Displays card), so a numbered screen can always be read.
 hl.layer_rule({ match = { namespace = "^(quickshell:displays-identify)$" }, order = 2 })
 
 -- The capture overlays (slurp's namespace is "selection") appear and vanish

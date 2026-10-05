@@ -87,8 +87,9 @@ hl.config({
         allow_session_lock_restore = true,
         -- Any input wakes DPMS-off outputs; otherwise a screen off after the
         -- lid or a suspend hides the lock prompt. monitors.lua re-arms the
-        -- compositor-wide DPMS state so this does not wake a shut panel when
-        -- an external is lit.
+        -- compositor-wide DPMS state while an output is lit, so this does not
+        -- wake a shut panel or a display the screensaver turned off; once
+        -- every output is dark, it wakes them all.
         mouse_move_enables_dpms = true,
         key_press_enables_dpms = true,
     },

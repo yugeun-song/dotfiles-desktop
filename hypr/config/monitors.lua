@@ -1566,14 +1566,27 @@ end)
 -- ---------------------------------------------------------------------------
 -- Lid.
 -- ---------------------------------------------------------------------------
+-- A per-output DPMS request also sets the compositor-wide state (0.56.2), so
+-- after an off, with *_enables_dpms on (general.lua), any input would re-light
+-- every dark output: the panel in a shut lid, a display the screensaver turned
+-- off. Enabling an output that is lit already changes nothing on it and resets
+-- that state to on. A dark output is never the one enabled, and with nothing
+-- lit the state stays off, so input still wakes a desk that went all dark.
+local function rearm_dpms()
+    for _, monitor in ipairs(hl.get_monitors()) do
+        local name = monitor.name
+        if name and monitor.dpms_status and classify(name) ~= "synthetic" then
+            hl.dispatch(hl.dsp.dpms({ action = "enable", monitor = name }))
+            return
+        end
+    end
+end
+
 -- Display only: no suspend, input untouched. DPMS darkens the panel at once;
 -- beside an external the evaluation that follows also turns it off, which
 -- moves workspace 1 to a screen in view. Alone the panel stays enabled, as
 -- re-enabling is a modeset. Per output, and resolved first: dpms with an
 -- unresolvable name silently hits every output.
--- A per-output DPMS request also sets the compositor-wide state (0.56.2), so
--- with *_enables_dpms on (general.lua) any input would re-light the panel.
--- Enabling an already-lit external afterwards resets that state to on.
 local function dpms_internal(action)
     local state = present()
     for _, name in ipairs(state.internal) do
@@ -1581,8 +1594,8 @@ local function dpms_internal(action)
             hl.dispatch(hl.dsp.dpms({ action = action, monitor = name }))
         end
     end
-    if action == "disable" and state.external[1] and hl.get_monitor(state.external[1]) then
-        hl.dispatch(hl.dsp.dpms({ action = "enable", monitor = state.external[1] }))
+    if action == "disable" then
+        rearm_dpms()
     end
 end
 
@@ -1636,6 +1649,28 @@ function M.resume()
         end
     end
     schedule("resume", policy.settle_removed_ms)
+end
+
+-- ---------------------------------------------------------------------------
+-- Screensaver.
+-- ---------------------------------------------------------------------------
+-- The bar's screensaver (quickshell/bar/modules/ScreensaverDpms.qml)
+-- decides when a display is unused and calls this to turn it off or back on.
+-- DPMS only: the output stays enabled with its workspaces and windows, and
+-- nothing is suspended or locked. While another output is lit, input does
+-- not wake the dark one (rearm_dpms); the bar wakes it when focus reaches it.
+-- Once every output is dark, the first key or pointer motion wakes them all.
+-- The panel in a shut lid stays dark whatever the bar asks.
+function M.saver(name, dark)
+    if type(name) ~= "string" or not hl.get_monitor(name) then
+        return
+    end
+    if dark then
+        hl.dispatch(hl.dsp.dpms({ action = "disable", monitor = name }))
+        rearm_dpms()
+    elseif not (lid_closed and classify(name) == "internal") then
+        hl.dispatch(hl.dsp.dpms({ action = "enable", monitor = name }))
+    end
 end
 
 -- ---------------------------------------------------------------------------

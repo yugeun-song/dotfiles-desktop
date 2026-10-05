@@ -6,10 +6,10 @@ import Quickshell.Io
 import Quickshell.Hyprland
 
 // The screensaver's per-display setting: after how many minutes without input
-// on a display its saver comes up, 0 for never. Off everywhere by default, on
+// on a display it is turned off, 0 for never. Off everywhere by default, on
 // this machine and on the next one: the file is state (XDG_STATE_HOME), never
 // installed or tracked, and a missing file means off. The Displays panel
-// writes it; modules/ScreensaverWindows.qml reads the resolved minutes from here.
+// writes it; modules/ScreensaverDpms.qml reads the resolved minutes from here.
 //
 // One line per display, <selector> TAB <minutes>, the selector as in the
 // monitor overrides: the description as `hyprctl monitors` prints it with
