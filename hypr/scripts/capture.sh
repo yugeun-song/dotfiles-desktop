@@ -342,9 +342,22 @@ case "$MODE" in
 
     window)
         need grim hyprctl jq
-        geom=$(timeout "$GRAB_TIMEOUT" hyprctl activewindow -j 2>/dev/null \
-            | jq -r 'select(.at and .size) | "\(.at[0]),\(.at[1]) \(.size[0])x\(.size[1])"' 2>/dev/null)
-        [[ "$geom" =~ ^-?[0-9]+,-?[0-9]+\ [0-9]+x[0-9]+$ ]] || die "no focused window"
+        # The window as far as it lies on lit outputs: grim captures every
+        # output a geometry touches, and a floating window reaching onto one
+        # that is off would leave it waiting for a frame (see grab_frames).
+        geom=$( { timeout "$GRAB_TIMEOUT" hyprctl activewindow -j; timeout "$GRAB_TIMEOUT" hyprctl monitors -j; } 2>/dev/null \
+            | jq -rs '
+                (.[0] | select(.at and .size)) as $w
+                | [ .[1][] | select(.disabled != true and (.mirrorOf // "none") == "none" and .dpmsStatus != false)
+                    | (if .transform % 2 == 1 then [.height, .width] else [.width, .height] end) as [$pw, $ph]
+                    | [([$w.at[0], .x] | max), ([$w.at[1], .y] | max),
+                       ([$w.at[0] + $w.size[0], .x + ($pw / .scale | round)] | min),
+                       ([$w.at[1] + $w.size[1], .y + ($ph / .scale | round)] | min)]
+                    | select(.[0] < .[2] and .[1] < .[3]) ]
+                | select(length > 0)
+                | [(map(.[0]) | min), (map(.[1]) | min), (map(.[2]) | max), (map(.[3]) | max)]
+                | "\(.[0]),\(.[1]) \(.[2] - .[0])x\(.[3] - .[1])"' 2>/dev/null)
+        [[ "$geom" =~ ^-?[0-9]+,-?[0-9]+\ [0-9]+x[0-9]+$ ]] || die "no focused window on a lit output"
         begin_shot
         timeout "$GRAB_TIMEOUT" grim -g "$geom" "$PART" </dev/null >/dev/null 2>&1 \
             || die "grim could not capture the window"
