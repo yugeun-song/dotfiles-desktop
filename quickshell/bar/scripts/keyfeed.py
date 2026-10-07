@@ -5,6 +5,12 @@ This is the only part of the key visualiser that needs a permission, and the
 permission is membership of the input group rather than root or a polkit agent.
 Everything above it is ordinary QML.
 
+What it reads goes nowhere but these lines on stdout, a pipe to the bar,
+which keeps at most five chords, each for under a second. It opens no socket
+and no file but the devices, the kernel's key header and sysfs, writes no
+file, logs no key, and leaves no core (see undumpable). It runs only while
+the overlay is on.
+
 The output is a line protocol on purpose. It is the seam that lets this be
 replaced by a Rust binary later without the overlay changing at all: anything
 that prints the same lines will do.
@@ -149,9 +155,28 @@ def emit(payload):
     sys.stdout.flush()
 
 
+def undumpable():
+    """Keep this process's memory to itself.
+
+    It holds raw key events, and freed memory is not cleared: a core dump
+    would keep the last of them on disk (systemd-coredump stores the whole
+    process), and with kernel.yama.ptrace_scope at 0 any process of the user
+    could attach and read them. A process that is not dumpable leaves no core
+    and cannot be traced by an unprivileged one. Best effort: where prctl is
+    missing the reader runs as before.
+    """
+    try:
+        import ctypes
+        PR_SET_DUMPABLE = 4
+        ctypes.CDLL(None, use_errno=True).prctl(PR_SET_DUMPABLE, 0, 0, 0, 0)
+    except (OSError, AttributeError):
+        pass
+
+
 def main():
     signal.signal(signal.SIGINT, lambda *_: sys.exit(0))
     signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    undumpable()
 
     devices = open_keyboards()
     if not devices:

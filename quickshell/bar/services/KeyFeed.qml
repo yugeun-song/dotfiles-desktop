@@ -74,7 +74,10 @@ Singleton {
         }
     }
 
-    // {mods: [...], key: "C", id: n}
+    // {mods: [...], key: "C", id: n}. The only place keys are kept: at most
+    // maxVisible, each dropped by its cap's exit (dwell plus the fall, under
+    // a second), all of them on Super+Y off and on a lock or unlock. Nothing
+    // reads them but the overlay.
     property var chords: []
 
     readonly property int dwellMs: 500
@@ -199,7 +202,9 @@ Singleton {
         id: feed
 
         running: root.enabled
-        command: ["python3", Quickshell.shellPath("scripts/keyfeed.py")]
+        // -I: no PYTHON* variables and no user site-packages, whose .pth
+        // files would run inside the process holding the keyboard.
+        command: ["python3", "-I", Quickshell.shellPath("scripts/keyfeed.py")]
 
         stdout: SplitParser {
             onRead: line => {
@@ -210,7 +215,9 @@ Singleton {
                 try {
                     msg = JSON.parse(t);
                 } catch (e) {
-                    console.warn("[keyfeed] unparseable line:", t);
+                    // Its length only: a line can carry a key, and the
+                    // journal is kept on disk.
+                    console.warn("[keyfeed] unparseable line of", t.length, "characters");
                     return;
                 }
                 // A reader that got this far works: the backoff starts over.
