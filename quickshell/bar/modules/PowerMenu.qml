@@ -13,14 +13,15 @@ import qs.services
 Scope {
     id: root
 
-    property bool open: false
+    // Held by Session: the bar's power button opens this dialog too.
+    readonly property bool open: Session.menuOpen
 
     function toggle() {
-        root.open = !root.open;
+        Session.toggleMenu();
     }
 
     function close() {
-        root.open = false;
+        Session.menuOpen = false;
     }
 
     readonly property var entries: [

@@ -2,8 +2,9 @@ import QtQuick
 import Quickshell
 import qs.services
 
-// The right-hand group: status items, clock at the outer edge. Identity comes
-// from position and shape; colour appears only when a reading wants attention.
+// The right-hand group: status items, then the clock and, at the outer edge,
+// the session button. Identity comes from position and shape; colour appears
+// only when a reading wants attention.
 //
 // No tray: the only SNI items here are fcitx5 and Spotify, both already on the
 // bar. If one is ever needed, see IslandTray.qml in git (ae72a11).
@@ -293,7 +294,7 @@ Row {
         onActivated: Weather.refresh()
     }
 
-    // Outer edge, no glyph.
+    // No glyph.
     StatusItem {
         id: clockItem
 
@@ -306,5 +307,17 @@ Row {
             anchorItem: clockItem
             anchorHovered: clockItem.hovered
         }
+    }
+
+    // The dialog the power key opens, for the pointer: lock, sign out,
+    // sleep, restart, shut down. The outermost item, where a desktop's
+    // session menu is looked for.
+    StatusItem {
+        icon: Theme.iconPower
+        iconScale: Theme.statusIconBoost
+        tooltip: "Lock, sign out, sleep, restart or shut down\nClick to open the session dialog"
+
+        interactive: true
+        onActivated: Session.toggleMenu()
     }
 }
