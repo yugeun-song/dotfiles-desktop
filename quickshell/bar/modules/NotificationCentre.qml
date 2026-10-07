@@ -329,15 +329,25 @@ Scope {
                                     spacing: Theme.px(6)
 
                                     Row {
+                                        id: header
+
                                         width: parent.width
                                         spacing: Theme.px(8)
 
+                                        // The time keeps its room; a long app_name
+                                        // ("org.freedesktop.network-manager-applet")
+                                        // pushed it off the row.
                                         Text {
+                                            width: Math.min(implicitWidth, header.width - when.implicitWidth - header.spacing)
+                                            elide: Text.ElideRight
                                             visible: slot.modelData.critical
                                                      || slot.modelData.appName !== ""
                                             text: slot.modelData.critical
                                                   ? "URGENT"
                                                   : slot.modelData.appName.toUpperCase()
+                                            // The sender names itself; never markup,
+                                            // which would fetch an <img> in it.
+                                            textFormat: Text.PlainText
                                             font.family: Theme.uiFont
                                             font.pixelSize: Theme.notifLabelSize
                                             font.weight: Font.DemiBold
@@ -347,6 +357,8 @@ Scope {
                                         }
 
                                         Text {
+                                            id: when
+
                                             text: root.stamp(slot.modelData.at)
                                             font.family: Theme.uiFont
                                             font.pixelSize: Theme.notifLabelSize
@@ -381,7 +393,12 @@ Scope {
                                         textFormat: Text.StyledText
                                     }
 
-                                    Row {
+                                    // A Flow: several long labels wrap to a second
+                                    // line instead of running off the row.
+                                    Flow {
+                                        id: actions
+
+                                        width: parent.width
                                         visible: slot.modelData.actions.length > 0
                                         spacing: Theme.px(18)
                                         topPadding: Theme.px(9)
@@ -394,6 +411,8 @@ Scope {
 
                                                 required property var modelData
 
+                                                width: Math.min(implicitWidth, actions.width)
+                                                elide: Text.ElideRight
                                                 text: action.modelData.text.toUpperCase() + "  →"
                                                 // The label came from the sender too.
                                                 textFormat: Text.PlainText

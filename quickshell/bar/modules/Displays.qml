@@ -1458,8 +1458,13 @@ Scope {
                                                 color: box.active ? Theme.ink : Theme.fg
                                             }
 
+                                            // Held to the box, which is
+                                            // small for a small or disabled
+                                            // output far from the others.
                                             Text {
                                                 anchors.horizontalCenter: parent.horizontalCenter
+                                                width: Math.min(implicitWidth, box.width - Theme.px(6))
+                                                elide: Text.ElideRight
                                                 text: box.modelData.name + (box.modelData.disabled ? "  off" : "")
                                                 font.family: Theme.uiFont
                                                 font.pixelSize: Theme.px(11)
@@ -2311,9 +2316,13 @@ Scope {
                                         }
                                     }
 
+                                    // What is left of the row: the line ran
+                                    // past the card at the old wording.
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
-                                        text: "the clock, alone on black, after that long with nothing done on this display"
+                                        width: Math.max(0, saverRow.width - Theme.displaysLabelWidth - x)
+                                        elide: Text.ElideRight
+                                        text: "black after that long unused, off once nobody is at the keys"
                                         font.family: Theme.uiFont
                                         font.pixelSize: Theme.px(12)
                                         color: Theme.muted

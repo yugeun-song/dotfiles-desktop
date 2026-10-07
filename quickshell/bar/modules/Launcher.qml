@@ -313,6 +313,11 @@ Scope {
                         width: parent.width
                         visible: root.matches.length === 0
                         text: root.allEntries.length === 0 ? "no application entries found under XDG_DATA_DIRS" : `nothing matches "${root.query}"`
+                        // A long query ran past the card. Cut in the middle,
+                        // so both ends of what was typed still show; plain,
+                        // so typed markup is not drawn (or fetched).
+                        elide: Text.ElideMiddle
+                        textFormat: Text.PlainText
                         font.family: Theme.uiFont
                         font.pixelSize: Theme.textSize
                         color: Theme.muted
@@ -337,12 +342,18 @@ Scope {
                             color: row.current ? Theme.accentIndigo : "transparent"
 
                             Row {
+                                id: line
+
                                 anchors.left: parent.left
+                                anchors.right: parent.right
                                 anchors.leftMargin: Theme.px(10)
+                                anchors.rightMargin: Theme.px(10)
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: Theme.px(12)
 
                                 Image {
+                                    id: icon
+
                                     anchors.verticalCenter: parent.verticalCenter
                                     visible: row.iconSource !== ""
                                     source: row.iconSource
@@ -354,11 +365,17 @@ Scope {
                                     smooth: true
                                 }
 
+                                // What the icon leaves: a long Name or
+                                // GenericName (Wine and Steam entries) is cut
+                                // here instead of running off the card.
                                 Column {
                                     anchors.verticalCenter: parent.verticalCenter
+                                    width: line.width - (icon.visible ? icon.width + line.spacing : 0)
                                     spacing: 1
 
                                     Text {
+                                        width: parent.width
+                                        elide: Text.ElideRight
                                         text: row.modelData.name ?? ""
                                         // Untrusted .desktop content.
                                         textFormat: Text.PlainText
@@ -369,6 +386,8 @@ Scope {
                                     }
 
                                     Text {
+                                        width: parent.width
+                                        elide: Text.ElideRight
                                         visible: (row.modelData.genericName ?? "") !== ""
                                         text: row.modelData.genericName ?? ""
                                         textFormat: Text.PlainText

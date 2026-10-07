@@ -93,8 +93,10 @@ Row {
         active: Alarms.ringing
         activeFill: Theme.accentRed
         tooltip: {
+            // Shortened like the pending lines: the tooltip grows to its
+            // widest line and ran off the screen's edge.
             if (Alarms.ringing)
-                return `Ringing   ${Alarms.ringing.label}\nSet for   ${Alarms.ringing.at} ${Alarms.timezone}\nClick to dismiss`;
+                return `Ringing   ${Theme.shorten(Alarms.ringing.label, 40)}\nSet for   ${Alarms.ringing.at} ${Alarms.timezone}\nClick to dismiss`;
             const lines = [];
             for (const a of Alarms.pending.slice(0, 6))
                 lines.push(`  ${a.at}  ${a.daily ? "daily" : "once "}  ${Theme.shorten(a.label, 24)}`);
@@ -263,8 +265,9 @@ Row {
             if (why === "")
                 return "";
             const lines = [why];
+            // curl's complaints run long; the chip sits near the right edge.
             if (Weather.lastError !== "")
-                lines.push(Weather.lastError);
+                lines.push(Theme.shorten(Weather.lastError, 60));
             lines.push(Weather.fetching ? "Fetching now" : "Click to refresh");
             return lines.join("\n");
         }

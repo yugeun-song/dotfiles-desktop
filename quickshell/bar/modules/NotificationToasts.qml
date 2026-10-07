@@ -214,6 +214,9 @@ Scope {
                                     text: slot.modelData.critical
                                           ? "URGENT"
                                           : slot.modelData.appName.toUpperCase()
+                                    // The sender names itself; never markup,
+                                    // which would fetch an <img> in it.
+                                    textFormat: Text.PlainText
                                     font.family: Theme.uiFont
                                     font.pixelSize: Theme.notifLabelSize
                                     font.weight: Font.DemiBold
