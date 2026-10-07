@@ -30,6 +30,8 @@ tuigreet/            the greeter's appearance, installed only when greetd runs i
 fcitx5/              Korean input configuration
 node/ iex/           REPL helpers (hex, bin, oct) for node and IEx
 theme/               colour system notes and the cursor theme builder
+tests/               tests/run.sh: static checks and unit tests; --e2e adds the
+                     end-to-end suite in a nested headless Hyprland
 ```
 
 ## Outputs
@@ -320,6 +322,27 @@ has its own `install.sh`. Its `zshenv` and `bashrc` source
 `~/.config/profile.d/*.sh`, which is how `node.sh` adds the REPL helpers
 (`hex`, `bin`, `oct`) to a bare node REPL only; `~/.iex.exs` does the same for
 IEx.
+
+## Checks
+
+```sh
+tests/run.sh           # shellcheck, Lua, Python, the Hyprland config, unit tests
+tests/run.sh --e2e     # and the end-to-end suite
+```
+
+Nothing here touches the installed desktop. The unit tests run the bar's own
+logic (the cover-art filter, the override file the Displays panel writes,
+launcher ranking, the screensaver file, the key feed) in a copy of the bar,
+offscreen and on no D-Bus, and drive `monitor-override.sh`, `alarm.sh` and
+`keyfeed.py` against temporary state with stubs for `hyprctl` and the input
+devices. The end-to-end suite starts a nested Hyprland with two headless
+outputs on a hidden workspace, runs a copy of the bar on it with every session
+action, program launch and hardware write turned into a log line, drives it
+with a virtual pointer and keyboard, and checks what survives a reload, a
+restart and a lock: the key overlay's switch, notifications, a dark display,
+a ringing alarm, a display trial. It needs a running Hyprland session, gcc,
+wayland-scanner, grim, slurp, ImageMagick and python3-pillow, skips what it
+lacks, and takes a minute and a half.
 
 ## Credits
 
