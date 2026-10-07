@@ -41,6 +41,18 @@ Singleton {
         // engine ("JSValue can't be reassigned to another engine") and arrives
         // undefined.
         property string times: "{}"
+
+        // Ids marked read, for the same reason: a replayed notification is
+        // rebuilt from scratch and would come back unread.
+        property string reads: "[]"
+    }
+
+    function wasRead(id) {
+        try {
+            return JSON.parse(arrivals.reads).indexOf(id) !== -1;
+        } catch (e) {
+            return false;
+        }
     }
 
     function arrivalMap() {
@@ -61,16 +73,21 @@ Singleton {
         return now;
     }
 
-    // Drops ids the history no longer holds, or the map grows all session.
+    // Drops ids the history no longer holds, or the map grows all session,
+    // and records which are read.
     function prune() {
         const m = root.arrivalMap();
         const live = {};
+        const read = [];
         for (let i = 0; i < root.history.length; i++) {
             const e = root.history[i];
             if (m[e.id] !== undefined)
                 live[e.id] = m[e.id];
+            if (e.read)
+                read.push(e.id);
         }
         arrivals.times = JSON.stringify(live);
+        arrivals.reads = JSON.stringify(read);
     }
 
     // notify-send fills app_name with its own basename when no --app-name is
@@ -122,19 +139,30 @@ Singleton {
     }
 
     function add(n) {
-        // Arriving into an open panel counts as read.
         const entry = root.snapshot(n);
-        entry.read = root.centreOpen;
+        // Handed back after a reload (lastGeneration), a notification is not
+        // news: it was toasted when it came and keeps the read mark it had.
+        // Taken as new, every reload toasted the history again and marked
+        // all of it unread.
+        const replayed = n.lastGeneration === true;
+        // Arriving into an open panel counts as read.
+        entry.read = replayed ? root.wasRead(n.id) : root.centreOpen;
 
         const next = [entry].concat(root.history);
+        // Replays come back in no promised order; newest first by arrival.
+        if (replayed)
+            next.sort((a, b) => b.at - a.at);
         if (next.length > root.historyLimit) {
             for (let i = root.historyLimit; i < next.length; i++)
                 root.release(next[i]);
             next.length = root.historyLimit;
         }
         root.history = next;
+        // Not while replaying: the history is still partial, and a prune
+        // would drop the times and read marks of those yet to come back.
+        if (replayed)
+            return;
         root.prune();
-
         root.toast(entry);
     }
 
@@ -167,6 +195,7 @@ Singleton {
     // Rebuilt, not mutated: a var property notifies only on reassignment.
     function markRead() {
         root.history = root.history.map(e => Object.assign({}, e, { read: true }));
+        root.prune();
     }
 
     // An action only works while the sender is running; warn instead of
