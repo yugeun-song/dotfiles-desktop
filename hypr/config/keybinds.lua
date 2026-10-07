@@ -40,6 +40,19 @@ hl.bind("CTRL + SUPER + V", hl.dsp.exec_cmd(app.mixer), { description = "Volume 
 hl.bind("CTRL + SHIFT + Escape", hl.dsp.exec_cmd(app.tasks), { description = "Task manager" })
 hl.bind("CTRL + SUPER + SHIFT + ALT + W", hl.dsp.exec_cmd(app.office), { description = "Office" })
 
+-- Shell presence from its layer surfaces, not pgrep (a fork on the input
+-- thread). Prefix match: the bar uses quickshell's default namespace.
+local SHELL_NAMESPACE = "quickshell"
+
+local function shell_is_up()
+    for _, l in ipairs(hl.get_layers()) do
+        if l.mapped and l.namespace:sub(1, #SHELL_NAMESPACE) == SHELL_NAMESPACE then
+            return true
+        end
+    end
+    return false
+end
+
 --##! Shell surfaces
 -- Lone Super tap. Must be a release bind: on press the SUPER mask is not set
 -- yet. Fires only for a short tap without another key. Through a script, not
@@ -49,10 +62,28 @@ for _, key in ipairs({ "SUPER_L", "SUPER_R" }) do
         { release = true, description = "Application launcher" })
 end
 -- Needs logind HandlePowerKey=ignore. The 4 s hardware override still works.
-hl.bind("XF86PowerOff", hl.dsp.global("quickshell:powerMenu"),
-    { description = "Session menu" })
-hl.bind("CTRL + ALT + Delete", hl.dsp.global("quickshell:powerMenu"),
-    { description = "Session dialog" })
+-- The dialog is the bar's: with the bar down (a crash loop past its start
+-- limit) these keys did nothing at all. They now start the bar again and say
+-- so in the compositor's own notice, which needs no bar; the power-off that
+-- needs none is Ctrl+Shift+Alt+Super+Delete. A failed check counts as up.
+local function session_dialog()
+    local to_shell = hl.dsp.global("quickshell:powerMenu")
+    local restart = hl.dsp.exec_cmd(HOME .. "/.local/bin/bar")
+    local notice = hl.dsp.exec_cmd("hyprctl notify 1 8000 0 'The bar is not running, so the session dialog cannot open. "
+        .. "Starting the bar again; Ctrl+Shift+Alt+Super+Delete powers off without it.'")
+    return function()
+        local asked, up = pcall(shell_is_up)
+        if not asked or up then
+            hl.dispatch(to_shell)
+            return
+        end
+        hl.dispatch(notice)
+        hl.dispatch(restart)
+    end
+end
+
+hl.bind("XF86PowerOff", session_dialog(), { description = "Session menu" })
+hl.bind("CTRL + ALT + Delete", session_dialog(), { description = "Session dialog" })
 hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd("systemd-cat -t session-start " .. scripts .. "/session-start.sh"),
     { description = "Restart anything in the session that died" })
 
@@ -380,19 +411,6 @@ hl.bind("SUPER + ALT + M", hl.dsp.exec_cmd(volume .. " mic-mute"),
 --##! Hardware keys
 -- locked: work on the lock screen; repeating: holding keeps stepping.
 -- One binding per key with the branch inside; a second binding double-steps.
-
--- Shell presence from its layer surfaces, not pgrep (a fork on the input
--- thread). Prefix match: the bar uses quickshell's default namespace.
-local SHELL_NAMESPACE = "quickshell"
-
-local function shell_is_up()
-    for _, l in ipairs(hl.get_layers()) do
-        if l.mapped and l.namespace:sub(1, #SHELL_NAMESPACE) == SHELL_NAMESPACE then
-            return true
-        end
-    end
-    return false
-end
 
 -- Without the shell, fall back to brightnessctl only on the internal panel;
 -- DDC is too slow for key repeat, so externals get nothing. Must match

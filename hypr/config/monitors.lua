@@ -1721,8 +1721,20 @@ end
 -- of three that ended with the panel lit as well, two were not. The sample
 -- is small and the mechanism unknown: this reproduces the state that held,
 -- it does not fix a cause.
+--
+-- An external the screensaver turned off is still enabled, so it counts as
+-- lit: the plan turned the panel off beside it, and the session ended with no
+-- output lit at all, a state the evidence above never covered. Such an
+-- external is lit first. Not the panel, which goes off here anyway: lit and
+-- then disabled, it flashed as the session ended.
 function M.prepare_exit()
     exiting = true
+    for _, monitor in ipairs(hl.get_monitors()) do
+        local name = monitor.name
+        if name and monitor.dpms_status == false and classify(name) == "external" then
+            hl.dispatch(hl.dsp.dpms({ action = "enable", monitor = name }))
+        end
+    end
     M.evaluate("session end", false)
 end
 
