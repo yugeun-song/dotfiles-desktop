@@ -36,7 +36,8 @@ ShellRoot {
 
     NotificationCentre {}
 
-    // Inert until KeyFeed.enabled is toggled, since it reads input devices.
+    // Inert until Super+Y switches it on, since it reads input devices; the
+    // switch is kept across restarts (services/KeyFeed.qml).
     KeyOverlay {}
 
     Osd {

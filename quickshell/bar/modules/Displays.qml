@@ -12,8 +12,9 @@ import qs.services
 // file hypr/config/monitors.lua reads (see the header there); the policy
 // keeps the last word, so nothing chosen here can leave every screen dark.
 // Writes go through hypr/scripts/monitor-override.sh, which validates the
-// lines, keeps the previous file for a revert and asks the compositor to
-// re-evaluate. This file never touches the state directory itself.
+// lines, keeps the previous file for a revert, records an Apply's deadline
+// so the revert survives the bar, and asks the compositor to re-evaluate.
+// This file never touches the state directory itself.
 Scope {
     id: root
 

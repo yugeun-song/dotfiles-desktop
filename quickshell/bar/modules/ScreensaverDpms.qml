@@ -56,8 +56,11 @@ import qs.services
 // wake, a resume, the lid) counts as used, so both its clocks start over.
 //
 // Nothing goes dark while the Displays panel is open (`paused`), and a
-// display being shared stays up while the share lasts (`shares`). When the
-// bar stops, bar.service lights whatever it left off (MONITORS.saver_release).
+// display being shared stays up while the share lasts (`shares`). A region
+// shot or a colour pick lifts the black while it runs (`lifted`). A reload
+// hands the dark displays and the shares on to the new instance (`kept`);
+// when the bar stops, bar.service lights whatever it left off
+// (MONITORS.saver_release).
 Scope {
     id: root
 

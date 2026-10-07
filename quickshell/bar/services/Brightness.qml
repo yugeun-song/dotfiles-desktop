@@ -7,8 +7,9 @@ import Quickshell.Io
 
 // Brightness of the focused monitor: sysfs backlight for the internal panel,
 // DDC/CI over i2c for externals. DDC is slow (detect ~0.7 s, getvcp ~75 ms
-// here), so detection runs once and writes are coalesced, or a held key
-// queues round trips that keep stepping after release.
+// here), so detection runs only at the start and after a monitor comes or
+// goes, and writes are coalesced, or a held key queues round trips that keep
+// stepping after release.
 Singleton {
     id: root
 

@@ -78,15 +78,23 @@ only, external only, extend left or right, mirror) with the current one
 marked, the workspace scheme (preset, panel first, blocks, dynamic), and for
 the selected output power, mode, scale, rotation, side and its screensaver
 (below). Apply writes `~/.local/state/hypr/monitor-overrides` through
-`hypr/scripts/monitor-override.sh` (`show | set < lines | clear | revert`) and
-re-evaluates; a 30 s countdown reverts unless Keep is pressed (Esc reverts at
-once), so a mode the screen cannot show undoes itself. The file is one line
-per override, `<selector> TAB <field> TAB <value>`: the selector is the
-description as `hyprctl monitors` prints it with commas removed, or
-`name:<connector>`, or `*` for the desk-wide `workspaces` line. The policy
-keeps the last word: the panel goes off only beside a lit external, an
-external only while another output stays lit, external-off is suspended while
-the lid is shut, and a mode the output does not list falls back to automatic.
+`hypr/scripts/monitor-override.sh` (`show | set < lines | try SECONDS <
+lines | keep | trial | clear | revert`) and re-evaluates; a 30 s countdown
+reverts unless Keep is pressed (Esc reverts at once), so a mode the screen
+cannot show undoes itself. The deadline is written beside the file (`.trial`),
+so a reload, a crash or a forced power-off within those seconds does not keep
+the untested set: the next bar to start resumes the countdown, or reverts
+straight away once the deadline has passed. A display that comes back while
+the panel is open (switched on, back from a dropped link) brings its saved
+settings into the edits, and the panel closes itself once nothing has been
+done for the shortest screensaver time set, since it holds every screensaver
+off while open. The file is one line per override,
+`<selector> TAB <field> TAB <value>`: the selector is the description as
+`hyprctl monitors` prints it with commas removed, or `name:<connector>`, or
+`*` for the desk-wide `workspaces` line. The policy keeps the last word: the
+panel goes off only beside a lit external, an external only while another
+output stays lit, external-off is suspended while the lid is shut, and a mode
+the output does not list falls back to automatic.
 
 The lid and power-button bindings assume logind ignores those keys
 (`HandleLidSwitch=ignore` and its Docked/ExternalPower variants,
@@ -120,6 +128,11 @@ found; the volume keys go through `scripts/volume.sh` (wpctl, then pactl,
 then amixer) and the media keys through `launch.sh`, so a missing tool gives
 one notification instead of a dead key.
 
+The session menu (power key, `Ctrl+Alt+Delete`, the power glyph at the
+bar's right end) is the bar's own. With the bar down, the two keys start it
+again and say so in Hyprland's own notice, since nothing else would answer
+them; `Ctrl+Shift+Alt+Super+Delete` powers off without it.
+
 Shut down and Restart in the session menu, and `Ctrl+Shift+Alt+Super+Delete`,
 go through `hypr/scripts/session-power.sh`: under a logind delay lock it
 requests the action, ends the compositor, waits for it to be gone, then lets
@@ -148,7 +161,8 @@ A menu bar, in the macOS sense: two groups and what is playing between them.
 left     arch badge, the ten workspaces, the focused window's application
 centre   what is playing
 right    caps lock, input method, alarm, network, bluetooth,
-         cpu, memory, battery, notifications, weather, clock
+         cpu, memory, battery, notifications, weather, clock,
+         session
 ```
 
 No `File / Edit / View` menu: Wayland has no global menu protocol. Status
@@ -207,12 +221,25 @@ and a short allowlist of hosts (`Theme.artHosts`), since a browser's
 `mpris:artUrl` is chosen by the page. The bar is also the notification
 server: toasts stack under its right edge, history is behind `Super+N`, a
 toast dwells 5 s (20 s critical), drag right dismisses, click runs the default
-action. `Super+/` lists every binding with a description, `Super+Y` shows the
-keys being pressed, near the bottom-right corner of the screen they go to.
+action; a reload hands the history back without toasting it again, read
+marks kept. `Super+/` lists every binding with a description, `Super+Y` shows
+the keys being pressed, near the bottom-right corner of the screen they go to.
 The player card follows the desktop Spotify player below the title: a filled
 disc for play and pause between the skips, shuffle and repeat marked with a
 dot while on, and the elapsed and whole time either side of a thin bar that
 shows a knob under the pointer.
+
+**Key overlay.** `scripts/keyfeed.py` reads the keyboards, which takes
+membership of the `input` group, and runs only while the overlay is on. The
+switch is kept across restarts and reboots
+(`~/.local/state/quickshell/bar/keyoverlay`). A lock drops what is shown and
+nothing shows until the unlock; hypridle tells the bar both. A reader that
+dies is started again, 2 s to a minute apart. The keys go nowhere but the
+overlay: the reader opens no socket and writes no file, neither it nor the
+bar logs a key, the reader is not dumpable (no core, no tracing by the
+user's other programs), and the bar holds at most five chords, each gone in
+under a second. The group is the exposure: it lets every program of the
+user read the keyboards, overlay on or off.
 
 **Screensaver.** Off everywhere unless a display's switch in the Displays
 panel is turned on, with a time from 1 minute to a day (Apply writes it; the
@@ -248,18 +275,22 @@ is off, the first key or pointer motion turns them all on (Hyprland's
 display while another is lit). A display turned on by anything else (that
 wake, a resume, the lid) starts its clocks over. Nothing goes dark while the
 Displays panel is open, since its changes and their revert countdown need
-screens that can be seen, and a display being shared (a call, a recording)
-stays up while the share lasts; a shared window keeps every display up.
-Hyprland reports any screencopy as a share until half a second after its
-last frame, so a share counts after two seconds, and one that only asks for
-changed frames of a still screen is not seen. When the bar stops, its unit
-lights whatever the saver left off. Captures leave an output that is off
-out, since it would never send a frame: a region over one is black there,
-and a window is cut to the lit outputs. The saver never asks for
-the lock, and `Ctrl+Alt+L` locks as usual. Inhibitors the compositor does
-not know about (a browser that only holds the D-Bus screensaver inhibit)
-are not seen; a window rule with `idle_inhibit` (rules.lua has one for mpv
-and vlc) makes one visible. Times live in
+screens that can be seen (left open, it closes itself), and a display being
+shared (a call, a recording) stays up while the share lasts; a shared window
+keeps every display up. Hyprland reports any screencopy as a share until half
+a second after its last frame, so a share counts after two seconds, and one
+that only asks for changed frames of a still screen is not seen. A reload of
+the bar hands the dark displays to the new instance, so none flashes on; when
+the bar stops, its unit lights whatever the saver left off, and a sign-out or
+power-off lights an external the saver turned off, so the session never ends
+with no output lit. A region shot or a colour pick lifts the black while it
+runs, since it grabs every screen first; the clocks run on, so the black
+returns. Captures leave an output that is off out, since it would never send a
+frame: a region over one is black there, and a window is cut to the lit
+outputs. The saver never asks for the lock, and `Ctrl+Alt+L` locks as usual.
+Inhibitors the compositor does not know about (a browser that only holds the
+D-Bus screensaver inhibit) are not seen; a window rule with `idle_inhibit`
+(rules.lua has one for mpv and vlc) makes one visible. Times live in
 `~/.local/state/quickshell/bar/screensaver`, one `<selector> TAB <minutes>`
 line per display with the overrides' selectors.
 `qs -p ~/.config/quickshell/bar ipc call screensaver preview <output> 10`
@@ -335,14 +366,15 @@ logic (the cover-art filter, the override file the Displays panel writes,
 launcher ranking, the screensaver file, the key feed) in a copy of the bar,
 offscreen and on no D-Bus, and drive `monitor-override.sh`, `alarm.sh` and
 `keyfeed.py` against temporary state with stubs for `hyprctl` and the input
-devices. The end-to-end suite starts a nested Hyprland with two headless
-outputs on a hidden workspace, runs a copy of the bar on it with every session
-action, program launch and hardware write turned into a log line, drives it
-with a virtual pointer and keyboard, and checks what survives a reload, a
-restart and a lock: the key overlay's switch, notifications, a dark display,
-a ringing alarm, a display trial. It needs a running Hyprland session, gcc,
-wayland-scanner, grim, slurp, ImageMagick and python3-pillow, skips what it
-lacks, and takes a minute and a half.
+devices, and `inputmethod.py` against a private D-Bus daemon. The end-to-end
+suite starts a nested Hyprland with two headless outputs on a hidden
+workspace, runs a copy of the bar on it with every session action, program
+launch and hardware write turned into a log line, drives it with a virtual
+pointer and keyboard, and checks what survives a reload, a restart and a lock:
+the key overlay's switch, notifications, a dark display, a ringing alarm, a
+display trial. It needs a running Hyprland session, gcc, wayland-scanner,
+grim, slurp, ImageMagick and python3-pillow, skips what it lacks, and takes a
+minute and a half.
 
 ## Credits
 
