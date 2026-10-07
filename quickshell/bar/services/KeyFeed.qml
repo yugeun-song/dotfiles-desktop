@@ -22,6 +22,58 @@ Singleton {
     // Set by the first toggle, so a read landing after it does not undo it.
     property bool chosen: false
 
+    // The reader sits on evdev, under the compositor, so it reads what is
+    // typed into the lock screen too. The strip is not drawn over hyprlock,
+    // but a chord younger than its dwell was drawn the moment the session
+    // unlocked: the Enter and the last keys of the password. hypridle says
+    // when the session locks and unlocks (on_lock_cmd, on_unlock_cmd), and
+    // lock.sh as it starts hyprlock; keys in between are dropped. The unlock
+    // comes from hypridle only: lock.sh also returns when hyprlock crashes
+    // and the session stays locked.
+    property bool locked: false
+
+    IpcHandler {
+        target: "keys"
+
+        function lock(): void {
+            root.locked = true;
+            root.clear();
+        }
+
+        function unlock(): void {
+            root.locked = false;
+            root.clear();
+        }
+    }
+
+    // With hypridle not running, no unlock would come and the overlay would
+    // stay mute after the first lock. While locked, hyprlock is looked for
+    // now and then, and its absence counts as the unlock.
+    Timer {
+        interval: 5000
+        repeat: true
+        running: root.locked
+
+        onTriggered: {
+            if (!lockProbe.running)
+                lockProbe.running = true;
+        }
+    }
+
+    Process {
+        id: lockProbe
+
+        command: ["pgrep", "-x", "hyprlock"]
+
+        // pgrep: 0 found, 1 none.
+        onExited: code => {
+            if (code === 1 && root.locked) {
+                root.locked = false;
+                root.clear();
+            }
+        }
+    }
+
     // {mods: [...], key: "C", id: n}
     property var chords: []
 
@@ -74,6 +126,8 @@ Singleton {
     readonly property bool running: feed.running
 
     function push(mods, key) {
+        if (root.locked)
+            return;
         const next = root.chords.concat([{ mods: mods, key: key, id: root.nextId }]);
         root.nextId = root.nextId + 1;
         // Overflow is cut without an exit animation; animating it kept its

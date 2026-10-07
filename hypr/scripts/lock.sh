@@ -36,6 +36,11 @@ if conf=$("$(dirname -- "${BASH_SOURCE[0]}")/lock-fit.sh"); then
     fitted=(-c "$conf")
 fi
 
+# The bar's key overlay drops keys from here to the unlock (hypridle's
+# on_unlock_cmd); hypridle's own lock notice can come late. In the
+# background, so the lock never waits on the bar.
+qs -p "${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar" ipc call keys lock >/dev/null 2>&1 &
+
 hyprlock "${fitted[@]}" "$@"
 rc=$?
 
