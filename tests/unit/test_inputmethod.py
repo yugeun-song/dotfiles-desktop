@@ -19,6 +19,10 @@ import tempfile
 import unittest
 from unittest import mock
 
+# The script is imported from the tree install.sh mirrors, and a bytecode
+# cache written beside it went out with the next install.
+sys.dont_write_bytecode = True
+
 SCRIPT = pathlib.Path(__file__).resolve().parents[2] / "quickshell/bar/scripts/inputmethod.py"
 spec = importlib.util.spec_from_file_location("inputmethod", SCRIPT)
 im = importlib.util.module_from_spec(spec)

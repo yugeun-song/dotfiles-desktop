@@ -7,8 +7,13 @@ open /dev/input, which would read the keyboard of whoever runs it.
 import importlib.util
 import os
 import pathlib
+import sys
 import unittest
 from unittest import mock
+
+# The script is imported from the tree install.sh mirrors, and a bytecode
+# cache written beside it went out with the next install.
+sys.dont_write_bytecode = True
 
 SCRIPT = pathlib.Path(__file__).resolve().parents[2] / "quickshell/bar/scripts/keyfeed.py"
 HEADER = "/usr/include/linux/input-event-codes.h"
