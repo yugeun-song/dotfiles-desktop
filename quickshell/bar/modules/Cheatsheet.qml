@@ -378,6 +378,7 @@ Scope {
                                                 anchors.leftMargin: card.chordWidth + Theme.px(18)
                                                 anchors.right: parent.right
                                                 anchors.verticalCenter: parent.verticalCenter
+                                                textFormat: Text.PlainText
                                                 text: row.modelData.what
                                                 font.family: Theme.uiFont
                                                 font.pixelSize: Theme.px(15)

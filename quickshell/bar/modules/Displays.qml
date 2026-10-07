@@ -1372,6 +1372,8 @@ Scope {
 
                         Text {
                             width: parent.width
+                            // Names and descriptions come from the displays (EDID); never markup.
+                            textFormat: Text.PlainText
                             text: root.error !== "" ? root.error : "Select a display to change its settings"
                             font.family: Theme.uiFont
                             font.pixelSize: Theme.px(13)
@@ -1615,6 +1617,7 @@ Scope {
                                     anchors.leftMargin: Theme.px(16)
                                     anchors.verticalCenter: parent.verticalCenter
                                     horizontalAlignment: Text.AlignRight
+                                    textFormat: Text.PlainText
                                     text: root.layoutCaption
                                     font.family: Theme.uiFont
                                     font.pixelSize: Theme.px(12)
@@ -1754,6 +1757,7 @@ Scope {
                                     anchors.leftMargin: Theme.px(16)
                                     anchors.verticalCenter: parent.verticalCenter
                                     horizontalAlignment: Text.AlignRight
+                                    textFormat: Text.PlainText
                                     text: root.schemeCaption
                                     font.family: Theme.uiFont
                                     font.pixelSize: Theme.px(12)
@@ -1852,6 +1856,7 @@ Scope {
                                 Text {
                                     anchors.verticalCenter: parent.verticalCenter
                                     width: Math.max(0, settings.width - Theme.px(200))
+                                    textFormat: Text.PlainText
                                     text: {
                                         const o = settings.o;
                                         if (!o)
@@ -2494,6 +2499,7 @@ Scope {
 
                         Text {
                             width: parent.width
+                            textFormat: Text.PlainText
                             text: root.hint !== "" ? root.hint
                                   : root.countdown > 0 ? "enter keeps, esc reverts"
                                   : "digits select a display, the wheel over the picture moves the panel, enter applies, esc closes"

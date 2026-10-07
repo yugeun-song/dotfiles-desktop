@@ -38,6 +38,8 @@ Item {
                 Text {
                     required property var modelData
 
+                    // Callers pass strings through (an input method's engine name); never markup.
+                    textFormat: Text.PlainText
                     text: modelData.separator === true ? "" : ((modelData.label ?? "") + "   " + (modelData.detail ?? ""))
                     font.family: Theme.uiFont
                     font.pixelSize: Theme.menuTextSize
@@ -165,6 +167,7 @@ Item {
                                 anchors.right: parent.right
                                 anchors.rightMargin: Theme.px(13)
                                 anchors.verticalCenter: parent.verticalCenter
+                                textFormat: Text.PlainText
                                 text: row.modelData.detail ?? ""
                                 font.family: Theme.uiFont
                                 font.pixelSize: Theme.px(12)
@@ -179,6 +182,7 @@ Item {
                                 anchors.rightMargin: Theme.px(13)
                                 anchors.verticalCenter: parent.verticalCenter
                                 elide: Text.ElideRight
+                                textFormat: Text.PlainText
                                 text: row.modelData.label ?? ""
                                 font.family: Theme.uiFont
                                 font.pixelSize: Theme.menuTextSize
