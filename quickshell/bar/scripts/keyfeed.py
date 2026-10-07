@@ -117,7 +117,12 @@ def is_keyboard(event_name):
     return bool(bits >> KEY_A & 1)
 
 
-def open_keyboards():
+def open_keyboards(skip=frozenset()):
+    """Open the keyboards not in skip (paths already open).
+
+    The rescan used to open every keyboard again and close the copy it already
+    had: a sysfs read, an open and a close per keyboard every five seconds.
+    """
     found = {}
     try:
         entries = sorted(os.listdir("/dev/input"))
@@ -126,9 +131,11 @@ def open_keyboards():
     for name in entries:
         if not name.startswith("event"):
             continue
+        path = f"/dev/input/{name}"
+        if path in skip:
+            continue
         if not is_keyboard(name):
             continue
-        path = f"/dev/input/{name}"
         try:
             found[os.open(path, os.O_RDONLY | os.O_NONBLOCK)] = path
         except OSError:
@@ -196,12 +203,7 @@ def main():
         now = time.monotonic()
         if now >= next_scan:
             next_scan = now + 5
-            current = set(devices.values())
-            for fd, path in open_keyboards().items():
-                if path in current:
-                    os.close(fd)
-                else:
-                    devices[fd] = path
+            devices.update(open_keyboards(frozenset(devices.values())))
             if not devices:
                 emit({"type": "error", "reason": "every keyboard went away"})
 
