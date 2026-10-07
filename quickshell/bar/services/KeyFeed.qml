@@ -3,6 +3,7 @@ pragma Singleton
 import QtQuick
 import Quickshell
 import Quickshell.Io
+import qs.services
 
 // Key presses for the on-screen overlay, read by scripts/keyfeed.py (evdev,
 // needs the input group) over a JSON-lines protocol. Not named "Keys": that
@@ -10,8 +11,16 @@ import Quickshell.Io
 Singleton {
     id: root
 
-    // Off by default: an always-on reader is a keylogger nobody asked for.
+    // Off until Super+Y turns it on, and on until Super+Y turns it off. Kept
+    // in the state directory, outside the repository and the installed
+    // config: held in memory only, every start or reload of the bar (a
+    // reboot, install.sh) turned the overlay off behind the user's back. A
+    // missing file is off: an always-on reader is a keylogger nobody asked
+    // for.
     property bool enabled: false
+
+    // Set by the first toggle, so a read landing after it does not undo it.
+    property bool chosen: false
 
     // {mods: [...], key: "C", id: n}
     property var chords: []
@@ -87,9 +96,49 @@ Singleton {
     }
 
     function toggle() {
+        root.chosen = true;
         root.enabled = !root.enabled;
+        root.failure = "";
+        supervisor.stop();
+        supervisor.delay = 2000;
         if (!root.enabled)
             root.clear();
+        store.setText(root.enabled ? "on\n" : "off\n");
+    }
+
+    FileView {
+        id: store
+
+        path: Paths.stateDir + "/keyoverlay"
+        // A missing file is the default state, not an error worth a log line.
+        printErrors: false
+
+        onLoaded: {
+            if (!root.chosen)
+                root.enabled = store.text().trim() === "on";
+        }
+        onSaveFailed: error => console.warn("[keyfeed] could not keep the switch in", store.path, "-", error)
+    }
+
+    // A reader that dies while the overlay is on is started again, backing
+    // off from 2 s to a minute like the other helpers. Switching the overlay
+    // off at the first exit lost the user's choice and took down the strip
+    // that would have said why; the strip now shows the reason until the
+    // reader runs again or Super+Y turns the overlay off.
+    Timer {
+        id: supervisor
+
+        property int delay: 2000
+
+        interval: supervisor.delay
+        onTriggered: {
+            if (!root.enabled)
+                return;
+            supervisor.delay = Math.min(supervisor.delay * 2, 60000);
+            feed.running = true;
+            // Restored, or the reader would outlive Super+Y.
+            feed.running = Qt.binding(() => root.enabled);
+        }
     }
 
     Process {
@@ -110,11 +159,16 @@ Singleton {
                     console.warn("[keyfeed] unparseable line:", t);
                     return;
                 }
+                // A reader that got this far works: the backoff starts over.
+                // Not on an error line, which a failing reader sends just
+                // before it exits.
                 if (msg.type === "key") {
                     root.failure = "";
+                    supervisor.delay = 2000;
                     root.push(msg.mods ?? [], msg.key ?? "?");
                 } else if (msg.type === "ready") {
                     root.failure = "";
+                    supervisor.delay = 2000;
                 } else if (msg.type === "error") {
                     root.failure = msg.reason ?? "unknown";
                     console.warn("[keyfeed]", root.failure);
@@ -125,10 +179,11 @@ Singleton {
         onExited: code => {
             if (!root.enabled)
                 return;
-            // Exit while enabled is a failure; surface it.
-            root.failure = `the key feed exited with ${code}`;
-            console.warn("[keyfeed]", root.failure);
-            root.enabled = false;
+            // The reader's own complaint, when it sent one, says more.
+            if (root.failure === "")
+                root.failure = `the key feed exited with ${code}`;
+            console.warn("[keyfeed]", root.failure, "- retrying");
+            supervisor.restart();
         }
     }
 }

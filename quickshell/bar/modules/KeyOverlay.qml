@@ -105,14 +105,21 @@ Scope {
                 text: Theme.iconPlay
             }
 
-            // Show the feed's failure instead of an empty strip.
+            // Show the feed's failure instead of an empty strip, held to the
+            // strip: the reason comes from the reader and may be long.
             Text {
                 id: failure
 
                 anchors.centerIn: parent
+                width: win.stripWidth
                 scale: win.fit
                 transformOrigin: Item.Center
                 visible: KeyFeed.chords.length === 0 && KeyFeed.failure !== ""
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+                textFormat: Text.PlainText
                 text: KeyFeed.failure
                 font.family: Theme.uiFont
                 font.pixelSize: Theme.px(12)

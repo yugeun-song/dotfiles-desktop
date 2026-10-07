@@ -4,6 +4,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Io
 import Quickshell.Hyprland
+import qs.services
 
 // The screensaver's per-display setting: after how many minutes without input
 // on a display the saver takes it (black while someone works on another, off
@@ -22,14 +23,7 @@ import Quickshell.Hyprland
 Singleton {
     id: root
 
-    readonly property string stateDir: {
-        const configured = Quickshell.env("XDG_STATE_HOME");
-        if (configured)
-            return configured + "/quickshell/bar";
-        const home = Quickshell.env("HOME");
-        return (home ? home : "") + "/.local/state/quickshell/bar";
-    }
-    readonly property string file: root.stateDir + "/screensaver"
+    readonly property string file: Paths.stateDir + "/screensaver"
 
     // A timer under a minute would fire from the pauses within ordinary use;
     // above a day it is off in all but name.

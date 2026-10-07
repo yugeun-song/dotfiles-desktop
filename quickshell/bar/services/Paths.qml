@@ -21,4 +21,15 @@ Singleton {
     }
 
     readonly property string hyprScripts: root.configHome + "/hypr/scripts"
+
+    // The bar's own state (the screensaver times, the key overlay switch):
+    // what the user chose on this machine, so neither installed nor tracked.
+    // bin/bar creates the directory, which quickshell cannot do.
+    readonly property string stateDir: {
+        const configured = Quickshell.env("XDG_STATE_HOME");
+        if (configured)
+            return configured + "/quickshell/bar";
+        const home = Quickshell.env("HOME");
+        return (home ? home : "") + "/.local/state/quickshell/bar";
+    }
 }
