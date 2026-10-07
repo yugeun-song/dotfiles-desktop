@@ -16,6 +16,12 @@ Singleton {
     // Last good load. entries survive a failed load, so this marks staleness.
     property double asOf: 0
 
+    // Set while the state file does not exist. alarm.sh creates it with the
+    // first alarm, and a file missing when the bar started was never watched:
+    // after a fresh install the first alarm did not ring until the bar was
+    // restarted. Looked for again on every tick until it appears.
+    property bool missing: false
+
     // Uses nowSeconds, not Date.now(): a binding only re-runs on dependencies.
     readonly property var pending: root.entries.filter(a => a.epoch > root.nowSeconds).sort((a, b) => a.epoch - b.epoch)
 
@@ -49,6 +55,30 @@ Singleton {
     // Rung occurrences as id@epoch, so a rolled-forward daily alarm rings again.
     property var firedKeys: []
     property real lastReap: 0
+
+    // The ringing alarm and the occurrences rung, kept across reloads: a
+    // reload mid-ring (install.sh) took the red pill down while the alarm
+    // still had minutes to ring. JSON, as in Notifications.qml.
+    PersistentProperties {
+        id: kept
+
+        reloadableId: "alarms"
+
+        property string ringing: ""
+        property string fired: "[]"
+
+        onReloaded: {
+            try {
+                root.ringing = kept.ringing !== "" ? JSON.parse(kept.ringing) : null;
+                root.firedKeys = JSON.parse(kept.fired);
+            } catch (e) {
+                root.ringing = null;
+            }
+        }
+    }
+
+    onRingingChanged: kept.ringing = root.ringing ? JSON.stringify(root.ringing) : ""
+    onFiredKeysChanged: kept.fired = JSON.stringify(root.firedKeys)
 
     function reload() {
         try {
@@ -115,7 +145,12 @@ Singleton {
 
         path: root.statePath
         watchChanges: true
-        onLoaded: root.reload()
+        // Missing until alarm.sh first runs; onLoadFailed says why that is fine.
+        printErrors: false
+        onLoaded: {
+            root.missing = false;
+            root.reload();
+        }
         onFileChanged: {
             file.reload();
             root.reload();
@@ -125,6 +160,7 @@ Singleton {
                 // alarm.sh never ran: a valid empty reading, not a failure.
                 root.entries = [];
                 root.asOf = Date.now();
+                root.missing = true;
                 return;
             }
             // Deleted after a good load, or unreadable: mark stale.
@@ -162,6 +198,8 @@ Singleton {
         repeat: true
         triggeredOnStart: true
         onTriggered: {
+            if (root.missing)
+                file.reload();
             root.nowSeconds = Date.now() / 1000;
             root.check();
         }

@@ -41,7 +41,41 @@ Singleton {
 
     Component.onCompleted: {
         backlightProbe.running = true;
+        root.detect();
+    }
+
+    // When detection last finished, for the retry in step().
+    property double lastDetect: 0
+
+    function detect() {
+        if (ddcDetect.running) {
+            redetect.restart();
+            return;
+        }
+        ddcDetect.found = {};
+        ddcDetect.pendingBus = "";
+        ddcDetect.pendingUsable = false;
         ddcDetect.running = true;
+    }
+
+    // Detection ran once, at the start: an external connected later, or one
+    // back from a dropped link on another bus, had no bus and its keys did
+    // nothing until the bar restarted. It runs again once a monitor comes or
+    // goes, after the newcomer has had time to answer DDC.
+    Connections {
+        target: Hyprland
+
+        function onRawEvent(event) {
+            if (event.name === "monitoraddedv2" || event.name === "monitorremovedv2")
+                redetect.restart();
+        }
+    }
+
+    Timer {
+        id: redetect
+
+        interval: 3000
+        onTriggered: root.detect()
     }
 
     Process {
@@ -65,6 +99,9 @@ Singleton {
 
         property string pendingBus: ""
         property bool pendingUsable: false
+        // Filled during a run and swapped in at its end, so the map in use
+        // never empties while ddcutil probes.
+        property var found: ({})
 
         stdout: SplitParser {
             onRead: line => {
@@ -89,9 +126,9 @@ Singleton {
                 }
                 const conn = line.match(/DRM connector:\s+card\d+-(\S+)/);
                 if (conn && ddcDetect.pendingBus !== "" && ddcDetect.pendingUsable) {
-                    const next = Object.assign({}, root.buses);
+                    const next = Object.assign({}, ddcDetect.found);
                     next[conn[1]] = ddcDetect.pendingBus;
-                    root.buses = next;
+                    ddcDetect.found = next;
                     ddcDetect.pendingBus = "";
                 }
             }
@@ -99,7 +136,9 @@ Singleton {
 
         onRunningChanged: {
             if (!ddcDetect.running) {
+                root.buses = ddcDetect.found;
                 root.detected = true;
+                root.lastDetect = Date.now();
                 root.read();
             }
         }
@@ -168,6 +207,14 @@ Singleton {
     }
 
     function step(delta) {
+        // An external that slept through detection (switched off and on by
+        // hand, which is no hotplug) has no bus: look again, at most every
+        // half minute, and let a later press act.
+        if (!root.available && root.monitor !== "" && !root.isInternal(root.monitor)) {
+            if (Date.now() - root.lastDetect > 30000)
+                root.detect();
+            return;
+        }
         // Nothing to step from yet: read, and let the next press act.
         if (root.percent < 0) {
             root.read();
