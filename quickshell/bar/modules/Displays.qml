@@ -40,6 +40,26 @@ Scope {
         root.open = false;
     }
 
+    // Left open, the panel held every screensaver off all night (shell.qml
+    // pauses the saver while it is open). It closes once nothing has been
+    // done for the shortest time a display has set; a countdown under way
+    // reverts by itself first.
+    readonly property int idleMinutes: {
+        const set = Object.values(Screensaver.minutesByName).filter(n => n > 0);
+        return set.length > 0 ? Math.min(...set) : 0;
+    }
+
+    IdleMonitor {
+        enabled: root.open && root.idleMinutes > 0 && root.countdown === 0
+        timeout: Math.max(1, root.idleMinutes) * 60
+        respectInhibitors: false
+
+        onIsIdleChanged: {
+            if (isIdle)
+                root.close();
+        }
+    }
+
     // The shell's own directory is not where the script lives.
     readonly property string script: Paths.hyprScripts + "/monitor-override.sh"
 
@@ -248,12 +268,40 @@ Scope {
             o.mirrorOf = target ? target.name : String(o.mirrorOfId);
         }
         list.sort((a, b) => (a.disabled - b.disabled) || (a.x - b.x) || (a.y - b.y) || a.name.localeCompare(b.name));
+        const before = root.outputs.map(o => o.name);
+        const selectedName = root.current?.name ?? "";
         root.outputs = list;
         root.error = "";
-        if (root.selected >= list.length)
-            root.selected = 0;
+        // The selection stays on its output: the list is sorted by place, so
+        // a hotplug moved the index onto another display, and the next edit
+        // landed there.
+        const keepAt = list.findIndex(o => o.name === selectedName);
+        root.selected = keepAt >= 0 ? keepAt : (root.selected < list.length ? root.selected : 0);
         root.monitorsFresh = true;
+        root.adoptNewcomers(list.filter(o => before.indexOf(o.name) === -1));
         root.maybeResetPending();
+    }
+
+    // An output that appears while the panel is open (switched on by hand,
+    // back from a dropped link) brings its saved settings into the edits.
+    // Its file lines stop being kept verbatim once it is present, so without
+    // this the next Apply wrote the file without them and dropped its
+    // screensaver time.
+    function adoptNewcomers(newcomers) {
+        if (newcomers.length === 0 || root.resetPendingOnLoad || !root.overridesFresh)
+            return;
+        const current = root.currentMap();
+        const saver = root.currentSaverMap();
+        const pending = root.clonePending();
+        const pendingSaver = Object.assign({}, root.pendingSaver);
+        for (const o of newcomers) {
+            if (pending[o.name] === undefined && current[o.name] !== undefined)
+                pending[o.name] = Object.assign({}, current[o.name]);
+            if (pendingSaver[o.name] === undefined)
+                pendingSaver[o.name] = saver[o.name] ?? 0;
+        }
+        root.pending = pending;
+        root.pendingSaver = pendingSaver;
     }
 
     function parseOverrides(text) {
@@ -749,8 +797,11 @@ Scope {
         root.busy = true;
         root.error = "";
         // The content travels as an argument, never through the shell's
-        // parser: descriptions are whatever the display claims to be.
-        setProc.command = ["sh", "-c", "printf '%s' \"$1\" | \"$2\" set", "_", root.pendingTsv, root.script];
+        // parser: descriptions are whatever the display claims to be. A
+        // trial: the script keeps the deadline, so a bar that goes away
+        // during the countdown still reverts (see the script's header).
+        setProc.command = ["sh", "-c", "printf '%s' \"$1\" | \"$2\" try \"$3\"", "_", root.pendingTsv, root.script,
+                           String(Theme.displaysRevertSeconds)];
         setProc.running = true;
     }
 
@@ -812,6 +863,41 @@ Scope {
 
     function keep() {
         root.countdown = 0;
+        keepProc.running = true;
+    }
+
+    Process {
+        id: keepProc
+
+        command: ["sh", "-c", "exec \"$1\" keep", "_", root.script]
+
+        onExited: code => {
+            if (code !== 0)
+                root.error = `could not keep the settings (exit ${code}); they revert at the next start`;
+        }
+    }
+
+    // A trial an earlier bar left (a reload, a crash, a power-off during
+    // the countdown): its time left runs on here, and one already due is
+    // reverted at once.
+    Component.onCompleted: trialProc.running = true
+
+    Process {
+        id: trialProc
+
+        command: ["sh", "-c", "[ -x \"$1\" ] && exec \"$1\" trial", "_", root.script]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                const left = parseInt(this.text.trim(), 10);
+                if (Number.isNaN(left))
+                    return;
+                if (left > 0)
+                    root.countdown = Math.min(left, Theme.displaysRevertSeconds);
+                else
+                    root.revert();
+            }
+        }
     }
 
     Timer {

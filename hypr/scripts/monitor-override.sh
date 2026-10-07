@@ -9,6 +9,12 @@
 #
 #   monitor-override.sh show            print the current overrides
 #   monitor-override.sh set  < lines    replace them with stdin (checked first)
+#   monitor-override.sh try SECONDS < lines
+#                                       set, as a trial: due for a revert
+#                                       unless kept within SECONDS
+#   monitor-override.sh keep            end a trial, keeping what it set
+#   monitor-override.sh trial           print the seconds a trial has left
+#                                       (0 or less: due); nothing if none
 #   monitor-override.sh clear           remove them: the policy alone decides
 #   monitor-override.sh revert          swap the previous set back in
 #
@@ -35,17 +41,27 @@
 # revert swaps <file>.prev back; an empty .prev means there was no file. Exit
 # codes: 0 ok, 1 could not write or reload, 2 usage or a line that does not
 # parse (then nothing is written).
+#
+# A trial is the display panel's Apply: the panel counts down and reverts
+# unless the user keeps the change. The countdown lived only in the running
+# bar, so a reload, a crash or a forced power-off in those seconds (when a
+# mode has gone wrong, say) left the untested set in force at every later
+# login, and the next Apply overwrote .prev, the last state known to work.
+# <file>.trial holds the deadline instead; a bar that starts reads it and
+# resumes the countdown or reverts at once. Anything that settles the state
+# (set, keep, clear, revert) ends the trial.
 
 set -uo pipefail
 
 STATE_DIR="${XDG_STATE_HOME:-$HOME/.local/state}/hypr"
 FILE="$STATE_DIR/monitor-overrides"
 PREV="$FILE.prev"
+TRIAL="$FILE.trial"
 
 say() { printf 'monitor-override: %s\n' "$*" >&2; }
 
 usage() {
-    say "usage: ${0##*/} show | set < lines | clear | revert"
+    say "usage: ${0##*/} show | set < lines | try SECONDS < lines | keep | trial | clear | revert"
     exit 2
 }
 
@@ -157,16 +173,32 @@ write_lines() {
     }
 }
 
+# The deadline goes in first: an Apply interrupted between the write and the
+# marker must still come back as a trial.
+start_trial() {
+    local seconds="$1" tmp="$TRIAL.new-$$"
+    mkdir -p -- "$STATE_DIR" || { say "cannot create $STATE_DIR"; return 1; }
+    { printf '%s\n' "$(( $(date +%s) + seconds ))" > "$tmp" && mv -T -- "$tmp" "$TRIAL"; } || {
+        rm -f -- "$tmp"
+        say "cannot write $TRIAL"
+        return 1
+    }
+}
+
 case "${1:-}" in
     show)
         [[ $# -eq 1 ]] || usage
         [[ -f "$FILE" ]] && cat -- "$FILE"
         exit 0
         ;;
-    set)
-        [[ $# -eq 1 ]] || usage
+    set|try)
+        if [[ "$1" == try ]]; then
+            [[ $# -eq 2 && "$2" =~ ^[1-9][0-9]{0,3}$ ]] || usage
+        else
+            [[ $# -eq 1 ]] || usage
+        fi
         if [[ -t 0 ]]; then
-            say "set reads the new overrides from stdin"
+            say "$1 reads the new overrides from stdin"
             exit 2
         fi
         lines=()
@@ -174,13 +206,38 @@ case "${1:-}" in
             lines+=("$line")
         done
         validate lines || exit 2
-        keep_previous || exit 1
-        write_lines lines || exit 1
+        if [[ "$1" == try ]]; then
+            start_trial "$2" || exit 1
+        else
+            rm -f -- "$TRIAL"
+        fi
+        # Nothing written, nothing to try: a marker left over would revert
+        # to the state before the previous set.
+        if ! keep_previous || ! write_lines lines; then
+            rm -f -- "$TRIAL"
+            exit 1
+        fi
         reload || exit 1
+        exit 0
+        ;;
+    keep)
+        [[ $# -eq 1 ]] || usage
+        rm -f -- "$TRIAL"
+        exit 0
+        ;;
+    trial)
+        [[ $# -eq 1 ]] || usage
+        if [[ -f "$TRIAL" ]]; then
+            deadline=$(head -n 1 -- "$TRIAL")
+            # Unreadable counts as due: reverting is the safe side.
+            [[ "$deadline" =~ ^[0-9]+$ ]] || deadline=0
+            printf '%s\n' "$(( deadline - $(date +%s) ))"
+        fi
         exit 0
         ;;
     clear)
         [[ $# -eq 1 ]] || usage
+        rm -f -- "$TRIAL"
         keep_previous || exit 1
         rm -f -- "$FILE"
         reload || exit 1
@@ -188,6 +245,10 @@ case "${1:-}" in
         ;;
     revert)
         [[ $# -eq 1 ]] || usage
+        # Over before the swap: a marker left behind by a failed reload
+        # would revert again at the next start, and a second revert undoes
+        # the first.
+        rm -f -- "$TRIAL"
         if [[ ! -f "$PREV" ]]; then
             say "nothing to revert"
             exit 1
