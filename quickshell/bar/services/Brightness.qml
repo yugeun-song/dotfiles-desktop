@@ -156,15 +156,15 @@ Singleton {
         if (root.mechanism === "ddc") {
             if (bus === undefined)
                 return;
-            readDdc.command = ["ddcutil", "-b", String(bus), "getvcp", "10", "--brief"];
+            readProc.command = ["ddcutil", "-b", String(bus), "getvcp", "10", "--brief"];
         } else {
-            readDdc.command = ["sh", "-c", "brightnessctl -m | cut -d, -f4 | tr -d '%'"];
+            readProc.command = ["sh", "-c", "brightnessctl -m | cut -d, -f4 | tr -d '%'"];
         }
-        readDdc.running = true;
+        readProc.running = true;
     }
 
     Process {
-        id: readDdc
+        id: readProc
 
         stdout: SplitParser {
             onRead: line => {
