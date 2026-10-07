@@ -65,6 +65,12 @@ Item {
 
     HoverHandler {
         id: hover
+
+        // Uptime is read for the tooltip only; see Resources.readUptime.
+        onHoveredChanged: {
+            if (hover.hovered)
+                Resources.readUptime();
+        }
     }
 
     Tooltip {

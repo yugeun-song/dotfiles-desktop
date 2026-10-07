@@ -21,14 +21,19 @@ Singleton {
     readonly property int cpuPercent: Math.round(cpuUsage * 100)
     readonly property int memPercent: Math.round(memUsage * 100)
 
+    // blockLoading: text() waits for the read reload() just started. Without
+    // it, text() gave the read before, and every sample was a second old.
+    // A /proc read takes microseconds.
     FileView {
         id: statFile
         path: "/proc/stat"
+        blockLoading: true
     }
 
     FileView {
         id: memFile
         path: "/proc/meminfo"
+        blockLoading: true
     }
 
     FileView {
@@ -38,9 +43,18 @@ Singleton {
         blockLoading: true
     }
 
+    // Read when the badge's tooltip is about to show (readUptime), not every
+    // second: nothing else shows it, and each read is a reader thread and
+    // three lines in the bar's log, which lives in tmpfs for the session.
     FileView {
         id: uptimeFile
         path: "/proc/uptime"
+        blockLoading: true
+    }
+
+    function readUptime() {
+        uptimeFile.reload();
+        root.uptimeSeconds = Number(uptimeFile.text().split(/\s+/)[0] ?? 0);
     }
 
     property string kernel: "unknown"
@@ -70,8 +84,6 @@ Singleton {
     function sample() {
         statFile.reload();
         memFile.reload();
-        uptimeFile.reload();
-        root.uptimeSeconds = Number(uptimeFile.text().split(/\s+/)[0] ?? 0);
 
         const meminfo = memFile.text();
         const total = Number(meminfo.match(/MemTotal:\s+(\d+)/)?.[1] ?? 0);
