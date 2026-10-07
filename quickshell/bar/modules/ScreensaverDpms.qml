@@ -98,6 +98,104 @@ Scope {
     // them, are only safe on screens the user can see.
     property bool paused: false
 
+    // What this module did to each display, and the shares under way, kept
+    // across reloads. install.sh reloads the bar, at night too, and the new
+    // instance lit every display the old one had darkened, then waited its
+    // full minutes to darken them again; a share in progress was forgotten,
+    // and its display could go dark under the call. JSON strings, as in
+    // Notifications.qml; state is {name: {off, offSince, away, slept,
+    // blocked}}.
+    PersistentProperties {
+        id: kept
+
+        reloadableId: "screensaver"
+
+        property string state: "{}"
+        property string shares: "{}"
+
+        onLoaded: {
+            root.inherited = root.parseObject(kept.state);
+            root.inheritedArrived();
+            root.shares = root.parseObject(kept.shares);
+            root.settleShares();
+            // Nothing announces a DPMS change, so the cached monitor state
+            // can predate the old instance's last request: a display it had
+            // just turned off still read as lit and was lit again. Read the
+            // monitors afresh; the answer lands within milliseconds.
+            Hyprland.refreshMonitors();
+            settle.restart();
+        }
+    }
+
+    Timer {
+        id: settle
+
+        interval: 300
+        onTriggered: root.restored = true
+    }
+
+    function parseObject(text) {
+        try {
+            const value = JSON.parse(text);
+            return value !== null && typeof value === "object" ? value : {};
+        } catch (e) {
+            return {};
+        }
+    }
+
+    function record(name, entry) {
+        const all = root.parseObject(kept.state);
+        if (entry)
+            all[name] = entry;
+        else
+            delete all[name];
+        kept.state = JSON.stringify(all);
+    }
+
+    onSharesChanged: kept.shares = JSON.stringify(root.shares)
+
+    // The previous instance's state, taken by each display once; empty
+    // after a start.
+    property var inherited: ({})
+    property bool restored: false
+
+    signal inheritedArrived
+
+    // No display decides anything before both are in: with the minutes
+    // still unread every display reads as unarmed, and without the saved
+    // state a display left dark would be lit.
+    readonly property bool ready: root.restored && Screensaver.loaded
+
+    onReadyChanged: {
+        // What no display took is stale by the time one could: a display
+        // that comes back later must not inherit its old darkness.
+        if (root.ready)
+            Qt.callLater(() => root.inherited = {});
+    }
+
+    // A display taken over while off counts the seat as idle, as it was
+    // when it went off. A new idle notification reports going idle and
+    // back only, so the first input after a reload would never arrive;
+    // this one-second notification stands in for it.
+    property int waking: 0
+
+    signal inputSeen
+
+    IdleMonitor {
+        id: wake
+
+        enabled: root.waking > 0
+        timeout: 1
+        respectInhibitors: false
+
+        onIsIdleChanged: {
+            if (wake.isIdle)
+                return;
+            root.waking = 0;
+            root.inputSeen();
+        }
+    }
+
     // Screen sharing (a call, a recording) shows a display to someone, so it
     // must not go dark: a shared output is held up, and a shared window holds
     // every display, since its frames are drawn with its monitor's. Hyprland
@@ -212,7 +310,7 @@ Scope {
             readonly property bool unused: slot.armed && slot.away && !slot.focused && !slot.blocked
             readonly property bool wantOff: (slot.previewing && root.previewStage === "off")
                 || (slot.armed && (slot.rested || (slot.slept && slot.unused)))
-            readonly property bool dark: slot.wantOff || slot.unused || slot.previewing
+            readonly property bool dark: slot.wantOff || slot.unused || slot.previewing || slot.inheritedDark
 
             onWantOffChanged: slot.ask(slot.wantOff)
 
@@ -221,9 +319,87 @@ Scope {
                     slot.slept = true;
             }
 
-            // A display an earlier instance left off (a reload, a crash)
-            // would otherwise stay off with nothing here knowing of it.
-            Component.onCompleted: slot.ask(false)
+            // Waits for the saved state and the minutes (root.ready).
+            Component.onCompleted: {
+                if (root.ready)
+                    slot.start();
+            }
+
+            Connections {
+                target: root
+
+                function onReadyChanged() {
+                    if (root.ready)
+                        slot.start();
+                }
+
+                // Black at once where the previous instance had it dark:
+                // its layer is gone with it, and waiting for start() showed
+                // the desktop for half a second at every reload.
+                function onInheritedArrived() {
+                    const saved = root.inherited[slot.name];
+                    slot.inheritedDark = saved?.off === true || (saved?.away === true && !slot.focused);
+                }
+
+                function onInputSeen() {
+                    if (!slot.waking)
+                        return;
+                    slot.waking = false;
+                    slot.rested = false;
+                    if (!slot.unused)
+                        slot.slept = false;
+                    if (slot.off)
+                        Hyprland.refreshMonitors();
+                }
+            }
+
+            // Set while a display taken over off waits for the next input.
+            property bool waking: false
+
+            // Black until start() has decided; see onInheritedArrived.
+            property bool inheritedDark: false
+
+            // Takes over what the instance before a reload left: a display
+            // still off stays off, one that was black stays black. Anything
+            // else is lit, in case an earlier instance left it off (after a
+            // crash bar.service has lit it already; M.saver passes over a
+            // display that is lit).
+            function start() {
+                const saved = root.inherited[slot.name];
+                const lit = slot.monitor?.lastIpcObject?.dpmsStatus;
+                if (saved?.off === true && lit === false && slot.armed) {
+                    slot.offSince = saved.offSince ?? Date.now();
+                    slot.off = true;
+                    slot.slept = true;
+                    slot.blocked = saved.blocked === true;
+                    slot.away = !slot.focused;
+                    slot.rested = true;
+                    slot.waking = true;
+                    root.waking += 1;
+                } else if (saved?.away === true && !slot.focused && lit !== false) {
+                    slot.blocked = saved.blocked === true;
+                    slot.slept = saved.slept === true;
+                    slot.away = true;
+                } else {
+                    slot.ask(false);
+                }
+                slot.inheritedDark = false;
+            }
+
+            // For the next instance; see `kept`.
+            function remember() {
+                if (!root.ready)
+                    return;
+                root.record(slot.name, slot.off || slot.away
+                            ? { off: slot.off, offSince: slot.offSince, away: slot.away,
+                                slept: slot.slept, blocked: slot.blocked }
+                            : null);
+            }
+
+            onOffChanged: slot.remember()
+            onAwayChanged: slot.remember()
+            onSleptChanged: slot.remember()
+            onBlockedChanged: slot.remember()
 
             onFocusedChanged: {
                 if (slot.focused) {

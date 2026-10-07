@@ -39,6 +39,11 @@ Singleton {
     property var kept: []
     property string error: ""
 
+    // Set once the file has been read or found missing. The saver takes no
+    // decision before: with every display at 0 minutes, a display an earlier
+    // bar left off would be lit again.
+    property bool loaded: false
+
     // Minutes per connector for every monitor the compositor lists, rebuilt
     // whenever the file or the monitor set changes. A property rather than a
     // function for the module's bindings: a singleton's functions are not
@@ -124,10 +129,14 @@ Singleton {
         // A missing file is the default state, not an error worth a log line.
         printErrors: false
 
-        onLoaded: root.parse(store.text())
+        onLoaded: {
+            root.parse(store.text());
+            root.loaded = true;
+        }
         onLoadFailed: {
             root.entries = [];
             root.kept = [];
+            root.loaded = true;
         }
         onFileChanged: store.reload()
         onSaveFailed: error => {

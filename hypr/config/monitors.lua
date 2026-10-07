@@ -1669,14 +1669,26 @@ end
 -- output's enabled state makes aquamarine probe every connector again (up
 -- to 1.1 s). Hence the bar's black for a display unused while someone works
 -- on another.
+--
+-- An output already in the state asked for is left alone. The bar asks for
+-- every display to be lit whenever it starts or reloads and whenever an
+-- output appears (a display an earlier bar left off must not stay off), so
+-- most requests are for the state an output already has; none of them is
+-- sent on as a DPMS dispatch, which may cost a commit like the one above.
 function M.saver(name, off)
-    if type(name) ~= "string" or not hl.get_monitor(name) then
+    if type(name) ~= "string" then
+        return
+    end
+    local monitor = hl.get_monitor(name)
+    if not monitor then
         return
     end
     if off then
-        hl.dispatch(hl.dsp.dpms({ action = "disable", monitor = name }))
-        rearm_dpms()
-    elseif not (lid_closed and classify(name) == "internal") then
+        if monitor.dpms_status ~= false then
+            hl.dispatch(hl.dsp.dpms({ action = "disable", monitor = name }))
+            rearm_dpms()
+        end
+    elseif monitor.dpms_status ~= true and not (lid_closed and classify(name) == "internal") then
         hl.dispatch(hl.dsp.dpms({ action = "enable", monitor = name }))
     end
 end
