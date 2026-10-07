@@ -93,7 +93,9 @@ get_json() {
     if [[ -n "$body" ]] && printf '%s' "$body" | jq -e '.current' >/dev/null 2>&1; then
         # Atomic replace.
         if tmp=$(mktemp "$CACHE_DIR/.wx.XXXXXX" 2>/dev/null); then
-            printf '%s' "$body" > "$tmp" && mv "$tmp" "$CACHE_FILE" || rm -f "$tmp"
+            if ! { printf '%s' "$body" > "$tmp" && mv "$tmp" "$CACHE_FILE"; }; then
+                rm -f "$tmp"
+            fi
         fi
         json=$body
         FETCHED=$(date +%s)

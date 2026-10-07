@@ -114,7 +114,10 @@ settle() {
     done
     return 1
 }
+# Both are called through settle(), which shellcheck cannot see.
+# shellcheck disable=SC2329
 mirrors() { [[ "$(n monitors all -j | jq -r --arg m "$1" '.[] | select(.name == $m) | .mirrorOf')" != "none" ]]; }
+# shellcheck disable=SC2329
 not_mirroring() { ! mirrors "$1"; }
 expect_re() {
     local label="$1" want="$2" got

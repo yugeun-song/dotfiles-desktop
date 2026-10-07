@@ -1,3 +1,6 @@
+# Sourced by the login shell from profile.d, never run, so no shebang; the
+# ${var//...} expansions need bash or zsh.
+# shellcheck shell=bash
 _node_repl="${XDG_CONFIG_HOME:-$HOME/.config}/node/repl.js"
 _node_flag="--require \"$_node_repl\""
 _node_opts=" ${NODE_OPTIONS-} "
