@@ -82,12 +82,14 @@ fi
 tests/unit/qml.sh || failed=1
 tests/unit/monitor-override.sh || failed=1
 tests/unit/alarm.sh || failed=1
-if out=$(python3 -I tests/unit/test_keyfeed.py 2>&1); then
-    echo "PASS  keyfeed: $(grep -oE '^Ran [0-9]+ tests' <<<"$out" | sed 's/^Ran //')"
-else
-    fail "keyfeed:"
-    echo "$out" | tail -20
-fi
+for name in keyfeed inputmethod; do
+    if out=$(python3 -I "tests/unit/test_$name.py" 2>&1); then
+        echo "PASS  $name: $(grep -oE '^Ran [0-9]+ tests' <<<"$out" | sed 's/^Ran //')"
+    else
+        fail "$name:"
+        echo "$out" | tail -20
+    fi
+done
 
 if (( E2E )); then
     tests/e2e/run.sh || failed=1

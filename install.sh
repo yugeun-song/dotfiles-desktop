@@ -437,7 +437,7 @@ doctor() {
         "brightnessctl:brightness keys on the panel" "ddcutil:brightness on external displays"
         "playerctl:media keys" "wpctl:volume keys" "hyprlock:lock screen" "hypridle:lock before sleep"
         "hyprpaper:wallpaper" "fcitx5:Korean input" "jq:the Displays panel and every script that reads hyprctl"
-        "python3:key overlay" "cava:visualiser" "notify-send:notifications from scripts" "kitty:terminal"
+        "python3:key overlay and input method indicator" "cava:visualiser" "notify-send:notifications from scripts" "kitty:terminal"
         "inotifywait:session watch (polls every 5 s without it)"
     )
     for tool in "${tools[@]}"; do

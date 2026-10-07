@@ -51,8 +51,8 @@ Singleton {
     property double asOf: 0
     property int restarts: 0
 
-    // Exponential backoff (2 s to 60 s): the helper exits at once when
-    // fcitx5-remote is missing.
+    // Exponential backoff (2 s to 60 s): the helper exits at once when the
+    // session bus cannot be reached, and when it drops the connection.
     Timer {
         id: supervisor
 
@@ -72,7 +72,9 @@ Singleton {
         id: poller
 
         running: true
-        command: [Quickshell.shellPath("scripts/inputmethod.sh")]
+        // One D-Bus connection, polled; see the script for why not
+        // fcitx5-remote.
+        command: ["python3", "-I", Quickshell.shellPath("scripts/inputmethod.py")]
 
         onRunningChanged: {
             if (!poller.running) {
