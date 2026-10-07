@@ -46,8 +46,10 @@ else
     RUN="/tmp/capture-$UID"
 fi
 LOCKED=0
+LIFTED=0
 PART=""
 OUT=""
+BAR_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar"
 
 # Anything that may outlive the script starts here: detached, and with fd 9
 # (the lock) closed. $1 is its stdin.
@@ -66,6 +68,7 @@ notify() {
 
 die() {
     release_lock
+    restore_black
     echo "capture: $*" >&2
     notify -u critical "Screenshot failed" "$*"
     exit 1
@@ -99,10 +102,42 @@ release_lock() {
 }
 
 cleanup() {
+    restore_black
     [[ -n "$PART" ]] && rm -f -- "$PART"
     rm -f -- "$RUN"/*."$$".* 2>/dev/null
 }
 trap cleanup EXIT
+
+# The bar's screensaver blacks out a display nobody uses (a 1x1 layer that
+# Hyprland draws as black around it), and a frame grabbed from that display is
+# black. Region shots and colour picks take every output before their overlay
+# shows, so the bar lifts the black while they run: its clocks go on, and the
+# black comes back as it was. Asked only when a black is up, since the call
+# starts a process; the bar ends the lift by itself if this script dies.
+saver_up() {
+    timeout 2 hyprctl -j layers 2>/dev/null \
+        | jq -e '[.. | objects | select(.namespace? == "quickshell:screensaver")] | length > 0' >/dev/null 2>&1
+}
+
+lift_black() {
+    command -v qs >/dev/null 2>&1 || return 0
+    saver_up || return 0
+    timeout 2 qs -p "$BAR_CONFIG" ipc call screensaver lift "$(( OVERLAY_TIMEOUT + 10 ))" \
+        </dev/null >/dev/null 2>&1 9>&- || return 0
+    LIFTED=1
+    # Until the layers are gone: a few frames at most.
+    local _
+    for _ in 1 2 3 4 5 6 7 8 9 10; do
+        saver_up || break
+        sleep 0.03
+    done
+}
+
+restore_black() {
+    (( LIFTED )) || return 0
+    LIFTED=0
+    spawn /dev/null timeout 2 qs -p "$BAR_CONFIG" ipc call screensaver lift 0
+}
 
 # Files of runs killed before their trap could run. The pid in the name says
 # whose they are; a live run's files are left alone.
@@ -321,6 +356,12 @@ case "$MODE" in
         need grim hyprctl jq
         out=$(timeout "$GRAB_TIMEOUT" hyprctl activeworkspace -j 2>/dev/null | jq -r '.monitor // empty' 2>/dev/null)
         [[ -n "$out" ]] || die "could not determine the focused monitor"
+        # An output that is off draws no frames: grim would wait out its
+        # deadline (see grab_frames). The bar wakes a display as soon as it
+        # is used, so this means the bar is not running.
+        lit=$(timeout "$GRAB_TIMEOUT" hyprctl monitors -j 2>/dev/null \
+            | jq -r --arg m "$out" '.[] | select(.name == $m) | .dpmsStatus' 2>/dev/null)
+        [[ "$lit" == false ]] && die "$out is off; is the bar running? (bar --status)"
         begin_shot
         timeout "$GRAB_TIMEOUT" grim -o "$out" "$PART" </dev/null >/dev/null 2>&1 \
             || die "grim could not capture $out"
@@ -332,8 +373,10 @@ case "$MODE" in
         need grim slurp magick hyprctl jq
         [[ "$MODE" == region-edit ]] && need swappy
         take_lock
+        lift_black
         grab_frames
         select_region || exit 0
+        restore_black
         cut_selection
         publish
         [[ "$MODE" == region-edit ]] && spawn /dev/null swappy -f "$OUT"
@@ -369,11 +412,13 @@ case "$MODE" in
         need hyprpicker wl-copy
         take_lock
         pgrep -u "$UID" -x 'slurp|hyprpicker' >/dev/null 2>&1 && die "another selection is already open"
+        lift_black
         # No -a: hyprpicker's own wl-copy would inherit the lock, and this
         # script copies anyway.
         hex=$(timeout -k 2 "$OVERLAY_TIMEOUT" hyprpicker -n </dev/null 2>/dev/null)
         rc=$?
         release_lock
+        restore_black
         case "$rc" in
             0) ;;
             2) exit 0 ;;   # Esc

@@ -64,6 +64,8 @@ Scope {
     // Either stage for a while, from a shell:
     //   qs -p ~/.config/quickshell/bar ipc call screensaver preview eDP-1 10
     //   qs -p ~/.config/quickshell/bar ipc call screensaver previewOff eDP-1 10
+    //
+    // And for hypr/scripts/capture.sh (lift N, then lift 0); see `lifted`.
     IpcHandler {
         target: "screensaver"
 
@@ -74,6 +76,28 @@ Scope {
         function previewOff(name: string, seconds: int): void {
             root.startPreview(name, seconds, "off");
         }
+
+        function lift(seconds: int): void {
+            root.lifted = seconds > 0;
+            if (root.lifted) {
+                liftTimer.interval = Math.min(seconds, 300) * 1000;
+                liftTimer.restart();
+            } else {
+                liftTimer.stop();
+            }
+        }
+    }
+
+    // Set while a region shot or a colour pick runs. Both grab every output
+    // before their overlay shows, and a display in the black stage came out
+    // black. Only the black goes: the clocks run on, so it comes back as it
+    // was. Bounded, in case the capture dies before it says it is done.
+    property bool lifted: false
+
+    Timer {
+        id: liftTimer
+
+        onTriggered: root.lifted = false
     }
 
     property string previewName: ""
@@ -310,7 +334,7 @@ Scope {
             readonly property bool unused: slot.armed && slot.away && !slot.focused && !slot.blocked
             readonly property bool wantOff: (slot.previewing && root.previewStage === "off")
                 || (slot.armed && (slot.rested || (slot.slept && slot.unused)))
-            readonly property bool dark: slot.wantOff || slot.unused || slot.previewing || slot.inheritedDark
+            readonly property bool dark: (slot.wantOff || slot.unused || slot.previewing || slot.inheritedDark) && !root.lifted
 
             onWantOffChanged: slot.ask(slot.wantOff)
 
