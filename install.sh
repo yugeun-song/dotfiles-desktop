@@ -3,8 +3,9 @@
 # Installs the desktop configuration. Files are copied, not linked, so nothing
 # edited here runs until this is re-run. --check lists what is behind, exit 1.
 #
-# /etc/fonts/local.conf and /etc/tuigreet/config.toml need sudo; it is asked
-# for once, up front. Printing them as manual steps meant they never ran.
+# /etc/fonts/local.conf, /etc/tuigreet/config.toml and the camera switch need
+# sudo; it is asked for once, up front. Printing them as manual steps meant
+# they never ran.
 #
 set -euo pipefail
 
@@ -13,9 +14,19 @@ CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
 STAMP="$(date +%Y%m%d-%H%M%S)"
 FONTCONF=/etc/fonts/local.conf
 GREETERCONF=/etc/tuigreet/config.toml
+# The camera switch (camera/): the helper pkexec runs as root, the polkit
+# action that lets the seat's session run it without a password, and the udev
+# rule that turns off a camera appearing while the switch is off. Root's, with
+# these modes: whatever pkexec runs as root must not be writable by the user
+# it runs for. source:destination:mode
+CAMERA_FILES=(
+    "camera/camera-switch.py:/usr/local/bin/camera-switch:755"
+    "camera/io.github.yugeun-song.camera-switch.policy:/usr/share/polkit-1/actions/io.github.yugeun-song.camera-switch.policy:644"
+    "camera/70-camera-switch.rules:/etc/udev/rules.d/70-camera-switch.rules:644"
+)
 
 # sudo is acquired before any write and kept alive in the background, since a
-# cold run can outlast the timestamp. Without it only the /etc files are skipped.
+# cold run can outlast the timestamp. Without it only the system files are skipped.
 SUDO_OK=0
 SUDO_KEEPALIVE=
 
@@ -35,9 +46,24 @@ greeter_is_tuigreet() {
     command -v tuigreet >/dev/null 2>&1
 }
 
+# Each installed camera file that differs from the repository or is not
+# root's with its mode, one per line.
+camera_behind() {
+    local entry src dst mode
+    for entry in "${CAMERA_FILES[@]}"; do
+        IFS=: read -r src dst mode <<<"$entry"
+        if ! cmp -s "$SRC/$src" "$dst" || [[ "$(stat -c '%a %U' "$dst" 2>/dev/null)" != "$mode root" ]]; then
+            echo "$dst"
+        fi
+    done
+}
+
 acquire_sudo() {
     local want=0
     if [[ ! -f "$FONTCONF" ]] || ! cmp -s "$SRC/fontconfig/local.conf" "$FONTCONF"; then
+        want=1
+    fi
+    if [[ -n "$(camera_behind)" ]]; then
         want=1
     fi
     if greeter_is_tuigreet \
@@ -297,9 +323,14 @@ mirror "$SRC/bin/bar"               "$HOME/.local/bin/bar"
 mirror "$SRC/bin/unlock"            "$HOME/.local/bin/unlock"
 # In ~ on purpose: typed from a text console where PATH may not be set up.
 mirror "$SRC/bin/recover-desktop"   "$HOME/recover-desktop"
+# The camera switch's user copy: `camera-switch` from a terminal, and what
+# the camera keys fall back to until the sudo step below has installed the
+# root-owned one; it works, but asks for an administrator password each time.
+mirror "$SRC/camera/camera-switch.py" "$HOME/.local/bin/camera-switch"
 # mirror() ignores mode when content matches, and make_executable only walks
 # the script directories, so a 644 checkout needs this.
-(( CHECK )) || chmod +x "$HOME/.local/bin/bar" "$HOME/.local/bin/unlock" "$HOME/recover-desktop" 2>/dev/null || true
+(( CHECK )) || chmod +x "$HOME/.local/bin/bar" "$HOME/.local/bin/unlock" "$HOME/.local/bin/camera-switch" \
+    "$HOME/recover-desktop" 2>/dev/null || true
 
 # Units are mirrored, then daemon-reload below. Running units are not
 # restarted (restarting fcitx5 drops every window's input context); the next
@@ -437,7 +468,8 @@ doctor() {
         "brightnessctl:brightness keys on the panel" "ddcutil:brightness on external displays"
         "playerctl:media keys" "wpctl:volume keys" "hyprlock:lock screen" "hypridle:lock before sleep"
         "hyprpaper:wallpaper" "fcitx5:Korean input" "jq:the Displays panel and every script that reads hyprctl"
-        "python3:key overlay and input method indicator" "cava:visualiser" "notify-send:notifications from scripts" "kitty:terminal"
+        "python3:key overlay, input method indicator and camera switch" "pkexec:the camera keys"
+        "cava:visualiser" "notify-send:notifications from scripts" "kitty:terminal"
         "inotifywait:session watch (polls every 5 s without it)"
     )
     for tool in "${tools[@]}"; do
@@ -462,6 +494,11 @@ if (( CHECK )); then
     else
         echo "skip    $GREETERCONF: this machine's greeter is not tuigreet"
     fi
+    while read -r _dst; do
+        [[ -n "$_dst" ]] || continue
+        echo "DRIFT   $_dst is behind $SRC/camera"; DRIFT=1
+    done < <(camera_behind)
+    unset _dst
     (( DRIFT )) && { echo; echo "run ./install.sh to apply"; exit 1; }
     echo "everything installed is current"
     exit 0
@@ -506,6 +543,32 @@ else
     echo "the greeter config was not installed. it is a system file:" >&2
     echo "  sudo install -Dm644 $SRC/tuigreet/config.toml $GREETERCONF" >&2
 fi
+
+_camera_behind=$(camera_behind)
+if [[ -z "$_camera_behind" ]]; then
+    echo "camera switch: already current"
+elif (( SUDO_OK )); then
+    for _entry in "${CAMERA_FILES[@]}"; do
+        IFS=: read -r _src _dst _mode <<<"$_entry"
+        grep -qxF -- "$_dst" <<<"$_camera_behind" || continue
+        if sudo install -D -o root -g root -m "$_mode" "$SRC/$_src" "$_dst"; then
+            echo "installed $_dst"
+        else
+            echo "could not write $_dst" >&2
+        fi
+    done
+    # polkit watches its action directory; udev is told, so the rule holds
+    # from the next event on.
+    sudo udevadm control --reload 2>/dev/null && echo "udev rules reloaded"
+else
+    echo "the camera switch was not installed. it is a set of system files:" >&2
+    for _entry in "${CAMERA_FILES[@]}"; do
+        IFS=: read -r _src _dst _mode <<<"$_entry"
+        echo "  sudo install -D -o root -g root -m $_mode $SRC/$_src $_dst" >&2
+    done
+    echo "  sudo udevadm control --reload" >&2
+fi
+unset _camera_behind _entry _src _dst _mode
 
 echo
 doctor

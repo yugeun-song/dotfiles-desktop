@@ -4,6 +4,8 @@
 #   tests/run.sh          static checks and unit tests; no display needed
 #   tests/run.sh --e2e    and the end-to-end suite (tests/e2e/run.sh), in a
 #                         nested headless Hyprland; needs a running session
+#   tests/run.sh --vm     and the camera switch against a real kernel
+#                         (tests/vm/camera.sh), in a virtual machine
 #
 # Nothing here touches the installed desktop: every test works on copies, in
 # temporary directories, with stubs for anything that reaches the machine.
@@ -15,11 +17,14 @@ REPO=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$REPO" || exit 2
 
 E2E=0
-case "${1:-}" in
-    "") ;;
-    --e2e) E2E=1 ;;
-    *) echo "usage: tests/run.sh [--e2e]" >&2; exit 2 ;;
-esac
+VM=0
+for arg in "$@"; do
+    case "$arg" in
+        --e2e) E2E=1 ;;
+        --vm) VM=1 ;;
+        *) echo "usage: tests/run.sh [--e2e] [--vm]" >&2; exit 2 ;;
+    esac
+done
 
 failed=0
 fail() { echo "FAIL  $*"; failed=1; }
@@ -82,7 +87,8 @@ fi
 tests/unit/qml.sh || failed=1
 tests/unit/monitor-override.sh || failed=1
 tests/unit/alarm.sh || failed=1
-for name in keyfeed inputmethod; do
+tests/unit/camera.sh || failed=1
+for name in keyfeed inputmethod camera_switch; do
     if out=$(python3 -I "tests/unit/test_$name.py" 2>&1); then
         echo "PASS  $name: $(grep -oE '^Ran [0-9]+ tests' <<<"$out" | sed 's/^Ran //')"
     else
@@ -93,6 +99,9 @@ done
 
 if (( E2E )); then
     tests/e2e/run.sh || failed=1
+fi
+if (( VM )); then
+    tests/vm/camera.sh || failed=1
 fi
 
 if (( failed )); then

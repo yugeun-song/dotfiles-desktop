@@ -24,6 +24,8 @@ systemd/user/        the session target, one unit per long-running program, and
                      the slice the launcher's programs run in
 dbus/                fcitx5's D-Bus activation, pointed at its unit
 bin/                 bar and unlock (to ~/.local/bin), recover-desktop (to ~/)
+camera/              the camera switch: camera-switch (to /usr/local/bin with
+                     sudo, and to ~/.local/bin), its polkit action, its udev rule
 fontconfig/          font chain: Inter for Latin, Pretendard for Hangul
 gtk/ kde/            GTK settings; Qt and KDE colours, so dialogs match the bar
 tuigreet/            the greeter's appearance, installed only when greetd runs it
@@ -31,7 +33,8 @@ fcitx5/              Korean input configuration
 node/ iex/           REPL helpers (hex, bin, oct) for node and IEx
 theme/               colour system notes and the cursor theme builder
 tests/               tests/run.sh: static checks and unit tests; --e2e adds the
-                     end-to-end suite in a nested headless Hyprland
+                     end-to-end suite in a nested headless Hyprland, --vm the
+                     camera switch on a real kernel in a virtual machine
 ```
 
 ## Outputs
@@ -317,6 +320,79 @@ copy. Programs opened from the launcher and the pills run in
 `app-hyprland.slice` through `scripts/app-scope.sh`, so `bar --restart` leaves
 them alone and they still end with the session.
 
+## Cameras
+
+`Super+Alt+C`, or the laptop's own camera key, turns every camera off, and
+pressed again, back on; a notification names each camera and how it was
+turned off (Hyprland's own notice when the bar, which serves notifications,
+is down). The work is done by `camera/camera-switch.py`. Its root-owned copy
+in `/usr/local/bin`, from install.sh's sudo step, runs as root through pkexec
+with a polkit action that lets the session at the seat use it without a
+password, as udev's uaccess already hands that session the cameras; a remote
+session has to authenticate. The keys do nothing on the lock screen, which
+must not be a way to turn the cameras on.
+
+Cameras are found from what the kernel publishes, not from a list of models:
+video4linux nodes that capture from hardware, and USB interfaces of the
+video class, which also find a camera whose driver has not bound. Whether a
+node captures is read from udev's record of its capabilities, so no camera is
+opened to ask; a codec, a TV tuner, an output and a virtual camera such as
+v4l2loopback are left alone. A USB video grabber (HDMI capture) is a camera to
+the kernel and goes off with the rest. Each camera is turned off by the
+strongest means its hardware offers and then checked in sysfs; one that
+still has a capture node falls through to the next:
+
+```
+platform switch  the laptop's own camera switch in its platform driver
+                 (ideapad camera_power, asus-wmi or eeepc camera, out-of-tree
+                 msi-ec webcam), kept by the firmware below every driver;
+                 tried first, for every camera at once, and a camera it
+                 leaves on the bus still goes through the rest
+usb-interface    the camera's USB video interfaces are deauthorized: the
+                 kernel unbinds uvcvideo and refuses to bind it again, while
+                 the rest of the device keeps working (this laptop's webcam
+                 also carries a presence sensor, an external one a microphone)
+usb-device       the whole USB device is deauthorized, as if unplugged: a
+                 kernel without per-interface authorization
+unbind           the driver of a camera that is not on USB (an ISP or CSI-2
+                 receiver, such as Intel's IPU6) is unbound
+module           a driver that cannot be unbound has its module unloaded, if
+                 nothing holds it and it drives nothing else
+```
+
+A program that has a camera open loses it at once. A camera that nothing
+reaches is named as still on, never counted as off. This laptop has no
+platform switch (its asus-wmi exposes none), so its webcam goes off at the
+interfaces; anything that later tries to bind a driver to one is refused,
+with `Interface N is not authorized for usage` in the kernel log.
+
+The switch is kept across reboots, in `/var/lib/camera-switch/off`. While it
+is off, `/etc/udev/rules.d/70-camera-switch.rules` turns off any camera that
+appears: one plugged in, one the kernel enumerates again after a resume, and
+at boot every camera before its driver binds. What was done to which device
+is kept in `/run/camera-switch`, and `on` undoes it newest first.
+
+    camera-switch                status, no root needed; --json for programs
+    camera-switch off|on|toggle  what the keys run
+    journalctl -t camera-switch  every change and the means it used
+
+Any part of the root step can be missing; the switch then says what that
+costs (`camera-switch` lists it under `setup`) instead of stopping. Without
+the root-owned copy, the keys run the user copy install.sh puts in
+`~/.local/bin` with no sudo, which pkexec runs only for an administrator's
+password, every time; without the polkit action, the same password. Without
+pkexec, sudo: asking on a terminal, and from a key only where it needs no
+password, since a key has no terminal to ask on. Without the udev rule, a
+camera that appears later stays on, so after a reboot the switch file can
+say off while the webcam is live: the key then goes by what is live and
+turns it off, rather than turning the switch on.
+
+Not reached: a camera driven from user space through libusb, with no kernel
+video driver, and root, which can always turn a camera back on. On a machine
+whose `/var` is a separate filesystem, cameras come up on at boot until the
+switch is pressed, since udev reads the switch file before it is mounted. To
+remove the switch, turn the cameras on and delete the three installed files.
+
 ## Install
 
 ```sh
@@ -338,9 +414,9 @@ delete the installed file and run the installer again.
 
 The installer also parse-checks the Hyprland config (with the preset) and
 refuses to copy anything that does not load, since a mirror reloads the
-running compositor; asks for sudo once for `/etc/fonts/local.conf` and, only
-under tuigreet, `/etc/tuigreet/config.toml`, keeping `.bak-<timestamp>`
-copies; builds the `Spaceduck-Sky` cursor theme (bitmaps, so the colour is
+running compositor; asks for sudo once for `/etc/fonts/local.conf`, only
+under tuigreet `/etc/tuigreet/config.toml` (both keeping `.bak-<timestamp>`
+copies) and the camera switch's three files (see Cameras); builds the `Spaceduck-Sky` cursor theme (bitmaps, so the colour is
 baked in); disables `kde-baloo` and masks the drkonqi coredump units, which
 crash-loop without a display; runs `daemon-reload`, enables `hypridle` and
 reloads Hyprland. Its doctor line names the fonts and tools the desktop uses
@@ -359,6 +435,7 @@ IEx.
 ```sh
 tests/run.sh           # shellcheck, Lua, Python, the Hyprland config, unit tests
 tests/run.sh --e2e     # and the end-to-end suite
+tests/run.sh --vm      # and the camera switch on a real kernel
 ```
 
 Nothing here touches the installed desktop. The unit tests run the bar's own
@@ -375,6 +452,23 @@ the key overlay's switch, notifications, a dark display, a ringing alarm, a
 display trial. It needs a running Hyprland session, gcc, wayland-scanner,
 grim, slurp, ImageMagick and python3-pillow, skips what it lacks, and takes a
 minute and a half.
+
+The camera switch's unit tests run it against a model of sysfs under a
+temporary root, with the layouts it has to tell apart: this laptop's
+composite webcam, an external one with a microphone, a vendor-class USB
+camera, a MIPI camera behind an IPU6, a driver that cannot be unbound,
+firmware switches that work, do nothing or ignore the write, codecs,
+tuners and virtual devices that are not cameras, and each part of the root
+step missing; `tests/unit/camera.sh` runs the key script against stand-ins
+for the helper, notify-send and hyprctl. `--vm` boots the running
+kernel under virtme-ng and checks the same flows on the real thing: USB
+cameras made with raw_gadget on dummy_hcd (`tests/vm/usb_camera.py`) that the
+real uvcvideo binds, vivid for a camera that is not on USB, vim2m for a
+codec, a camera held open, one plugged in while off, a replayed boot, and
+a reboot without the udev rule.
+Its checks read sysfs, udev's database and the kernel log; nothing is
+streamed, and the laptop's own camera is not touched. It needs vng, QEMU and
+`/dev/kvm`, skips without them, and takes about ten seconds.
 
 ## Credits
 

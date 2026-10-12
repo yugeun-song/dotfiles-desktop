@@ -13,6 +13,8 @@ local clipboard = scripts .. "/clipboard.sh"
 local shellkey  = scripts .. "/shell-global.sh"
 -- wpctl, then pactl, then amixer: the keys follow the audio stack present.
 local volume    = scripts .. "/volume.sh"
+-- Every camera off or back on, through camera/camera-switch.py as root.
+local camera    = scripts .. "/camera.sh"
 -- Through launch.sh so a machine without playerctl gets a notification.
 local player    = launch .. " 'playerctl"
 
@@ -407,6 +409,11 @@ hl.bind("SUPER + SHIFT + M", hl.dsp.exec_cmd(volume .. " mute"),
     { locked = true, description = "Mute" })
 hl.bind("SUPER + ALT + M", hl.dsp.exec_cmd(volume .. " mic-mute"),
     { locked = true, description = "Mute microphone" })
+-- Alt marks the privacy keys: M for the microphone, C for the cameras. Not
+-- locked, unlike the mute keys: the lock screen must not be a way to turn
+-- the cameras on.
+hl.bind("SUPER + ALT + C", hl.dsp.exec_cmd(camera .. " toggle"),
+    { description = "Cameras off or on" })
 
 --##! Hardware keys
 -- locked: work on the lock screen; repeating: holding keeps stepping.
@@ -469,6 +476,10 @@ hl.bind("XF86AudioMicMute", hl.dsp.exec_cmd(volume .. " mic-mute"),
     { locked = true, description = "Mute microphone" })
 hl.bind("ALT + XF86AudioMute", hl.dsp.exec_cmd(volume .. " mic-mute"),
     { locked = true })
+-- The laptop's own camera key (KEY_CAMERA, sent by asus-wmi on this one);
+-- inert on a keyboard without it. Not locked, as Super+Alt+C.
+hl.bind("XF86WebCam", hl.dsp.exec_cmd(camera .. " toggle"),
+    { description = "Cameras off or on" })
 
 hl.bind("XF86AudioPlay", hl.dsp.exec_cmd(player .. " play-pause'"), { locked = true })
 hl.bind("XF86AudioPause", hl.dsp.exec_cmd(player .. " play-pause'"), { locked = true })
