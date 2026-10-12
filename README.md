@@ -30,7 +30,7 @@ fontconfig/          font chain: Inter for Latin, Pretendard for Hangul
 gtk/ kde/            GTK settings; Qt and KDE colours, so dialogs match the bar
 tuigreet/            the greeter's appearance, installed only when greetd runs it
 fcitx5/              Korean input configuration
-node/ iex/           REPL helpers (hex, bin, oct) for node and IEx
+node/                REPL helpers (hex, bin, oct) for node
 theme/               colour system notes and the cursor theme builder
 tests/               tests/run.sh: static checks and unit tests; --e2e adds the
                      end-to-end suite in a nested headless Hyprland, --vm the
@@ -427,8 +427,8 @@ The shell, terminal emulator and prompt live in
 [dotfiles-terminal](https://github.com/yugeun-song/dotfiles-terminal), which
 has its own `install.sh`. Its `zshenv` and `bashrc` source
 `~/.config/profile.d/*.sh`, which is how `node.sh` adds the REPL helpers
-(`hex`, `bin`, `oct`) to a bare node REPL only; `~/.iex.exs` does the same for
-IEx.
+(`hex`, `bin`, `oct`) to a bare node REPL only. The same helpers for IEx,
+`~/.iex.exs`, come from dotfiles-terminal alone.
 
 ## Checks
 

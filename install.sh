@@ -382,7 +382,8 @@ else
 fi
 mirror "$SRC/node/repl.js"           "$CONFIG/node/repl.js"
 mirror "$SRC/node/node.sh"           "$CONFIG/profile.d/node.sh"
-mirror "$SRC/iex/iex.exs"            "$HOME/.iex.exs"
+# IEx's helpers, ~/.iex.exs, are dotfiles-terminal's alone: mirrored from both
+# repositories, the file was whatever the last installer to run left there.
 mirror "$SRC/spotify/spotify-launcher.conf" "$CONFIG/spotify-launcher.conf"
 seed "$SRC/fcitx5/config"          "$CONFIG/fcitx5/config"
 seed "$SRC/fcitx5/profile"         "$CONFIG/fcitx5/profile"
