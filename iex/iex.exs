@@ -57,4 +57,5 @@ defmodule IExHelpers do
   end
 end
 
+import Bitwise
 import IExHelpers
