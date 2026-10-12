@@ -380,10 +380,9 @@ elif [[ -n "$cursor_tint" ]]; then
 else
     echo "install: no FILL in pointer.py; the cursor theme was not built" >&2
 fi
-mirror "$SRC/node/repl.js"           "$CONFIG/node/repl.js"
-mirror "$SRC/node/node.sh"           "$CONFIG/profile.d/node.sh"
-# IEx's helpers, ~/.iex.exs, are dotfiles-terminal's alone: mirrored from both
-# repositories, the file was whatever the last installer to run left there.
+# The REPL helpers for node and IEx (~/.config/node, profile.d/node.sh,
+# ~/.iex.exs) are dotfiles-terminal's alone: a file mirrored from both
+# repositories was whatever the last installer to run left there.
 mirror "$SRC/spotify/spotify-launcher.conf" "$CONFIG/spotify-launcher.conf"
 seed "$SRC/fcitx5/config"          "$CONFIG/fcitx5/config"
 seed "$SRC/fcitx5/profile"         "$CONFIG/fcitx5/profile"

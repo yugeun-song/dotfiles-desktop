@@ -30,7 +30,6 @@ fontconfig/          font chain: Inter for Latin, Pretendard for Hangul
 gtk/ kde/            GTK settings; Qt and KDE colours, so dialogs match the bar
 tuigreet/            the greeter's appearance, installed only when greetd runs it
 fcitx5/              Korean input configuration
-node/                REPL helpers (hex, bin, oct) for node
 theme/               colour system notes and the cursor theme builder
 tests/               tests/run.sh: static checks and unit tests; --e2e adds the
                      end-to-end suite in a nested headless Hyprland, --vm the
@@ -404,8 +403,8 @@ Files are copied, never linked, so **nothing edited here runs until
 `./install.sh` runs again**, and a running unit keeps its old code until it
 is restarted. A **mirror** is what this repository authors (the Hyprland
 config and scripts, the quickshell tree, `bin/`, the units, the D-Bus service,
-the REPL helpers, the Spotify launcher flags, the output preset and its local
-file): overwritten every run, pruned of files the repository dropped, and a
+the Spotify launcher flags, the output preset and its local file):
+overwritten every run, pruned of files the repository dropped, and a
 unit whose first line is `# dotfiles-desktop` is removed once its source is
 gone. A **seed** is what a program owns (fcitx5, GTK, KDE, hypridle, hyprlock,
 hyprpaper): copied once, never overwritten, reported when it has diverged. To
@@ -423,12 +422,9 @@ reloads Hyprland. Its doctor line names the fonts and tools the desktop uses
 that this machine lacks; every script degrades on its own without them, but
 only says so when its key is pressed.
 
-The shell, terminal emulator and prompt live in
-[dotfiles-terminal](https://github.com/yugeun-song/dotfiles-terminal), which
-has its own `install.sh`. Its `zshenv` and `bashrc` source
-`~/.config/profile.d/*.sh`, which is how `node.sh` adds the REPL helpers
-(`hex`, `bin`, `oct`) to a bare node REPL only. The same helpers for IEx,
-`~/.iex.exs`, come from dotfiles-terminal alone.
+The shell, terminal emulator, prompt and the REPL helpers for node and IEx
+live in [dotfiles-terminal](https://github.com/yugeun-song/dotfiles-terminal),
+which has its own `install.sh`. No file is installed by both.
 
 ## Checks
 
