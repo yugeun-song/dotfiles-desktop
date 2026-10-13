@@ -21,19 +21,20 @@ Singleton {
     readonly property int cpuPercent: Math.round(cpuUsage * 100)
     readonly property int memPercent: Math.round(memUsage * 100)
 
-    // blockLoading: text() waits for the read reload() just started. Without
-    // it, text() gave the read before, and every sample was a second old.
-    // A /proc read takes microseconds.
+    // blockAllReads: text() waits for the read reload() just started.
+    // blockLoading covers only the first load; after it, text() gave the read
+    // before (CPU and memory a second old, uptime from the previous hover). A
+    // /proc read takes microseconds.
     FileView {
         id: statFile
         path: "/proc/stat"
-        blockLoading: true
+        blockAllReads: true
     }
 
     FileView {
         id: memFile
         path: "/proc/meminfo"
-        blockLoading: true
+        blockAllReads: true
     }
 
     FileView {
@@ -49,7 +50,7 @@ Singleton {
     FileView {
         id: uptimeFile
         path: "/proc/uptime"
-        blockLoading: true
+        blockAllReads: true
     }
 
     function readUptime() {
