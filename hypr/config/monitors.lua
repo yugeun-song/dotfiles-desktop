@@ -97,7 +97,13 @@ local SETTINGS_FILE = CONFIG .. "/monitor_settings.lua"
 -- Untracked, read after the preset; the same fields, merged over it.
 local LOCAL_SETTINGS_FILE = CONFIG .. "/monitor_settings.local.lua"
 local KEEP_INTERNAL_FILE = CONFIG .. "/keep-internal"
-local STATE_DIR = (os.getenv("XDG_STATE_HOME") or (HOME .. "/.local/state")) .. "/hypr"
+-- An empty or relative XDG_STATE_HOME is ignored, as the spec says and as
+-- scripts/monitor-override.sh, which writes the overrides here, does.
+local state_home = os.getenv("XDG_STATE_HOME") or ""
+if state_home:sub(1, 1) ~= "/" then
+    state_home = HOME .. "/.local/state"
+end
+local STATE_DIR = state_home .. "/hypr"
 local STATE_FILE = STATE_DIR .. "/monitors.state"
 -- Written by scripts/monitor-override.sh; the format is documented there.
 local OVERRIDES_FILE = STATE_DIR .. "/monitor-overrides"
