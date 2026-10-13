@@ -64,12 +64,16 @@ hl.env("XDG_SESSION_DESKTOP", "Hyprland")
 -- scripts/gsettings-apply.sh) must agree or it changes size between windows.
 -- HYPRCURSOR_THEME names an XCursor theme on purpose: with no hyprcursor
 -- theme installed Hyprland falls back to the same images. Spaceduck-Sky is
--- built by theme/cursor/tint-cursors.py into ~/.local/share/icons and named
+-- built by theme/cursor/tint-cursors.py into $XDG_DATA_HOME/icons and named
 -- only once built: a name nothing resolves makes every client draw its own
 -- default pointer, an unset one lets them agree on the system default.
 local cursor_theme = "Spaceduck-Sky"
 local cursor_size = "24"
-local data_home = os.getenv("XDG_DATA_HOME") or (HOME .. "/.local/share")
+-- An empty or relative XDG_DATA_HOME is ignored, as the spec says.
+local data_home = os.getenv("XDG_DATA_HOME") or ""
+if data_home:sub(1, 1) ~= "/" then
+    data_home = HOME .. "/.local/share"
+end
 local cursor_installed = file_exists(data_home .. "/icons/" .. cursor_theme .. "/index.theme")
     or file_exists("/usr/share/icons/" .. cursor_theme .. "/index.theme")
 

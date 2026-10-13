@@ -7,8 +7,10 @@ follows luminance rather than replacing a colour: the black outline stays
 black, the white body becomes the tint and grey shading lands in proportion,
 so the shape stays readable on dark and light windows.
 
-Output goes to its own directory under ~/.local/share/icons; the source theme
-belongs to a package and is never modified (pacman would undo it silently).
+Output goes to its own directory under $XDG_DATA_HOME/icons (by default
+~/.local/share/icons), where env.lua looks for it; the source theme belongs
+to a package and is never modified (the package manager would undo it
+silently).
 
 Usage (--tint defaults to pointer.py's FILL, which install.sh also passes):
     tint-cursors.py --from Oxygen_White --name Spaceduck-Sky --tint '#1d89e4'
@@ -152,10 +154,17 @@ def write(path, images):
         fh.write(chunks)
 
 
+def data_home():
+    # The spec ignores a relative value, as install.sh does.
+    base = os.environ.get("XDG_DATA_HOME", "")
+    return base if os.path.isabs(base) else os.path.expanduser("~/.local/share")
+
+
 def find_theme(name):
-    for base in (os.path.expanduser("~/.local/share/icons"),
-                 os.path.expanduser("~/.icons"),
-                 "/usr/share/icons"):
+    shared = os.environ.get("XDG_DATA_DIRS", "") or "/usr/local/share:/usr/share"
+    bases = [os.path.join(data_home(), "icons"), os.path.expanduser("~/.icons")]
+    bases += [os.path.join(d, "icons") for d in shared.split(":") if os.path.isabs(d)]
+    for base in bases:
         d = os.path.join(base, name, "cursors")
         if os.path.isdir(d):
             return d
@@ -192,7 +201,7 @@ def main():
         return 1
     rgb = tuple(int(h[i : i + 2], 16) for i in (0, 2, 4))
 
-    root = os.path.join(os.path.expanduser("~/.local/share/icons"), args.name)
+    root = os.path.join(data_home(), "icons", args.name)
     dst = os.path.join(root, "cursors")
     # Rebuilt from scratch: a stale file would leave one pointer in thirty
     # the wrong colour.
