@@ -10,13 +10,21 @@ set -uo pipefail
 
 # A console login lacks the signature; find it in the runtime directory.
 if [[ -z "${HYPRLAND_INSTANCE_SIGNATURE:-}" ]]; then
-    # Only a live instance keeps hyprland.lock; dead sessions leave their
-    # directory (and log) behind, and those sort first by timestamp.
+    # The session compositor's, by the test session-start.sh makes: a lock
+    # whose pid is a running Hyprland (a crash leaves the lock behind) without
+    # WAYLAND_DISPLAY in its environment (a nested one has it). Directories
+    # sort by build before time, so the newest lock wins, not the first.
     sig=""
+    newest=""
     for d in "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"/hypr/*/; do
-        [[ -e "$d/hyprland.lock" ]] || continue
-        sig="$(basename "$d")"
-        break
+        lock="$d/hyprland.lock"
+        read -r pid < "$lock" 2>/dev/null || continue
+        [[ "$pid" =~ ^[0-9]+$ && "$(cat "/proc/$pid/comm" 2>/dev/null)" == Hyprland ]] || continue
+        grep -q '^WAYLAND_DISPLAY=' <<<"$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null)" && continue
+        if [[ -z "$newest" || "$lock" -nt "$newest" ]]; then
+            newest=$lock
+            sig="$(basename "$d")"
+        fi
     done
     [[ -n "$sig" ]] || { echo "unlock: no running Hyprland instance found" >&2; exit 1; }
     export HYPRLAND_INSTANCE_SIGNATURE="$sig"
