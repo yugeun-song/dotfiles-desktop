@@ -757,7 +757,7 @@ seed "$SRC/fcitx5/conf"            "$CONFIG/fcitx5/conf"
 seed "$SRC/gtk/gtk-3.0-settings.ini" "$CONFIG/gtk-3.0/settings.ini"
 seed "$SRC/gtk/gtk-4.0-settings.ini" "$CONFIG/gtk-4.0/settings.ini"
 seed "$SRC/kde/kdeglobals"        "$CONFIG/kdeglobals"
-seed "$SRC/kde/kded6rc"           "$CONFIG/kded6rc"
+seed "$SRC/kde/kded5rc"           "$CONFIG/kded5rc"
 seed "$SRC/kde/baloofilerc"       "$CONFIG/baloofilerc"
 seed "$SRC/kde/SpaceduckDark.colors" "$DATA/color-schemes/SpaceduckDark.colors"
 

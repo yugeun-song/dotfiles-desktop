@@ -367,7 +367,7 @@ override second.
 environment with spaceduck defaults; `slurp.env` exports them, and
 `capture.sh` sources it when readable.
 
-**GTK: option B.** kded6 `gtkconfig` stays off (`kde/kded6rc`, done for the
+**GTK: option B.** kded6 `gtkconfig` stays off (`kde/kded5rc`, done for the
 cursor) and `colors.css` is written here: the module replaces the
 `settings.ini` symlink with a real file and applies a kdeglobals-to-GTK
 mapping nobody here controls.
