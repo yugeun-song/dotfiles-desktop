@@ -226,14 +226,21 @@ def main():
         write(os.path.join(dst, name), images)
         made += 1
 
-    for name in entries:
-        path = os.path.join(src, name)
-        if not os.path.islink(path):
-            continue
-        target = os.readlink(path)
-        if os.path.exists(os.path.join(dst, target)):
-            os.symlink(target, os.path.join(dst, name))
-            linked += 1
+    # Until a pass links nothing more: an alias may name another alias that
+    # sorts after it, whose link is not there yet on the first pass.
+    pending = [name for name in entries if os.path.islink(os.path.join(src, name))]
+    while pending:
+        rest = []
+        for name in pending:
+            target = os.readlink(os.path.join(src, name))
+            if os.path.exists(os.path.join(dst, target)):
+                os.symlink(target, os.path.join(dst, name))
+                linked += 1
+            else:
+                rest.append(name)
+        if len(rest) == len(pending):
+            break
+        pending = rest
 
     # Add missing shape names only; the source's own names win.
     added = 0
