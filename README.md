@@ -10,7 +10,7 @@ reported; outside it, the installer refuses rather than half-apply.
 
 | Part | Expected |
 |---|---|
-| Distribution | Arch Linux or a derivative (`/etc/os-release` ID or ID_LIKE `arch`): package paths such as `/usr/lib/qt6/plugins` and `/usr/lib/hyprpolkitagent` are Arch's |
+| Distribution | Arch Linux, the one tested. Recognised by `/etc/os-release` ID, then ID_LIKE: the Arch, Debian/Ubuntu, Fedora/RHEL, openSUSE and Gentoo families, whose package managers the installer's hints name; Void and Alpine are recognised but boot without systemd. Library paths (Qt plugins, VA-API drivers, polkit agents, bash loadables) are looked for in each family's layout |
 | Init | systemd, with the user manager running the session's units |
 | Compositor | Hyprland 0.56 or later, which reads `hyprland.lua` (hypridle, hyprlock and hyprpaper still read hyprlang `.conf` files) |
 | Shell | quickshell (`qs`) for the bar and every panel |
@@ -18,11 +18,13 @@ reported; outside it, the installer refuses rather than half-apply.
 | KDE pieces | Breeze (GTK theme, icons), plasma-integration (Qt platform theme), the SpaceduckDark colour scheme; hyprpolkitagent or polkit-kde-agent |
 | Also expected | fcitx5 (Hangul), PipeWire, Inter, Pretendard and CaskaydiaCove Nerd Font |
 
-`./install.sh` stops before writing anything when the distribution, systemd,
-Hyprland or quickshell is missing, when this checkout's Hyprland config does
-not load, or when XDG_CONFIG_HOME, XDG_DATA_HOME or XDG_STATE_HOME differs
-between the shell and the systemd user manager. Everything else is optional:
-its doctor line names what is absent, and each script degrades on its own.
+`./install.sh` stops before writing anything when the distribution is not
+one of these, the system was not booted with systemd, Hyprland is missing or
+older than 0.56, quickshell is missing, this checkout's Hyprland config does
+not load, or XDG_CONFIG_HOME, XDG_DATA_HOME or XDG_STATE_HOME differs
+between the shell and the systemd user manager. Each reason comes with its
+fix. Everything else is optional: its doctor line names what is absent, and
+each script degrades on its own.
 
 ## Layout
 
@@ -50,7 +52,7 @@ tests/               tests/run.sh; --e2e and --vm add the slower suites
 ## Install
 
 ```sh
-./install.sh           # install
+./install.sh           # install, or update after a pull
 ./install.sh --check   # what is behind or in conflict; writes nothing
 ./install.sh --force   # install, overwriting conflicts without asking
 ```
@@ -58,14 +60,24 @@ tests/               tests/run.sh; --e2e and --vm add the slower suites
 Exit status: 0 everything is in place; 1 stopped, or finished with steps left
 undone (listed at the end, each with its command); 2 usage.
 
+Each step prints as a tree, one `✓` per file written, and a step with
+nothing to do as one dim line; colour only on a terminal, never under
+`NO_COLOR`. An update writes only files that differ and reloads only their
+owner: the bar when its tree changed, Hyprland when its config did, the user
+manager when a unit did. The `Spaceduck-Sky` cursor theme is rebuilt only
+when its scripts or the Oxygen_White theme it is drawn from changed, and
+sudo is asked for only when one of root's files differs.
+
 Files are copied, never linked: **nothing edited here runs until the
 installer runs again**, and a running unit keeps its old code until it
 restarts. A *mirror* (the Hyprland config and scripts, the quickshell tree,
 `bin/`, the units, the D-Bus service, the Spotify flags, the output preset)
 is overwritten on every run, file by file. A *seed* (fcitx5, GTK, KDE,
-hypridle, hyprlock, hyprpaper) is copied once and never overwritten, since
-its program rewrites it; copy a change back here to keep it, or delete the
-installed file to take this one.
+hypridle, hyprlock, hyprpaper) is copied once and then left to its program,
+which rewrites it: a newer version from here replaces it only while the
+installed copy is still one this repository wrote. One its program changed
+stays and is listed by `--check`; copy a change back here to keep it, or
+delete the installed file to take this one.
 
 A target whose content this repository did not write (another program
 changed it, or it was there first) is a **conflict**. The installer shows a
@@ -81,10 +93,9 @@ mirrored directory is left and pointed out.
 Root's files (`/etc/fonts/local.conf`, `/etc/tuigreet/config.toml` under
 tuigreet, the camera switch's three) take sudo, asked for once up front; a
 foreign one keeps a `.bak-<time>` copy. Without sudo they are listed as left
-undone. The installer also builds the `Spaceduck-Sky` cursor theme, disables
-`kde-baloo`, masks the drkonqi coredump units (they crash-loop without a
-display), runs `daemon-reload`, enables `hypridle` and reloads Hyprland and
-the bar.
+undone. Where they are not so already, the installer disables `kde-baloo`,
+masks the drkonqi coredump units (they crash-loop without a display) and
+enables `hypridle`.
 
 The shell, terminal, prompt and REPL helpers live in dotfiles-terminal. No
 file is installed by both repositories.

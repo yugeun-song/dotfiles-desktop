@@ -1,8 +1,10 @@
 #!/usr/bin/env bash
 #
-# Installs the desktop configuration from this checkout.
+# Installs the desktop configuration from this checkout, and updates an
+# installed one: run it again after a pull. Only files that differ are
+# written, and only what they belong to is reloaded or rebuilt.
 #
-#   ./install.sh           install
+#   ./install.sh           install or update
 #   ./install.sh --check   report what is behind or in conflict; writes nothing
 #   ./install.sh --force   install, overwriting every conflict without asking
 #
@@ -10,10 +12,12 @@
 # conflict was kept, a write failed) or finished with steps left undone,
 # listed at the end; 2 usage.
 #
-# The premise, checked before anything is written: Arch Linux or a
-# derivative, booted with systemd, Hyprland whose Lua config loads, and
-# quickshell. Outside it the paths and units here would be applied wrongly,
-# so nothing is applied at all.
+# The premise, checked before anything is written: a distribution this
+# script recognises (Arch is the one tested; Debian/Ubuntu, Fedora/RHEL,
+# openSUSE, Gentoo, Void and Alpine are known by their package managers),
+# booted with systemd, GNU coreutils, Hyprland 0.56 or later whose Lua config
+# loads, and quickshell. Outside it the paths and units here would be applied
+# wrongly, so nothing is applied at all.
 #
 # Files are copied, not linked: nothing edited here runs until this runs
 # again. A file this repository did not write (another program changed it,
@@ -22,24 +26,37 @@
 # the camera switch need sudo, asked for once, up front: printed as manual
 # steps they never ran.
 #
+# Test hooks: DOTFILES_OS_RELEASE replaces /etc/os-release, DOTFILES_SYSTEMD
+# replaces /run/systemd/system, and DOTFILES_ROOT goes in front of root's
+# files and greetd's config, so a test never reads this machine's.
+#
 set -euo pipefail
 
 SRC="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-FONTCONF=/etc/fonts/local.conf
-GREETERCONF=/etc/tuigreet/config.toml
+ROOT=${DOTFILES_ROOT:-}
+FONTCONF=$ROOT/etc/fonts/local.conf
+GREETERCONF=$ROOT/etc/tuigreet/config.toml
 # The camera switch (camera/): the helper pkexec runs as root, the polkit
 # action that lets the seat's session run it without a password, and the udev
 # rule that turns off a camera appearing while the switch is off. Root's, with
 # these modes: whatever pkexec runs as root must not be writable by the user
 # it runs for. source:destination:mode
 CAMERA_FILES=(
-    "camera/camera-switch.py:/usr/local/bin/camera-switch:755"
-    "camera/io.github.yugeun-song.camera-switch.policy:/usr/share/polkit-1/actions/io.github.yugeun-song.camera-switch.policy:644"
-    "camera/70-camera-switch.rules:/etc/udev/rules.d/70-camera-switch.rules:644"
+    "camera/camera-switch.py:$ROOT/usr/local/bin/camera-switch:755"
+    "camera/io.github.yugeun-song.camera-switch.policy:$ROOT/usr/share/polkit-1/actions/io.github.yugeun-song.camera-switch.policy:644"
+    "camera/70-camera-switch.rules:$ROOT/etc/udev/rules.d/70-camera-switch.rules:644"
 )
+HYPRLAND_MIN=0.56
 
-usage() { echo "usage: ${0##*/} [--check | --force]"; }
+usage() {
+    cat <<EOF
+usage: ${0##*/} [--check | --force]
+  (none)    install or update, asking before overwriting anything this repository did not install
+  --check   report what is behind or in conflict; writes nothing, exit 1 if anything is
+  --force   overwrite conflicts without asking
+EOF
+}
 CHECK=0
 FORCE_ALL=0
 for arg in "$@"; do
@@ -61,39 +78,210 @@ CONFIG=$(xdg "${XDG_CONFIG_HOME:-}" "$HOME/.config")
 DATA=$(xdg "${XDG_DATA_HOME:-}" "$HOME/.local/share")
 STATE=$(xdg "${XDG_STATE_HOME:-}" "$HOME/.local/state")
 
+# Colour only for a terminal, and never when NO_COLOR asks for none. The
+# glyphs (a check, a cross, tree lines) stay either way: they carry meaning.
 if [[ -t 1 && -z "${NO_COLOR:-}" ]]; then
-    RED=$'\e[31m' GREEN=$'\e[32m' CYAN=$'\e[36m' BOLD=$'\e[1m' DIM=$'\e[2m' OFF=$'\e[0m'
+    RED=$'\e[31m' GREEN=$'\e[32m' YELLOW=$'\e[33m' CYAN=$'\e[36m' BOLD=$'\e[1m' DIM=$'\e[2m' RESET=$'\e[0m'
 else
-    RED='' GREEN='' CYAN='' BOLD='' DIM='' OFF=''
+    RED='' GREEN='' YELLOW='' CYAN='' BOLD='' DIM='' RESET=''
 fi
 
 DRIFT=0
 FINISHED=0
 WRITTEN=0
+UNCHANGED=0
+CONFLICTED=0
 LEFT=()
+NOTES=()
+PROBLEMS=()
+SEEDS_DIFFER=0
 SUDO_OK=0
 SUDO_KEEPALIVE=
+FAMILY="" PRETTY=""
+
+# ------------------------------------------------------------------ output --
+
+# $HOME as ~, so a line names the path a user would type.
+tilde() {
+    if [[ "$1" == "$HOME" || "$1" == "$HOME"/* ]]; then printf '~%s' "${1#"$HOME"}"; else printf '%s' "$1"; fi
+}
+
+# Each step is a tree: its label once there is something to say, one branch
+# per change, and a last branch with the count. A step with nothing to say is
+# one dim line, so an update that changed little prints little.
+GROUP_LABEL="" GROUP_SHOWN=0 GROUP_WROTE=0 GROUP_SAME=0 GROUP_TODO=0
+group_open() {
+    GROUP_LABEL=$1 GROUP_SHOWN=0 GROUP_WROTE=0 GROUP_SAME=0 GROUP_TODO=0
+}
+group_label() {
+    (( GROUP_SHOWN )) && return 0
+    printf '%s%s%s\n' "$BOLD" "$GROUP_LABEL" "$RESET"
+    GROUP_SHOWN=1
+}
+branch() {
+    group_label
+    printf '%s├──%s %s\n' "$DIM" "$RESET" "$1"
+}
+group_close() {
+    local tally
+    if (( CHECK )); then
+        if (( GROUP_TODO )); then tally="$GROUP_TODO to apply"; else tally=current; fi
+    elif (( GROUP_WROTE )); then
+        tally="$GROUP_WROTE written, $GROUP_SAME unchanged"
+    elif (( GROUP_SAME )); then
+        tally="$GROUP_SAME unchanged"
+    else
+        tally=unchanged
+    fi
+    if (( GROUP_SHOWN )); then
+        printf '%s└── %s%s\n' "$DIM" "$tally" "$RESET"
+    else
+        printf '%s%s  %s%s\n' "$DIM" "$GROUP_LABEL" "$tally" "$RESET"
+    fi
+    GROUP_SHOWN=0
+}
+# A plain list as a tree under a heading already printed.
+tree_lines() {
+    local colour=$1 i n
+    shift
+    n=$#
+    for (( i = 1; i <= n; i++ )); do
+        if (( i < n )); then
+            printf '%s├──%s %s%s%s\n' "$DIM" "$RESET" "$colour" "${!i}" "$RESET"
+        else
+            printf '%s└──%s %s%s%s\n' "$DIM" "$RESET" "$colour" "${!i}" "$RESET"
+        fi
+    done
+}
+
+same() { UNCHANGED=$((UNCHANGED + 1)); GROUP_SAME=$((GROUP_SAME + 1)); }
+todo() { GROUP_TODO=$((GROUP_TODO + 1)); DRIFT=1; branch "$1"; }
+# A write or a removal, said in its group; one that followed a conflict is
+# marked as such.
+wrote() {
+    WRITTEN=$((WRITTEN + 1))
+    GROUP_WROTE=$((GROUP_WROTE + 1))
+    if (( CONFLICTED )); then
+        branch "${YELLOW}${2:-overwritten} after a conflict: $1$RESET"
+    elif [[ -n "${2:-}" ]]; then
+        branch "$GREEN✓$RESET $2 $1"
+    else
+        branch "$GREEN✓$RESET $1"
+    fi
+    CONFLICTED=0
+}
 
 # ------------------------------------------------------------- the premise --
 
-# Every unmet premise at once, before any write, each with its fix.
-# DOTFILES_OS_RELEASE points the tests at another os-release.
-preflight() {
-    local os="${DOTFILES_OS_RELEASE:-/etc/os-release}" id="" like="" problems=() env name want have verify
-    if [[ -r "$os" ]]; then
-        id=$(sed -n '/^ID=/{s/^ID=//;s/"//g;p;q}' "$os")
-        like=$(sed -n '/^ID_LIKE=/{s/^ID_LIKE=//;s/"//g;p;q}' "$os")
-    fi
-    case " $id $like " in
-        *" arch "*) ;;
-        *) problems+=("this desktop is built on Arch Linux's packages and paths; $os says ID=${id:-unknown}${like:+, ID_LIKE=$like}") ;;
+os_release_field() {
+    local key=$1 file=$2 line value=""
+    while IFS= read -r line; do
+        if [[ "$line" == "$key="* ]]; then
+            value=${line#*=}
+            value=${value#[\"\']}
+            value=${value%[\"\']}
+        fi
+    done <"$file"
+    printf '%s' "$value"
+}
+
+# The family names the package manager messages point at. ID first, then the
+# ID_LIKE words, so a derivative is known by its parent.
+distro_family() {
+    local word
+    for word in "$@"; do
+        case "$word" in
+            arch|manjaro|endeavouros|cachyos|garuda|artix) echo arch; return 0 ;;
+            debian|ubuntu|linuxmint|pop|elementary|zorin|kali|raspbian) echo debian; return 0 ;;
+            fedora|rhel|centos|rocky|almalinux|ol) echo fedora; return 0 ;;
+            opensuse*|sles|suse) echo suse; return 0 ;;
+            void) echo void; return 0 ;;
+            gentoo) echo gentoo; return 0 ;;
+            alpine) echo alpine; return 0 ;;
+        esac
+    done
+    return 0
+}
+
+install_hint() {
+    case "$FAMILY" in
+        arch) echo "pacman -S $1" ;;
+        debian) echo "apt install $1" ;;
+        fedora) echo "dnf install $1" ;;
+        suse) echo "zypper install $1" ;;
+        void) echo "xbps-install -S $1" ;;
+        gentoo) echo "emerge $1" ;;
+        alpine) echo "apk add $1" ;;
+        *) echo "your package manager ($1)" ;;
     esac
-    [[ -d /run/systemd/system ]] \
-        || problems+=("the session runs as systemd user units, and this system was not booted with systemd")
-    command -v Hyprland >/dev/null 2>&1 && command -v hyprctl >/dev/null 2>&1 \
-        || problems+=("Hyprland is not installed: pacman -S hyprland")
-    command -v qs >/dev/null 2>&1 || command -v quickshell >/dev/null 2>&1 \
-        || problems+=("quickshell, which draws the bar, is not installed: pacman -S quickshell")
+}
+
+# Hyprland and quickshell are packaged by few distributions, and some ship a
+# Hyprland too old for hyprland.lua.
+desktop_hint() {
+    if [[ "$FAMILY" == arch ]]; then install_hint "$1"; else echo "$(install_hint "$1"), or build it where the distribution's is missing or older"; fi
+}
+
+# The first dotted number on a program's --version line, or nothing.
+version_of() {
+    local out
+    out=$("$@" 2>/dev/null | head -n 1) || :
+    [[ "$out" =~ ([0-9]+\.[0-9]+(\.[0-9]+)?) ]] && printf '%s' "${BASH_REMATCH[1]}"
+    return 0
+}
+
+# $1 is $2 or later: the two, smaller first, are already in version order.
+version_at_least() { printf '%s\n%s\n' "$2" "$1" | sort -V -C; }
+
+# Every unmet premise at once, before any write, each with its fix.
+check_premise() {
+    local os=${DOTFILES_OS_RELEASE:-} f id="" like="" help env name want have verify init
+    local -a words=()
+    if [[ -z "$os" ]]; then
+        for f in /etc/os-release /usr/lib/os-release; do
+            if [[ -r "$f" ]]; then os=$f; break; fi
+        done
+    fi
+    if [[ -z "$os" || ! -r "$os" ]]; then
+        PROBLEMS+=("no readable os-release, so the distribution is unknown")
+    else
+        id=$(os_release_field ID "$os")
+        like=$(os_release_field ID_LIKE "$os")
+        PRETTY=$(os_release_field PRETTY_NAME "$os")
+        PRETTY=${PRETTY:-$(os_release_field NAME "$os")}
+        PRETTY=${PRETTY:-${id:-an unknown system}}
+        read -ra words <<<"$id $like"
+        FAMILY=$(distro_family "${words[@]}")
+        if [[ -z "$FAMILY" ]]; then
+            PROBLEMS+=("$PRETTY is not a distribution this repository recognises (Arch, Debian/Ubuntu, Fedora/RHEL, openSUSE, Gentoo, Void, Alpine)")
+        fi
+    fi
+    if [[ ! -d "${DOTFILES_SYSTEMD:-/run/systemd/system}" ]]; then
+        case "$id" in
+            void) init=" (Void Linux boots with runit)" ;;
+            alpine) init=" (Alpine boots with OpenRC)" ;;
+            artix) init=" (Artix boots without it)" ;;
+            *) init="" ;;
+        esac
+        PROBLEMS+=("the session runs as systemd user units, and this system was not booted with systemd$init")
+    fi
+    # busybox's mv has no -T, and every write here is a rename with it.
+    # Captured, not piped into grep -q: an early close would trip pipefail.
+    help=$(mv --help 2>&1 || :)
+    if [[ "$help" != *--no-target-directory* ]]; then
+        PROBLEMS+=("mv lacks -T, so this is not GNU coreutils; $(install_hint coreutils)")
+    fi
+    if ! command -v Hyprland >/dev/null 2>&1 || ! command -v hyprctl >/dev/null 2>&1; then
+        PROBLEMS+=("Hyprland is not installed; $(desktop_hint hyprland)")
+    else
+        HYPRLAND_VERSION=$(version_of Hyprland --version)
+        if [[ -n "$HYPRLAND_VERSION" ]] && ! version_at_least "$HYPRLAND_VERSION" "$HYPRLAND_MIN"; then
+            PROBLEMS+=("Hyprland $HYPRLAND_VERSION is older than $HYPRLAND_MIN, the first to read hyprland.lua; $(desktop_hint hyprland)")
+        fi
+    fi
+    if ! command -v qs >/dev/null 2>&1 && ! command -v quickshell >/dev/null 2>&1; then
+        PROBLEMS+=("quickshell, which draws the bar, is not installed; $(desktop_hint quickshell)")
+    fi
     # Units and the session read these from the user manager's environment,
     # this script from the shell's: two answers put files where nothing reads.
     if env=$(systemctl --user show-environment 2>/dev/null); then
@@ -104,24 +292,30 @@ preflight() {
                 *) want=$STATE; have=$(xdg "$(sed -n "s/^$name=//p" <<<"$env")" "$HOME/.local/state") ;;
             esac
             [[ "$want" == "$have" ]] \
-                || problems+=("$name means $want here but $have to the session's user manager; set it the same in both")
+                || PROBLEMS+=("$name means $(tilde "$want") here but $(tilde "$have") to the session's user manager; set it the same in both")
         done
     fi
     # Mirroring reloads the running compositor, and a module that throws sends
     # the session to emergency mode: a config that does not load stops here.
-    if (( ${#problems[@]} == 0 )); then
+    if (( ${#PROBLEMS[@]} == 0 )); then
         verify=0
         "$SRC/hypr/scripts/verify-config.sh" "$SRC/hypr" >/dev/null 2>"$STATE_TMP" || verify=$?
         case "$verify" in
             0) ;;
-            1) problems+=("the Hyprland configuration in this checkout does not load ($SRC/hypr/scripts/verify-config.sh says why)") ;;
-            *) problems+=("the Hyprland configuration could not be checked: $(head -n 3 "$STATE_TMP" | tr '\n' ' ')") ;;
+            1) PROBLEMS+=("the Hyprland configuration in this checkout does not load (hypr/scripts/verify-config.sh says why)") ;;
+            *) PROBLEMS+=("the Hyprland configuration could not be checked: $(head -n 3 "$STATE_TMP" | tr '\n' ' ')") ;;
         esac
     fi
-    (( ${#problems[@]} == 0 )) && return 0
-    printf '%sinstall: the premise is not met, so nothing was %s:%s\n' "$RED" "$( (( CHECK )) && echo checked || echo written)" "$OFF" >&2
-    printf '  %s\n' "${problems[@]}" >&2
-    exit 1
+}
+
+premise_line() {
+    local line="premise: $PRETTY ($FAMILY family)" v
+    v=$(systemctl --version 2>/dev/null | awk 'NR == 1 && $1 == "systemd" { print $2 }') || v=""
+    line+=", systemd${v:+ $v}, Hyprland${HYPRLAND_VERSION:+ $HYPRLAND_VERSION}"
+    v=$(version_of qs --version)
+    [[ -n "$v" ]] || v=$(version_of quickshell --version)
+    line+=", quickshell${v:+ $v}"
+    printf '%s✓%s %s\n' "$GREEN" "$RESET" "$line"
 }
 
 # ------------------------------------------------------- ownership, conflicts --
@@ -165,7 +359,7 @@ save_manifest() {
             printf '%s\t%s\n' "${MANIFEST[$path]}" "$path"
         done | sort -t $'\t' -k2
     } > "$MANIFEST_FILE.new" 2>/dev/null && mv -f -- "$MANIFEST_FILE.new" "$MANIFEST_FILE" \
-        || echo "install: could not save $MANIFEST_FILE; the next run asks about files it cannot place" >&2
+        || echo "install: could not save $(tilde "$MANIFEST_FILE"); the next run asks about files it cannot place" >&2
     return 0
 }
 
@@ -206,7 +400,7 @@ ours() {
 #            13 │ +added
 show_diff() {
     { diff -u -- "$1" "$2" 2>&1 || :; } | awk -v red="$RED" -v green="$GREEN" -v cyan="$CYAN" \
-        -v dim="$DIM" -v reset="$OFF" -v old_label="$3" -v new_label="$4" '
+        -v dim="$DIM" -v reset="$RESET" -v old_label="$3" -v new_label="$4" '
         NR == 1 && /^--- /    { printf "%s--- %s%s\n", red, old_label, reset; next }
         NR == 2 && /^\+\+\+ / { printf "%s+++ %s%s\n", green, new_label, reset; next }
         /^@@ / {
@@ -224,7 +418,8 @@ show_diff() {
 # ahead with this and every later one, n stops the install here. Without a
 # terminal to ask on, n.
 ask() {
-    local verb=$1 target=$2 answer
+    local verb=$1 target answer
+    target=$(tilde "$2")
     if ! { exec 3</dev/tty; } 2>/dev/null; then
         stop "$target is not what this repository installed; run ./install.sh in a terminal to choose, or with --force"
     fi
@@ -235,29 +430,28 @@ ask() {
         case "${answer,,}" in
             y|yes) exec 3<&-; return 0 ;;
             a|all) FORCE_ALL=1; exec 3<&-; return 0 ;;
-            n|no)  exec 3<&-; stop "kept $target as it is; nothing after it was installed" ;;
+            n|no)  exec 3<&-; stop "kept $target as it is" ;;
         esac
     done
 }
 
-# Before $1 is overwritten with $2 (shown as $3), or removed when $2 is
-# empty. Returns only to go ahead.
+# Before $1 is overwritten with $2 (named $3 in the diff), or removed when $2
+# is empty. Returns only to go ahead, and marks the write that follows.
 claim() {
     local to=$1 from=${2:-} label=${3:-}
     ours "$to" "$from" && return 0
     if [[ -d "$to" && ! -L "$to" ]]; then
-        stop "$to is a directory where this repository installs a file; move it away and run again"
+        stop "$(tilde "$to") is a directory where this repository installs a file; move it away and run again"
     fi
-    if (( FORCE_ALL )); then
-        echo "forced $to"
-        return 0
-    fi
-    printf '\n%sconflict%s  %s: not what this repository installed\n' "$BOLD$RED" "$OFF" "$to"
+    CONFLICTED=1
+    (( FORCE_ALL )) && return 0
+    group_label
+    printf '\n%s✗ conflict%s  %s: not what this repository installed\n' "$BOLD$RED" "$RESET" "$(tilde "$to")"
     if [[ -n "$from" ]]; then
-        show_diff "$to" "$from" "$to (installed)" "$label (repository)"
+        show_diff "$to" "$from" "$(tilde "$to") (installed)" "$label (repository)"
         ask Overwrite "$to"
     else
-        show_diff "$to" /dev/null "$to (installed)" "/dev/null (removed from the repository)"
+        show_diff "$to" /dev/null "$(tilde "$to") (installed)" "/dev/null (removed from the repository)"
         ask Remove "$to"
     fi
 }
@@ -266,18 +460,19 @@ claim() {
 # lazily, so overwriting session-watch.sh in place corrupts it mid-run; and
 # Hyprland reloads on write and could read a half-copied module.
 put() {
-    local from=$1 to=$2
-    mkdir -p -- "$(dirname -- "$to")" || stop "could not create $(dirname -- "$to")"
+    local from=$1 to=$2 name=$3
+    mkdir -p -- "$(dirname -- "$to")" || stop "could not create $(tilde "$(dirname -- "$to")")"
     if ! { cp -a -- "$from" "$to.new-$$" && mv -T -- "$to.new-$$" "$to"; }; then
         rm -f -- "$to.new-$$"
-        stop "could not write $to"
+        stop "could not write $(tilde "$to")"
     fi
     record "$to"
-    WRITTEN=$((WRITTEN + 1))
+    wrote "$name"
 }
 
 stop() {
-    printf '%sinstall: %s%s\n' "$RED" "$*" "$OFF" >&2
+    (( GROUP_SHOWN )) && printf '%s└── stopped here%s\n' "$DIM" "$RESET"
+    printf '%s✗ stopped:%s %s\n' "$BOLD$RED" "$RESET" "$*" >&2
     exit 1
 }
 
@@ -291,10 +486,10 @@ cleanup() {
     (( SUDO_OK )) && sudo -k 2>/dev/null
     save_manifest
     rm -f -- "$STATE_TMP"
-    if (( ! FINISHED && code == 1 && ! CHECK )); then
-        echo "install: stopped; what was installed before this point stays (${WRITTEN} files written)" >&2
-    elif (( ! FINISHED && code != 0 && code != 2 )); then
-        echo "install: a command failed (status $code); what was installed before it stays" >&2
+    if (( ! FINISHED && code == 1 && ! CHECK && WRITTEN )); then
+        printf '%sthe %s files written before the stop stay; run ./install.sh again to go on%s\n' "$DIM" "$WRITTEN" "$RESET" >&2
+    elif (( ! FINISHED && code != 0 && code != 1 && code != 2 )); then
+        printf '%s✗ a command failed (status %s); what was written before it stays%s\n' "$BOLD$RED" "$code" "$RESET" >&2
     fi
     return 0
 }
@@ -306,45 +501,28 @@ trap 'stop "interrupted"' INT TERM
 
 # For what this repository authors: overwritten on every run, unless what is
 # there is not what this repository wrote (a conflict). Not symlinked, because
-# a link resolves back into the working tree.
-mirror() {
-    local from=$1 to=$2
-    MIRROR_CHANGED=0
-    [[ -e "$from" ]] || stop "missing source: $from"
-    if [[ -d "$from" ]]; then
-        mirror_dir "$from" "$to"
-        return 0
-    fi
+# a link resolves back into the working tree. $3 names it in its group.
+mirror_file() {
+    local from=$1 to=$2 name=${3:-}
+    [[ -n "$name" ]] || name=$(tilde "$2")
+    [[ -f "$from" ]] || stop "missing source: ${from#"$SRC"/}"
     if [[ -f "$to" && ! -L "$to" ]] && cmp -s -- "$from" "$to"; then
-        (( CHECK )) && return 0
-        record "$to"
-        echo "unchanged $to"
+        (( CHECK )) || record "$to"
+        same
         return 0
     fi
     if (( CHECK )); then
-        if [[ ! -e "$to" && ! -L "$to" ]]; then
-            echo "DRIFT    $to is missing"
-        elif ours "$to" "$from"; then
-            echo "DRIFT    $to is behind $from"
-        else
-            echo "CONFLICT $to is not what this repository installed"
+        if [[ ! -e "$to" && ! -L "$to" ]]; then todo "${YELLOW}missing $name$RESET"
+        elif ours "$to" "$from"; then todo "${YELLOW}behind $name$RESET"
+        else todo "$RED✗ conflict $name$RESET"
         fi
-        DRIFT=1
         return 0
     fi
-    [[ -e "$to" || -L "$to" ]] && claim "$to" "$from" "${from#"$SRC"/}"
-    [[ -L "$to" ]] && rm -f -- "$to"
-    put "$from" "$to"
-    MIRROR_CHANGED=1
-    echo "installed $to"
+    if [[ -e "$to" || -L "$to" ]]; then claim "$to" "$from" "${from#"$SRC"/}"; fi
+    if [[ -L "$to" ]]; then rm -f -- "$to"; fi
+    put "$from" "$to" "$name"
 }
 
-# A directory is updated file by file, never swapped whole: quickshell
-# crashes if its directory is replaced underneath it. New files go in before
-# changed ones: quickshell reloads on every write, and a module updated to
-# use a component that has not landed yet fails that reload. Only files that
-# differ are written, since every write is a reload. Files the repository
-# dropped are removed when it put them there; anything else is left.
 # Every path the repository had under a source directory, at any commit.
 history_paths() {
     local rel=${1#"$SRC"/}
@@ -355,128 +533,154 @@ history_paths() {
     } | awk -v prefix="$rel/" 'index($0, prefix) == 1 { print substr($0, length(prefix) + 1) }'
 }
 
+# A directory is updated file by file, never swapped whole: quickshell
+# crashes if its directory is replaced underneath it. New files go in before
+# changed ones: quickshell reloads on every write, and a module updated to
+# use a component that has not landed yet fails that reload. Only files that
+# differ are written, since every write is a reload. Files the repository
+# dropped are removed when it put them there; anything else is left. $3
+# prefixes the names in the group's tree.
 mirror_dir() {
-    local from=$1 to=$2 rel pass target label
+    local from=$1 to=$2 prefix=${3:-} rel pass target
     local -a found=()
-    local -A known=()
+    local -A known=() fresh=()
+    [[ -d "$from" ]] || stop "missing source: ${from#"$SRC"/}"
+    while IFS= read -r rel; do
+        known[$rel]=1
+    done < <(history_paths "$from")
     if (( CHECK )); then
         while IFS= read -r -d '' rel; do
+            mirror_file "$from/${rel#./}" "$to/${rel#./}" "$prefix${rel#./}"
+        done < <(cd -- "$from" && find . -mindepth 1 \( -type f -o -type l \) -print0 | LC_ALL=C sort -z)
+        [[ -d "$to" ]] || return 0
+        while IFS= read -r -d '' rel; do
             rel=${rel#./}
-            [[ -d "$from/$rel" && ! -L "$from/$rel" ]] && continue
-            target="$to/$rel"
-            if [[ -f "$target" && ! -L "$target" ]] && cmp -s -- "$from/$rel" "$target"; then
-                continue
-            elif [[ ! -e "$target" && ! -L "$target" ]]; then
-                echo "DRIFT    $target is missing"
-            elif ours "$target" "$from/$rel"; then
-                echo "DRIFT    $target is behind"
+            [[ -e "$from/$rel" || -L "$from/$rel" ]] && continue
+            if ours "$to/$rel"; then
+                todo "${YELLOW}stale $prefix$rel (gone from the repository)$RESET"
+            elif [[ -n "${MANIFEST[$to/$rel]:-}" || -n "${known[$rel]:-}" ]]; then
+                todo "$RED✗ conflict $prefix$rel (gone from the repository and changed since)$RESET"
             else
-                echo "CONFLICT $target is not what this repository installed"
+                branch "${YELLOW}left $prefix$rel: not from this repository$RESET"
             fi
-            DRIFT=1
-        done < <(cd -- "$from" && find . -mindepth 1 -print0)
-        if [[ -d "$to" ]]; then
-            while IFS= read -r -d '' rel; do
-                rel=${rel#./}
-                [[ -e "$from/$rel" || -L "$from/$rel" ]] && continue
-                if ours "$to/$rel"; then
-                    echo "DRIFT    $to/$rel is no longer in the repository"
-                    DRIFT=1
-                fi
-            done < <(cd -- "$to" && find . -mindepth 1 \( -type f -o -type l \) -print0)
-        fi
+        done < <(cd -- "$to" && find . -mindepth 1 \( -type f -o -type l \) -print0 | LC_ALL=C sort -z)
         return 0
     fi
 
     [[ -L "$to" ]] && rm -f -- "$to"
-    [[ -e "$to" && ! -d "$to" ]] && claim "$to" && rm -f -- "$to"
-    mkdir -p -- "$to"
+    if [[ -e "$to" && ! -d "$to" ]]; then claim "$to"; rm -f -- "$to"; CONFLICTED=0; fi
+    mkdir -p -- "$to" || stop "could not create $(tilde "$to")"
     for pass in new changed; do
         while IFS= read -r -d '' rel; do
             rel=${rel#./}
             target="$to/$rel"
             if [[ -d "$from/$rel" && ! -L "$from/$rel" ]]; then
-                mkdir -p -- "$target"
+                mkdir -p -- "$target" || stop "could not create $(tilde "$target")"
                 continue
             fi
             if [[ "$pass" == new ]]; then
                 [[ -e "$target" || -L "$target" ]] && continue
+                fresh[$rel]=1
             else
+                [[ -n "${fresh[$rel]:-}" ]] && continue
                 [[ -e "$target" || -L "$target" ]] || continue
-                if [[ -f "$target" && ! -L "$target" ]] && cmp -s -- "$from/$rel" "$target"; then
-                    record "$target"
-                    continue
-                fi
-                label="${from#"$SRC"/}/$rel"
-                claim "$target" "$from/$rel" "$label"
-                [[ -L "$target" ]] && rm -f -- "$target"
             fi
-            put "$from/$rel" "$target"
-            MIRROR_CHANGED=1
-        done < <(cd -- "$from" && find . -mindepth 1 -print0)
+            mirror_file "$from/$rel" "$target" "$prefix$rel"
+        done < <(cd -- "$from" && find . -mindepth 1 -print0 | LC_ALL=C sort -z)
     done
     while IFS= read -r -d '' rel; do
         found+=("${rel#./}")
-    done < <(cd -- "$to" && find . -mindepth 1 \( -type f -o -type l \) -print0)
-    while IFS= read -r rel; do
-        known[$rel]=1
-    done < <(history_paths "$from")
+    done < <(cd -- "$to" && find . -mindepth 1 \( -type f -o -type l \) -print0 | LC_ALL=C sort -z)
     for rel in "${found[@]}"; do
         target="$to/$rel"
         [[ -e "$from/$rel" || -L "$from/$rel" ]] && continue
         if ours "$target" || [[ -n "${MANIFEST[$target]:-}" || -n "${known[$rel]:-}" ]]; then
             claim "$target"
-            rm -f -- "$target"
+            rm -f -- "$target" || stop "could not remove $(tilde "$target")"
             unset 'MANIFEST[$target]'
             MANIFEST_DIRTY=1
-            echo "removed stale $target"
-            MIRROR_CHANGED=1
+            wrote "$prefix$rel" removed
         else
-            echo "${DIM}left     $target: not from this repository${OFF}"
+            branch "${YELLOW}left $prefix$rel: not from this repository$RESET"
         fi
     done
     while IFS= read -r -d '' rel; do
         rel=${rel#./}
         [[ -e "$from/$rel" ]] && continue
-        rmdir -- "$to/$rel" 2>/dev/null && echo "removed stale $to/$rel/"
+        if rmdir -- "$to/$rel" 2>/dev/null; then branch "$GREEN✓$RESET removed $prefix$rel/"; fi
     done < <(cd -- "$to" && find . -mindepth 1 -depth -type d -print0)
-    if (( MIRROR_CHANGED )); then echo "installed $to"; else echo "unchanged $to"; fi
+    return 0
 }
 
-# For what a program owns: copied once, never overwritten. fcitx5, KDE and GTK
-# save by rename() over the target, which replaces a symlink rather than
-# following it. To take a change back, copy it into the repository; to push one
-# out, delete the installed file and run again.
+# A file the repository no longer installs, removed so that it cannot mislead.
+retire() {
+    local target=$1 name=$2
+    [[ -e "$target" || -L "$target" ]] || return 0
+    if (( CHECK )); then todo "${YELLOW}stale $name (no longer used)$RESET"; return 0; fi
+    rm -f -- "$target" || stop "could not remove $(tilde "$target")"
+    wrote "$name" removed
+}
+
+# cp -a keeps the checkout's mode, and an archive or core.fileMode=false
+# tree arrives at 644.
+ensure_exec() {
+    local f
+    for f in "$@"; do
+        [[ -f "$f" && ! -x "$f" ]] || continue
+        if (( CHECK )); then todo "${YELLOW}not executable: $(tilde "$f")$RESET"; continue; fi
+        chmod +x -- "$f" || stop "could not make $(tilde "$f") executable"
+        branch "$GREEN✓$RESET made $(tilde "$f") executable"
+    done
+}
+
+# For what a program owns: copied once, then left to the program. fcitx5, KDE
+# and GTK save by rename() over the target, which replaces a symlink rather
+# than following it. A newer version from here replaces an installed copy
+# only while that copy is still one this repository wrote (an update that
+# finds it untouched); one its program changed is left, counted for a note,
+# and listed by --check. To keep such a change, copy it into the repository;
+# to take this one, delete the installed file and run again. A directory is
+# seeded file by file.
 seed() {
-    local from="$1" to="$2"
-    [[ -e "$from" ]] || stop "missing source: $from"
+    local from=$1 to=$2 rel
+    [[ -e "$from" ]] || stop "missing source: ${from#"$SRC"/}"
+    if [[ ! -d "$from" ]]; then
+        seed_file "$from" "$to"
+        return 0
+    fi
+    if [[ -L "$to" ]] && ours "$to"; then
+        if (( CHECK )); then todo "${YELLOW}behind $(tilde "$to") (still a link from an older install)$RESET"; return 0; fi
+        rm -f -- "$to" || stop "could not remove the old link $(tilde "$to")"
+    fi
+    while IFS= read -r -d '' rel; do
+        seed_file "$from/${rel#./}" "$to/${rel#./}"
+    done < <(cd -- "$from" && find . -type f -print0 | LC_ALL=C sort -z)
+}
+
+seed_file() {
+    local from=$1 to=$2 name
+    name=$(tilde "$to")
+    if [[ -f "$to" && ! -L "$to" ]] && cmp -s -- "$from" "$to"; then
+        (( CHECK )) || record "$to"
+        same
+        return 0
+    fi
+    if [[ -e "$to" || -L "$to" ]] && ! ours "$to"; then
+        SEEDS_DIFFER=$((SEEDS_DIFFER + 1))
+        (( CHECK )) && branch "${DIM}$name was changed after it was seeded; left alone$RESET"
+        same
+        return 0
+    fi
     if (( CHECK )); then
-        if [[ ! -e "$to" ]]; then
-            echo "absent   $to would be seeded"
-        elif ! diff -rq "$from" "$to" >/dev/null 2>&1; then
-            echo "owned    $to differs; the program owns it, so $from is not what runs"
+        if [[ -L "$to" ]]; then todo "${YELLOW}behind $name (still a link from an older install)$RESET"
+        elif [[ -e "$to" ]]; then todo "${YELLOW}behind $name (seeded, and untouched since)$RESET"
+        else todo "${YELLOW}missing $name$RESET"
         fi
         return 0
     fi
     # A link from an older install becomes a real file.
-    if [[ -L "$to" ]]; then
-        rm -f -- "$to"
-        mkdir -p -- "$(dirname -- "$to")"
-        cp -a -- "$from" "$to" || stop "could not seed $to"
-        echo "unlinked and seeded $to"
-        return 0
-    fi
-    if [[ -e "$to" ]]; then
-        if diff -rq "$from" "$to" >/dev/null 2>&1; then
-            echo "already seeded $to"
-        else
-            echo "left $to alone: the program owns it; copy it back into $from to keep a change"
-        fi
-        return 0
-    fi
-    mkdir -p -- "$(dirname -- "$to")"
-    cp -a -- "$from" "$to" || stop "could not seed $to"
-    echo "seeded $to"
+    [[ -L "$to" ]] && rm -f -- "$to"
+    put "$from" "$to" "$name"
 }
 
 # --------------------------------------------------------- system files, sudo --
@@ -484,8 +688,8 @@ seed() {
 # tuigreet/config.toml means nothing to another greeter, so it is installed
 # only when greetd's command is tuigreet and tuigreet is installed.
 greeter_is_tuigreet() {
-    [[ -r /etc/greetd/config.toml ]] || return 1
-    grep -qE '^[[:space:]]*command[[:space:]]*=.*\btuigreet\b' /etc/greetd/config.toml || return 1
+    [[ -r "$ROOT/etc/greetd/config.toml" ]] || return 1
+    grep -qE '^[[:space:]]*command[[:space:]]*=.*\btuigreet\b' "$ROOT/etc/greetd/config.toml" || return 1
     command -v tuigreet >/dev/null 2>&1
 }
 
@@ -500,60 +704,176 @@ system_current() {
     cmp -s -- "$SRC/$1" "$2" && [[ "$(stat -c '%a %U' -- "$2" 2>/dev/null)" == "$3 root" ]]
 }
 
+# Asked for before the first write, and only when a root's file differs: an
+# update that leaves them alone never prompts.
 acquire_sudo() {
-    local src dst mode want=0
+    local src dst mode
+    local -a want=()
     while IFS=: read -r src dst mode; do
-        system_current "$src" "$dst" "$mode" || want=1
+        system_current "$src" "$dst" "$mode" || want+=("$dst")
     done < <(system_files)
-    if (( ! want )); then
-        echo "system files already installed"
-        return 0
-    fi
-    if ! command -v sudo >/dev/null 2>&1; then
-        echo "install: sudo is not installed, so the system files are left for the end" >&2
-        return 0
-    fi
+    (( ${#want[@]} )) || return 0
+    command -v sudo >/dev/null 2>&1 || return 0
+    printf '%ssudo%s %sfor %s%s\n' "$BOLD" "$RESET" "$DIM" "$(printf '%s, ' "${want[@]}" | sed 's/, $//')" "$RESET"
     if sudo -v 2>/dev/null; then
         SUDO_OK=1
         # Kept alive: a cold run can outlast sudo's timestamp.
         ( while true; do sudo -n true 2>/dev/null; sleep 50; done ) &
         SUDO_KEEPALIVE=$!
     else
-        echo "install: no sudo here, so the system files are left for the end" >&2
+        printf '%sno sudo here, so root'\''s files are left for the end%s\n' "$YELLOW" "$RESET"
     fi
+    echo
 }
 
-# One root-owned file. Content another hand wrote is a conflict, as in the
-# home directory, and its previous copy is kept beside it as .bak-<time>.
+# One root-owned file; 0 when it was written. Content another hand wrote is a
+# conflict, as in the home directory, and its previous copy is kept beside it
+# as .bak-<time>.
 system_file() {
     local rel=$1 dst=$2 mode=$3
     if system_current "$rel" "$dst" "$mode"; then
         (( CHECK )) || record "$dst"
+        same
         return 1
     fi
     if (( CHECK )); then
-        if [[ -e "$dst" ]] && ! cmp -s -- "$SRC/$rel" "$dst" && ! ours "$dst" "$SRC/$rel"; then
-            echo "CONFLICT $dst is not what this repository installed"
+        if [[ ! -e "$dst" ]]; then
+            todo "${YELLOW}missing $dst$RESET"
+        elif ! cmp -s -- "$SRC/$rel" "$dst" && ! ours "$dst" "$SRC/$rel"; then
+            todo "$RED✗ conflict $dst$RESET"
         else
-            echo "DRIFT    $dst is behind $SRC/$rel"
+            todo "${YELLOW}behind $dst$RESET"
         fi
-        DRIFT=1
         return 1
     fi
     if (( ! SUDO_OK )); then
         LEFT+=("sudo install -D -o root -g root -m $mode '$SRC/$rel' $dst")
+        branch "${YELLOW}left for sudo: $dst$RESET"
         return 1
     fi
     if [[ -e "$dst" ]] && ! cmp -s -- "$SRC/$rel" "$dst"; then
         if ! ours "$dst" "$SRC/$rel"; then
             claim "$dst" "$SRC/$rel" "$rel"
-            sudo cp -a -- "$dst" "$dst.bak-$STAMP" && echo "kept the previous $dst at $dst.bak-$STAMP"
+            sudo cp -a -- "$dst" "$dst.bak-$STAMP" && NOTES+=("the previous $dst is kept at $dst.bak-$STAMP")
         fi
     fi
     sudo install -D -o root -g root -m "$mode" -- "$SRC/$rel" "$dst" || stop "could not write $dst"
     record "$dst"
-    echo "installed $dst"
+    wrote "$dst"
     return 0
+}
+
+# --------------------------------------------------------- the user manager --
+
+# State changes only, each said: an update with nothing to change runs no
+# systemctl verb that writes. A unit not installed is left alone; masking one
+# would leave a link to /dev/null for nothing.
+unit_state() { systemctl --user is-enabled "$1" 2>/dev/null || :; }
+
+user_services() {
+    local u state
+    if (( UNITS_CHANGED && ! CHECK )); then
+        if systemctl --user daemon-reload 2>/dev/null; then
+            branch "$GREEN✓$RESET reloaded the user manager"
+        else
+            LEFT+=("systemctl --user daemon-reload (it failed here; the units apply at the next login)")
+            branch "${YELLOW}could not reload the user manager$RESET"
+        fi
+    fi
+    # hypridle uses its packaged unit; enabling hooks it to graphical-session.target.
+    state=$(unit_state hypridle.service)
+    if [[ "$state" == disabled ]]; then
+        if (( CHECK )); then
+            todo "${YELLOW}hypridle.service is not enabled$RESET"
+        elif systemctl --user enable hypridle.service >/dev/null 2>&1; then
+            branch "$GREEN✓$RESET enabled hypridle.service"
+        else
+            LEFT+=("systemctl --user enable hypridle.service (it failed here; without it the screen does not lock before sleep)")
+            branch "${YELLOW}could not enable hypridle.service$RESET"
+        fi
+    fi
+    # Baloo off, second half (see kde/baloofilerc): the config key only fails
+    # the unit's ExecCondition, so disable it to stop the start/stop at every
+    # login.
+    if [[ "$(unit_state kde-baloo.service)" == enabled ]]; then
+        if (( CHECK )); then
+            todo "${YELLOW}kde-baloo.service is enabled$RESET"
+        elif systemctl --user disable kde-baloo.service >/dev/null 2>&1; then
+            branch "$GREEN✓$RESET disabled kde-baloo.service"
+        fi
+    fi
+    # drkonqi runs from a user unit with no Wayland display, so Qt aborts it,
+    # and its own coredump launches it again (one crash left 1.1 GB of
+    # cores): masked; coredumpctl still works.
+    for u in drkonqi-coredump-launcher.socket drkonqi-coredump-pickup.service \
+             drkonqi-coredump-cleanup.timer drkonqi-sentry-postman.path drkonqi-sentry-postman.timer; do
+        state=$(unit_state "$u")
+        case "$state" in ""|not-found|masked|masked-runtime) continue ;; esac
+        if (( CHECK )); then
+            todo "${YELLOW}$u is not masked$RESET"
+            continue
+        fi
+        systemctl --user disable --now "$u" >/dev/null 2>&1 || :
+        if systemctl --user mask "$u" >/dev/null 2>&1; then
+            branch "$GREEN✓$RESET masked $u"
+        fi
+    done
+}
+
+# ------------------------------------------------------------- cursor theme --
+
+# XCursor themes are bitmaps, so the colour is baked in at build time; the
+# tint comes from pointer.py's FILL so the redrawn arrow and every other shape
+# match. The build redraws every image, so it runs only when what it is built
+# from changed (the three scripts, or the Oxygen_White files a package
+# upgrade replaces) or the theme is gone. A failed build is not fatal: the
+# previous pointer stays, and the next run tries again.
+CURSOR_THEME=Spaceduck-Sky
+CURSOR_STAMP="$STATE/dotfiles-desktop/cursor"
+
+cursor_inputs() {
+    local base dir=""
+    local -a bases=("$DATA/icons" "$HOME/.icons") dirs=()
+    IFS=: read -ra dirs <<<"${XDG_DATA_DIRS:-/usr/local/share:/usr/share}"
+    for base in "${dirs[@]}"; do [[ "$base" == /* ]] && bases+=("$base/icons"); done
+    for base in "${bases[@]}"; do
+        if [[ -d "$base/Oxygen_White/cursors" ]]; then dir=$base/Oxygen_White/cursors; break; fi
+    done
+    {
+        cat -- "$SRC/theme/cursor/tint-cursors.py" "$SRC/theme/cursor/pointer.py" "$SRC/theme/cursor/emphasise.py"
+        if [[ -n "$dir" ]]; then find "$dir" -printf '%P %s %T@\n' | LC_ALL=C sort; fi
+    } | sha256sum | cut -d' ' -f1
+}
+
+cursor_theme() {
+    local want have tint
+    want=$(cursor_inputs)
+    have=$(cat -- "$CURSOR_STAMP" 2>/dev/null) || have=""
+    if [[ -f "$DATA/icons/$CURSOR_THEME/index.theme" && "$want" == "$have" ]]; then
+        same
+        return 0
+    fi
+    if (( CHECK )); then
+        todo "${YELLOW}behind $CURSOR_THEME (what it is built from changed, or it is missing)$RESET"
+        return 0
+    fi
+    tint=$(sed -n 's/^FILL = "\(#[0-9a-fA-F]\{6\}\)".*/\1/p' "$SRC/theme/cursor/pointer.py" | head -n 1)
+    if [[ -z "$tint" ]]; then
+        branch "${YELLOW}no FILL in theme/cursor/pointer.py, so $CURSOR_THEME was not built$RESET"
+        return 0
+    fi
+    if ! "$SRC/theme/cursor/tint-cursors.py" --from Oxygen_White --name "$CURSOR_THEME" --tint "$tint" \
+            --comment "Oxygen_White recoloured to the drawn pointer's blue" >/dev/null 2>"$STATE_TMP"; then
+        branch "${YELLOW}$CURSOR_THEME could not be built ($(head -n 1 "$STATE_TMP")); the pointer is unchanged$RESET"
+        return 0
+    fi
+    "$SRC/theme/cursor/pointer.py" --theme "$CURSOR_THEME" >/dev/null 2>&1 \
+        || branch "${YELLOW}the arrow stayed as the tint left it$RESET"
+    # Enlarges the drag shapes; reasoning in the script.
+    "$SRC/theme/cursor/emphasise.py" --theme "$CURSOR_THEME" >/dev/null 2>&1 \
+        || branch "${YELLOW}the drag cursors were left at theme size$RESET"
+    mkdir -p -- "${CURSOR_STAMP%/*}" && printf '%s\n' "$want" >"$CURSOR_STAMP" || :
+    wrote "built $CURSOR_THEME in $(tilde "$DATA/icons")"
 }
 
 # ------------------------------------------------------------------- doctor --
@@ -582,25 +902,83 @@ doctor() {
         command -v "${tool%%:*}" >/dev/null 2>&1 || missing+=("${tool%%:*} (${tool#*:})")
     done
     if (( ${#missing[@]} == 0 )); then
-        echo "doctor: every font and tool the desktop uses is present"
+        printf '%s✓%s doctor: every font and tool the desktop uses is present\n' "$GREEN" "$RESET"
         return 0
     fi
-    printf 'doctor: missing %s\n' "${missing[@]}"
+    printf '%sdoctor: missing%s\n' "$YELLOW" "$RESET"
+    tree_lines "$YELLOW" "${missing[@]}"
+}
+
+finish() {
+    local note
+    FINISHED=1
+    echo
+    if (( ${#LEFT[@]} )); then
+        printf '%sleft undone%s %s(%s written)%s\n' "$BOLD$YELLOW" "$RESET" "$DIM" "$WRITTEN" "$RESET"
+        tree_lines "$YELLOW" "${LEFT[@]}"
+    elif (( ! CHECK )); then
+        printf '%s✓ everything is in place%s %s(%s written, %s unchanged)%s\n' \
+            "$BOLD$GREEN" "$RESET" "$DIM" "$WRITTEN" "$UNCHANGED" "$RESET"
+    fi
+    if (( SEEDS_DIFFER == 1 && ! CHECK )); then
+        NOTES+=("1 seeded file was changed after it was seeded and is left alone; --check names it")
+    elif (( SEEDS_DIFFER > 1 && ! CHECK )); then
+        NOTES+=("$SEEDS_DIFFER seeded files were changed after they were seeded and are left alone; --check lists them")
+    fi
+    for note in "${NOTES[@]}"; do printf '%snote: %s%s\n' "$DIM" "$note" "$RESET"; done
+    if (( CHECK )); then
+        if (( ${#PROBLEMS[@]} )); then
+            printf '%s✗ the premise is not met, so ./install.sh stops until it is%s\n' "$RED" "$RESET"
+        elif (( DRIFT )); then
+            printf '%srun ./install.sh to apply%s\n' "$YELLOW" "$RESET"
+        else
+            printf '%s✓%s everything installed is current\n' "$GREEN" "$RESET"
+        fi
+    fi
+    doctor
+    # The script's last command, so this is its exit status.
+    if (( ${#LEFT[@]} || (CHECK && (DRIFT || ${#PROBLEMS[@]})) )); then return 1; fi
+    return 0
 }
 
 # ===================================================================== run ==
 
-preflight
+printf '%sdotfiles-desktop%s  %s%s %s%s\n' "$BOLD$CYAN" "$RESET" "$DIM" \
+    "$( (( CHECK )) && echo checking || echo installing into)" "$(tilde "$HOME")" "$RESET"
+HYPRLAND_VERSION=""
+check_premise
+if (( ${#PROBLEMS[@]} )); then
+    if (( ! CHECK )); then
+        printf '%s✗ the premise is not met; nothing was written%s\n' "$RED" "$RESET" >&2
+        tree_lines "" "${PROBLEMS[@]}" >&2
+        exit 1
+    fi
+    printf '%s✗ the premise is not met%s\n' "$RED" "$RESET"
+    tree_lines "" "${PROBLEMS[@]}"
+else
+    premise_line
+fi
+echo
+
 load_manifest
 if (( ! CHECK )); then
     # Two runs at once would interleave their writes and their manifests.
-    mkdir -p -- "${MANIFEST_FILE%/*}" || stop "could not create ${MANIFEST_FILE%/*}"
+    mkdir -p -- "${MANIFEST_FILE%/*}" || stop "could not create $(tilde "${MANIFEST_FILE%/*}")"
     exec 9>"${MANIFEST_FILE%/*}/lock"
     flock -n 9 || stop "another ./install.sh is running"
     acquire_sudo
 fi
 
-mirror "$SRC/quickshell/bar"         "$CONFIG/quickshell/bar"
+# Scripts first: the config and the bar call them, and the reloads below may
+# run what they name.
+group_open "$(tilde "$CONFIG/hypr/scripts")"
+mirror_dir "$SRC/hypr/scripts" "$CONFIG/hypr/scripts"
+ensure_exec "$CONFIG/hypr/scripts"/*.sh
+group_close
+
+group_open "$(tilde "$CONFIG/quickshell/bar")"
+mirror_dir "$SRC/quickshell/bar" "$CONFIG/quickshell/bar"
+ensure_exec "$CONFIG/quickshell/bar/scripts"/*.sh "$CONFIG/quickshell/bar/scripts"/*.py
 # The reloads on write above can miss files: quickshell reads the whole tree
 # when a reload starts and watches again only when it ends, and a file
 # renamed over a watched one sometimes went unseen altogether. One more
@@ -608,7 +986,7 @@ mirror "$SRC/quickshell/bar"         "$CONFIG/quickshell/bar"
 # still under way builds the shell over several turns of its event loop, its
 # IPC targets appearing one by one, so the "shell" target is looked for a few
 # times before the bar is taken for one from before the call.
-if (( ! CHECK && MIRROR_CHANGED )); then
+if (( ! CHECK && GROUP_WROTE )); then
     _bar_state=none
     for _ in 1 2 3 4 5 6 7 8 9 10; do
         _bar_targets=$(qs -p "$CONFIG/quickshell/bar" ipc show 2>/dev/null) || { _bar_state=none; break; }
@@ -622,20 +1000,23 @@ if (( ! CHECK && MIRROR_CHANGED )); then
     case "$_bar_state" in
         ready)
             qs -p "$CONFIG/quickshell/bar" ipc call shell reload >/dev/null 2>&1 \
-                && echo "reloaded the running bar" ;;
+                && branch "$GREEN✓$RESET reloaded the running bar" ;;
         old)
-            echo "install: the running bar cannot be asked to reload yet; run: bar --restart" >&2 ;;
+            LEFT+=("bar --restart (the running bar could not be asked to reload)")
+            branch "${YELLOW}the running bar cannot be asked to reload yet$RESET" ;;
     esac
     unset _bar_targets _bar_state
 fi
+group_close
 
-# config/ before hyprland.lua, then an explicit reload. Hyprland reloads on
-# writes to files it has already loaded only, so a hyprland.lua that requires a
-# not-yet-copied module leaves the session in emergency mode. The state dir is
-# where monitors.lua caches output descriptions; the module cannot create it.
-(( CHECK )) || mkdir -p -- "$STATE/hypr"
-mirror "$SRC/hypr/config"            "$CONFIG/hypr/config"
-mirror "$SRC/hypr/scripts"           "$CONFIG/hypr/scripts"
+# config/ before hyprland.lua, then an explicit reload, and only when one of
+# them changed. Hyprland reloads on writes to files it has already loaded
+# only, so a hyprland.lua that requires a not-yet-copied module leaves the
+# session in emergency mode. The state dir is where monitors.lua caches
+# output descriptions; the module cannot create it.
+group_open "$(tilde "$CONFIG/hypr")"
+if (( ! CHECK )); then mkdir -p -- "$STATE/hypr" || stop "could not create $(tilde "$STATE/hypr")"; fi
+mirror_dir "$SRC/hypr/config" "$CONFIG/hypr/config" config/
 # The tracked preset, and the untracked per-machine deviations if this
 # checkout has any. Before the preset existed the installed
 # monitor_settings.lua was one machine's own file: one that differs from the
@@ -647,150 +1028,111 @@ _local_settings="$CONFIG/hypr/monitor_settings.local.lua"
 if [[ -f "$_old_settings" ]] && ! ours "$_old_settings" "$SRC/hypr/monitor_settings.lua" \
    && [[ ! -f "$SRC/hypr/monitor_settings.local.lua" ]]; then
     if (( CHECK )); then
-        echo "DRIFT    $_old_settings is a per-machine file from before the preset; install moves it to $_local_settings"; DRIFT=1
+        todo "${YELLOW}monitor_settings.lua is a per-machine file from before the preset; install moves it to monitor_settings.local.lua$RESET"
     elif [[ -f "$_local_settings" ]]; then
         cp -a -- "$_old_settings" "$_local_settings.bak-$STAMP"
-        echo "kept the old $_old_settings as $_local_settings.bak-$STAMP (a local file already exists)"
+        branch "${YELLOW}kept the old monitor_settings.lua as monitor_settings.local.lua.bak-$STAMP (a local file already exists)$RESET"
     else
         mv -- "$_old_settings" "$_local_settings"
-        echo "moved the old $_old_settings to $_local_settings: its values still win over the preset"
+        branch "$GREEN✓$RESET moved the old monitor_settings.lua to monitor_settings.local.lua: its values still win over the preset"
     fi
 fi
 unset _old_settings _local_settings
-mirror "$SRC/hypr/monitor_settings.lua" "$CONFIG/hypr/monitor_settings.lua"
+mirror_file "$SRC/hypr/monitor_settings.lua" "$CONFIG/hypr/monitor_settings.lua" monitor_settings.lua
 if [[ -f "$SRC/hypr/monitor_settings.local.lua" ]]; then
-    mirror "$SRC/hypr/monitor_settings.local.lua" "$CONFIG/hypr/monitor_settings.local.lua"
+    mirror_file "$SRC/hypr/monitor_settings.local.lua" "$CONFIG/hypr/monitor_settings.local.lua" monitor_settings.local.lua
 fi
-mirror "$SRC/hypr/hyprland.lua"      "$CONFIG/hypr/hyprland.lua"
-# Installed by older versions; removed so they cannot mislead.
-_retired_files=("$CONFIG/hypr/monitors.preset")
-for _retired in "${_retired_files[@]}"; do
-    [[ -e "$_retired" ]] || continue
-    if (( CHECK )); then
-        echo "DRIFT    $_retired is no longer used"; DRIFT=1
+mirror_file "$SRC/hypr/hyprland.lua" "$CONFIG/hypr/hyprland.lua" hyprland.lua
+retire "$CONFIG/hypr/monitors.preset" monitors.preset
+if (( ! CHECK && GROUP_WROTE )); then
+    if ! hyprctl version >/dev/null 2>&1; then
+        branch "${DIM}no compositor reachable from here; the next session reads it$RESET"
+    elif hyprctl reload >/dev/null 2>&1; then
+        branch "$GREEN✓$RESET reloaded the running compositor"
     else
-        rm -f -- "$_retired" && echo "removed retired $_retired"
-    fi
-done
-unset _retired _retired_files
-if (( ! CHECK )); then
-    if hyprctl version >/dev/null 2>&1; then
-        if hyprctl reload >/dev/null 2>&1; then
-            echo "reloaded the running compositor"
-        else
-            echo "install: could not reload the running compositor; run: hyprctl reload" >&2
-        fi
-    else
-        echo "no compositor reachable from here; a running session picks this up at its next hyprctl reload"
+        LEFT+=("hyprctl reload (it failed here)")
+        branch "${YELLOW}could not reload the running compositor$RESET"
     fi
 fi
-seed "$SRC/hypr/hypridle.conf"     "$CONFIG/hypr/hypridle.conf"
-seed "$SRC/hypr/hyprlock.conf"     "$CONFIG/hypr/hyprlock.conf"
-seed "$SRC/hypr/hyprpaper.conf"    "$CONFIG/hypr/hyprpaper.conf"
+group_close
+
 # ~/.local/bin, not an XDG directory: the units and keybinds name these by
 # that path, and the terminal configuration puts it on PATH.
-mirror "$SRC/bin/bar"               "$HOME/.local/bin/bar"
-mirror "$SRC/bin/unlock"            "$HOME/.local/bin/unlock"
+group_open programs
+mirror_file "$SRC/bin/bar" "$HOME/.local/bin/bar"
+mirror_file "$SRC/bin/unlock" "$HOME/.local/bin/unlock"
 # In ~ on purpose: typed from a text console where PATH may not be set up.
-mirror "$SRC/bin/recover-desktop"   "$HOME/recover-desktop"
+mirror_file "$SRC/bin/recover-desktop" "$HOME/recover-desktop"
 # The camera switch's user copy: `camera-switch` from a terminal, and what
 # the camera keys fall back to until the sudo step has installed the
 # root-owned one; it works, but asks for an administrator password each time.
-mirror "$SRC/camera/camera-switch.py" "$HOME/.local/bin/camera-switch"
-# mirror() keeps the checkout's mode, and an archive or core.fileMode=false
-# tree arrives at 644.
-if (( ! CHECK )); then
-    chmod +x "$HOME/.local/bin/bar" "$HOME/.local/bin/unlock" "$HOME/.local/bin/camera-switch" \
-        "$HOME/recover-desktop" || stop "could not make the programs in ~/.local/bin executable"
-fi
+mirror_file "$SRC/camera/camera-switch.py" "$HOME/.local/bin/camera-switch"
+ensure_exec "$HOME/.local/bin/bar" "$HOME/.local/bin/unlock" "$HOME/.local/bin/camera-switch" "$HOME/recover-desktop"
+group_close
 
-# Units are mirrored, then daemon-reload below. Running units are not
-# restarted (restarting fcitx5 drops every window's input context); the next
-# login or session-start.sh picks them up.
+# Units are mirrored, then daemon-reload. Running units are not restarted
+# (restarting fcitx5 drops every window's input context); the next login or
+# session-start.sh picks them up. The unit directory is shared with other
+# packages, so only units whose first line is the "# dotfiles-desktop" marker
+# and whose source is gone are removed.
+group_open "$(tilde "$CONFIG/systemd/user")"
 for _unit in "$SRC"/systemd/user/*; do
-    mirror "$_unit" "$CONFIG/systemd/user/$(basename "$_unit")"
+    # A drop-in directory (hypridle.service.d) is mirrored as one.
+    if [[ -d "$_unit" ]]; then
+        mirror_dir "$_unit" "$CONFIG/systemd/user/${_unit##*/}" "${_unit##*/}/"
+    else
+        mirror_file "$_unit" "$CONFIG/systemd/user/${_unit##*/}" "${_unit##*/}"
+    fi
 done
-unset _unit
-# The unit directory is shared with other packages, so only units whose first
-# line is the "# dotfiles-desktop" marker and whose source is gone are removed.
 for _installed in "$CONFIG"/systemd/user/*.service "$CONFIG"/systemd/user/*.target "$CONFIG"/systemd/user/*.slice; do
     [[ -f "$_installed" ]] || continue
-    [[ -e "$SRC/systemd/user/$(basename "$_installed")" ]] && continue
+    [[ -e "$SRC/systemd/user/${_installed##*/}" ]] && continue
     [[ "$(head -n 1 "$_installed" 2>/dev/null)" == "# dotfiles-desktop" ]] || continue
-    if (( CHECK )); then
-        echo "DRIFT    $_installed is no longer in the repository"; DRIFT=1
-    else
-        rm -f -- "$_installed" && echo "removed retired $_installed"
-    fi
+    retire "$_installed" "${_installed##*/}"
 done
-unset _installed
+unset _unit _installed
+UNITS_CHANGED=$GROUP_WROTE
+group_close
 
+group_open "user services"
+user_services
+group_close
+
+group_open "other files"
 # Overrides /usr/share's fcitx5 D-Bus activation to start the unit instead.
-mirror "$SRC/dbus/services/org.fcitx.Fcitx5.service" "$DATA/dbus-1/services/org.fcitx.Fcitx5.service"
-
-# XCursor themes are bitmaps, so the colour is baked in at build time. The tint
-# comes from pointer.py's FILL so the redrawn arrow and every other shape match.
-# Failure is not fatal; the previous pointer stays.
-if (( ! CHECK )); then
-    cursor_tint=$(sed -n 's/^FILL = "\(#[0-9a-fA-F]\{6\}\)".*/\1/p' "$SRC/theme/cursor/pointer.py" | head -1)
-    if [[ -z "$cursor_tint" ]]; then
-        echo "install: no FILL in pointer.py; the cursor theme was not built" >&2
-    elif "$SRC/theme/cursor/tint-cursors.py" --from Oxygen_White --name Spaceduck-Sky --tint "$cursor_tint" \
-           --comment "Oxygen_White recoloured to the drawn pointer's blue"; then
-        "$SRC/theme/cursor/pointer.py" --theme Spaceduck-Sky \
-            || echo "install: the arrow stayed as the tint left it" >&2
-        # Enlarges the drag shapes; reasoning in the script.
-        "$SRC/theme/cursor/emphasise.py" --theme Spaceduck-Sky \
-            || echo "install: the drag cursors were left at theme size" >&2
-    else
-        echo "install: could not build the cursor theme; the pointer is unchanged" >&2
-    fi
-    unset cursor_tint
-fi
+mirror_file "$SRC/dbus/services/org.fcitx.Fcitx5.service" "$DATA/dbus-1/services/org.fcitx.Fcitx5.service"
 # The REPL helpers for node and IEx (~/.config/node, profile.d/node.sh,
 # ~/.iex.exs) are dotfiles-terminal's alone: a file mirrored from both
 # repositories was whatever the last installer to run left there.
-mirror "$SRC/spotify/spotify-launcher.conf" "$CONFIG/spotify-launcher.conf"
-seed "$SRC/fcitx5/config"          "$CONFIG/fcitx5/config"
-seed "$SRC/fcitx5/profile"         "$CONFIG/fcitx5/profile"
-seed "$SRC/fcitx5/conf"            "$CONFIG/fcitx5/conf"
+mirror_file "$SRC/spotify/spotify-launcher.conf" "$CONFIG/spotify-launcher.conf"
+group_close
+
+group_open "cursor theme"
+cursor_theme
+group_close
+
+group_open "seeded once"
+seed "$SRC/hypr/hypridle.conf" "$CONFIG/hypr/hypridle.conf"
+seed "$SRC/hypr/hyprlock.conf" "$CONFIG/hypr/hyprlock.conf"
+seed "$SRC/hypr/hyprpaper.conf" "$CONFIG/hypr/hyprpaper.conf"
+seed "$SRC/fcitx5/config" "$CONFIG/fcitx5/config"
+seed "$SRC/fcitx5/profile" "$CONFIG/fcitx5/profile"
+seed "$SRC/fcitx5/conf" "$CONFIG/fcitx5/conf"
 seed "$SRC/gtk/gtk-3.0-settings.ini" "$CONFIG/gtk-3.0/settings.ini"
 seed "$SRC/gtk/gtk-4.0-settings.ini" "$CONFIG/gtk-4.0/settings.ini"
-seed "$SRC/kde/kdeglobals"        "$CONFIG/kdeglobals"
-seed "$SRC/kde/kded5rc"           "$CONFIG/kded5rc"
-seed "$SRC/kde/baloofilerc"       "$CONFIG/baloofilerc"
+seed "$SRC/kde/kdeglobals" "$CONFIG/kdeglobals"
+seed "$SRC/kde/kded5rc" "$CONFIG/kded5rc"
+seed "$SRC/kde/baloofilerc" "$CONFIG/baloofilerc"
 seed "$SRC/kde/SpaceduckDark.colors" "$DATA/color-schemes/SpaceduckDark.colors"
-
-if (( ! CHECK )); then
-    # Baloo off, second half (see kde/baloofilerc): the config key only fails
-    # the unit's ExecCondition, so disable it to stop the start/stop at every
-    # login. drkonqi runs from a user unit with no Wayland display, so Qt
-    # aborts it, and its own coredump launches it again (one crash left 1.1 GB
-    # of cores): masked; coredumpctl still works. No-ops where absent.
-    systemctl --user disable kde-baloo.service >/dev/null 2>&1 || true
-    for _u in drkonqi-coredump-launcher.socket drkonqi-coredump-pickup.service \
-              drkonqi-coredump-cleanup.timer drkonqi-sentry-postman.path drkonqi-sentry-postman.timer; do
-        systemctl --user disable --now "$_u" >/dev/null 2>&1 || true
-        systemctl --user mask "$_u" >/dev/null 2>&1 || true
-    done
-    unset _u
-    systemctl --user daemon-reload 2>/dev/null \
-        || echo "install: could not reload the user manager; the units apply at the next login" >&2
-    # hypridle uses its packaged unit; enabling hooks it to graphical-session.target.
-    systemctl --user enable hypridle.service >/dev/null 2>&1 \
-        || LEFT+=("systemctl --user enable hypridle.service (it failed here; without it the screen does not lock before sleep)")
-
-    # cp -a keeps the checkout's mode, and an archive or core.fileMode=false
-    # tree arrives at 644.
-    for _f in "$CONFIG/quickshell/bar/scripts"/*.{sh,py} "$CONFIG/hypr/scripts"/*.sh; do
-        [[ -f "$_f" ]] || continue
-        chmod +x -- "$_f" || stop "could not make $_f executable"
-    done
-    unset _f
+# Seeded by older versions under the name kded6 never reads; gone when it is
+# still the copy this repository wrote.
+if [[ -f "$CONFIG/kded6rc" ]] && ours "$CONFIG/kded6rc"; then
+    retire "$CONFIG/kded6rc" "$(tilde "$CONFIG/kded6rc") (kded6 reads kded5rc)"
 fi
+group_close
 
 # Root's files last: everything above works without them.
-echo
+group_open "system files"
 _fonts=0
 _camera=0
 while IFS=: read -r _src _dst _mode; do
@@ -800,35 +1142,20 @@ while IFS=: read -r _src _dst _mode; do
     fi
 done < <(system_files)
 if (( _fonts )); then
-    sudo fc-cache -f >/dev/null 2>&1 && echo "font cache rebuilt"
+    sudo fc-cache -f >/dev/null 2>&1 && branch "$GREEN✓$RESET rebuilt the font cache"
 fi
 # polkit watches its action directory; udev is told, so the rule holds from
 # the next event on.
 if (( _camera )); then
-    sudo udevadm control --reload 2>/dev/null && echo "udev rules reloaded"
+    sudo udevadm control --reload 2>/dev/null && branch "$GREEN✓$RESET reloaded the udev rules"
 fi
 if (( ! CHECK && ! SUDO_OK && ${#LEFT[@]} )) && [[ "${LEFT[*]}" == *"$SRC/camera/"* ]]; then
     LEFT+=("sudo udevadm control --reload")
 fi
-greeter_is_tuigreet || echo "greeter: not tuigreet, so $GREETERCONF is left alone"
+if (( CHECK )) && ! greeter_is_tuigreet; then
+    branch "${DIM}the greeter is not tuigreet, so $GREETERCONF is left alone$RESET"
+fi
 unset _src _dst _mode _fonts _camera
+group_close
 
-echo
-doctor
-FINISHED=1
-if (( CHECK )); then
-    if (( DRIFT )); then
-        echo
-        echo "run ./install.sh to apply"
-        exit 1
-    fi
-    echo "everything installed is current"
-    exit 0
-fi
-if (( ${#LEFT[@]} )); then
-    echo
-    echo "${BOLD}left undone${OFF} (${WRITTEN} files written):"
-    printf '  %s\n' "${LEFT[@]}"
-    exit 1
-fi
-echo "everything is in place (${WRITTEN} files written)"
+finish
