@@ -187,15 +187,16 @@ class Host:
             try:
                 os.unlink(path)
             except FileNotFoundError:
-                pass
-            return
-        os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
-        fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_CLOEXEC, 0o644)
-        try:
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-        # The position has to survive a power cut right after the key press.
+                return
+        else:
+            os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
+            fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_CLOEXEC, 0o644)
+            try:
+                os.fsync(fd)
+            finally:
+                os.close(fd)
+        # The position has to survive a power cut right after the key press,
+        # either way.
         dfd = os.open(os.path.dirname(path), os.O_RDONLY | os.O_DIRECTORY)
         try:
             os.fsync(dfd)
@@ -368,7 +369,7 @@ def discover(host, record=()):
         # Named while it was on: a camera that is off may have no node to
         # name it by, and older kernels blank a deauthorized device's strings.
         for entry in record:
-            if entry["device"] == cam.device and entry.get("name"):
+            if entry["device"] == cam.device and entry.get("name") and same_device(host, entry):
                 cam.name = entry["name"]
     return sorted(found.values(), key=lambda c: c.device)
 
@@ -658,18 +659,21 @@ class Report:
 
 
 def is_off(host, cam, held):
-    """Off: no capture node, and something keeps the driver from binding."""
+    """Off: no capture node, and something keeps every driver from binding.
+    A USB camera counts by the video interfaces it has now, not by the
+    record: one still enumerating has interfaces newer than the record, and
+    those would bind and come up live."""
     if live_nodes(host, cam.device):
         return None
-    for entry in reversed(held):
-        if METHODS[entry["method"]].holds(host, entry):
-            return METHODS[entry["method"]].done
     if cam.bus == "usb":
         if host.read(cam.device + "/authorized") == "0":
             return METHODS["usb-device"].done
         if cam.interfaces and all(host.read(f"{cam.device}/{i}/authorized") == "0"
                                   for i in cam.interfaces):
             return METHODS["usb-interface"].done
+    for entry in reversed(held):
+        if entry["method"] in ("unbind", "module") and METHODS[entry["method"]].holds(host, entry):
+            return METHODS[entry["method"]].done
     return None
 
 

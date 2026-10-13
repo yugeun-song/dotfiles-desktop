@@ -603,6 +603,40 @@ class LaptopWebcam(Case):
         self.assertEqual(len(self.capture_nodes()), 2)
 
 
+class Partial(Case):
+    def test_interfaces_newer_than_the_record_are_not_off(self):
+        # A camera still enumerating: enforce ran when only the RGB camera's
+        # interfaces existed; the IR camera's came after, its driver not
+        # bound yet. The record alone said "off" while they were live.
+        laptop_webcam(self.k)
+        self.k.set_switch(True)
+        for n in (0, 1):
+            self.k.write(f"{WEBCAM}/3-5:1.{n}/authorized", "0")
+        self.k.unbind(f"{WEBCAM}/3-5:1.2")
+        self.k.save_record([{"method": "usb-interface", "device": WEBCAM, "bus": "usb",
+                             "name": "ASUS FHD webcam", "ident": "3277:0059",
+                             "serial": "200901010001", "interfaces": ["3-5:1.0", "3-5:1.1"]}])
+        self.assertEqual(self.capture_nodes(), [])
+        cam = cs.discover(self.k, self.k.load_record())[0]
+        self.assertIsNone(cs.is_off(self.k, cam, self.k.load_record()))
+        self.assertEqual(self.act("enforce"), (0, None))
+        for n in range(4):
+            self.assertEqual(self.auth(f"{WEBCAM}/3-5:1.{n}"), "0", n)
+
+    def test_a_new_device_on_the_port_keeps_its_own_name(self):
+        k = Kernel(interface_auth=False)
+        self.addCleanup(k.cleanup)
+        laptop_webcam(k)
+        self.act("off", k)
+        k.remove(WEBCAM)
+        k.driver("usb", "uvcvideo", "uvcvideo")
+        k.usb("3-5", "046d", "085e", "Logitech BRIO", [
+            ("0e", "01", "uvcvideo", [("Logitech BRIO", ":capture:")], [1]),
+            ("0e", "02", None, [], [])])
+        names = [c.name for c in cs.discover(k, k.load_record())]
+        self.assertEqual(names, ["Logitech BRIO"])
+
+
 class Fallbacks(Case):
     def test_old_kernel_deauthorizes_the_whole_device(self):
         k = Kernel(interface_auth=False)
