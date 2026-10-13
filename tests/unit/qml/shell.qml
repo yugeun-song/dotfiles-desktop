@@ -300,6 +300,32 @@ ShellRoot {
         }
     }
 
+    function testBadge() {
+        const ids = Badge.marks.map(m => m.id);
+        check("badge: ids are unique", ids.filter((id, i) => ids.indexOf(id) !== i), []);
+        check("badge: every mark is a Font Logos code point",
+              Badge.marks.filter(m => m.cp < 0xF300 || m.cp > 0xF3FF).map(m => m.id), []);
+        check("badge: aliases name marks", Object.values(Badge.aliases).filter(id => !Badge.byId(id)), []);
+        check("badge: an id of its own", Badge.markFor("arch", []).id, "arch");
+        check("badge: an alias", Badge.markFor("opensuse-tumbleweed", []).id, "tumbleweed");
+        check("badge: rhel", Badge.markFor("rhel", ["fedora"]).id, "redhat");
+        check("badge: a derivative by ID_LIKE", Badge.markFor("someremix", ["ubuntu", "debian"]).id, "ubuntu");
+        check("badge: nothing known is Tux", Badge.markFor("plan9", []).id, "tux");
+        check("badge: fc-query's charset", Badge.parseCharset("d 20-7e f000-f385\n"),
+              [[13, 13], [32, 126], [61440, 62341]]);
+        const saved = Badge.coverage;
+        Badge.coverage = Badge.parseCharset("20-7e f000-f37f");
+        check("badge: a mark the font lacks is not offered", Badge.offered.some(m => m.id === "cachyos"), false);
+        check("badge: one it has is", Badge.offered.some(m => m.id === "void"), true);
+        check("badge: a missing own mark falls to ID_LIKE", Badge.markFor("cachyos", ["arch"]).id, "arch");
+        Badge.coverage = saved;
+        Badge.choose("void");
+        check("badge: a choice", Badge.current.id, "void");
+        Badge.choose("no-such-mark");
+        check("badge: an unknown choice is automatic", Badge.choice, "auto");
+        check("badge: automatic is the system's", Badge.current.id, Badge.autoMark.id);
+    }
+
     function testBrightness() {
         check("internal: eDP", Brightness.isInternal("eDP-1"), true);
         check("internal: HDMI", Brightness.isInternal("HDMI-A-1"), false);
@@ -313,7 +339,7 @@ ShellRoot {
 
         onTriggered: {
             const suites = [root.testTheme, root.testNotifications, root.testScreensaver, root.testKeyFeed,
-                            root.testBrightness, root.testCamera];
+                            root.testBrightness, root.testCamera, root.testBadge];
             if (modules.item)
                 suites.push(() => modules.item.testLauncher(root.check), () => modules.item.testDisplays(root.check));
             else

@@ -64,6 +64,8 @@ Singleton {
     // /etc/os-release is missing or has no ID.
     property string distroId: "linux"
     property string distroName: "Linux"
+    // ID_LIKE's words, for a derivative the badge has no mark of its own for.
+    property var distroLike: []
 
     FileView {
         id: osRelease
@@ -134,6 +136,8 @@ Singleton {
         const id = release.match(/^ID=["']?([A-Za-z0-9._-]+)["']?\s*$/m);
         if (id)
             root.distroId = id[1].toLowerCase();
+        const like = release.match(/^ID_LIKE=["']?([A-Za-z0-9._ -]+)["']?\s*$/m);
+        root.distroLike = like ? like[1].toLowerCase().split(/\s+/).filter(w => w !== "") : [];
         const pretty = release.match(/^PRETTY_NAME=["']?([^"'\n]+)["']?\s*$/m)
                        ?? release.match(/^NAME=["']?([^"'\n]+)["']?\s*$/m);
         if (pretty)

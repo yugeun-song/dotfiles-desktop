@@ -138,6 +138,10 @@ alarm_is() { [[ "$(ipc e2e alarm)" == "$1" ]]; }
 countdown_over() { (( $(ipc e2e displaysState | jq .countdown) > $1 )); }
 outputs_are() { [[ "$(n monitors -j | jq -r '[.[] | "\(.name)=\(.width)"] | sort | join(" ")')" == "$1" ]]; }
 logged() { grep -q -- "$2" "$1" 2>/dev/null; }
+# A position read from captures until two agree: Hyprland pops a new layer in
+# from 93% of its size (layersIn), and a capture in those frames once put the
+# badge 17 px right of where its click lands.
+steady() { local last=$x; "$@" || return 1; [[ $x == "$last" ]]; }
 no_qml_warnings() { ! grep -E "WARN scene|ERROR" "$WORK/qs.out" | grep -v -E "portal|Could not register" | grep -q .; }
 session_dialog_open() { has_layer quickshell:powermenu && [[ "$(ipc e2e session)" == true ]]; }
 overlay_on() { has_layer quickshell:keys && key_state_is .enabled true; }
@@ -460,7 +464,72 @@ n output create headless HEADLESS-2 >/dev/null
 check "DDC detection runs again after a hotplug" wait_for 8 logged "$WORK/hardware.log" "ddcutil detect"
 wait_for 10 outputs_are "HEADLESS-1=2880 HEADLESS-2=2560"
 
-# 14. The suites for modules with windows, on the nested display.
+# 14. The badge's menu draws every mark it offers, at one size, and a mark
+# picked from it is the badge from then on, through a reload.
+badge_x() {
+    shot -g "0,0 200x34" "$WORK/bar-start.png" 2>/dev/null || return 1
+    x=$(python3 - "$WORK/bar-start.png" <<'EOF'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert("L")
+w, h = im.size
+cols = [x for x in range(w) if any(im.getpixel((x, y)) > 150 for y in range(h))]
+if not cols:
+    sys.exit(1)
+left = right = cols[0]
+while right + 1 in cols or right + 2 in cols or right + 3 in cols:
+    right += 1
+print((left + right) // 2)
+EOF
+)
+}
+# Below the bar, where the menu opens; picker.py reads it against a capture
+# taken while the menu was closed.
+PICKER_AREA="0,40 760x560"
+picker_open() { shot -g "$PICKER_AREA" "$WORK/picker.png" && python3 "$REPO/tests/e2e/picker.py" "$WORK/picker-closed.png" "$WORK/picker.png" > "$WORK/picker.json"; }
+picker_closed() { shot -g "$PICKER_AREA" "$WORK/picker-now.png"; python3 "$REPO/tests/e2e/picker.py" "$WORK/picker-closed.png" "$WORK/picker-now.png" >/dev/null; [[ $? == 1 ]]; }
+badge_is() { [[ "$(ipc e2e badge | jq -r .choice)" == "$1" ]]; }
+marks_drawn() { [[ "$(jq '.tiles | length' "$WORK/picker.json")" == "$(ipc e2e badge | jq '.offered | length')" ]]; }
+marks_differ() { jq -e '[.tiles[].ink] | (unique | length) == length' "$WORK/picker.json" >/dev/null; }
+marks_even() { jq -e '[.tiles[] | [.w, .h] | max] | max / min < 1.15' "$WORK/picker.json" >/dev/null; }
+open_picker() {
+    input move 2000 600 sleep 100 move "$x" 16 sleep 200 click sleep 100
+    wait_for 3 picker_open
+}
+
+if (( ! PIL )); then
+    skip "badge: python3-pillow is not installed"
+elif ! { x=""; wait_for 5 steady badge_x; }; then
+    fail "the badge: no glyph at the bar's left end"
+else
+    shot -g "$PICKER_AREA" "$WORK/picker-closed.png"
+    if open_picker; then
+        pass "a click on the badge opens its menu"
+        check "every mark it offers is drawn" marks_drawn
+        check "no two are drawn alike" marks_differ
+        check "they are drawn at one size" marks_even
+        i=$(ipc e2e badge | jq '.offered | index("void")')
+        read -r tx ty < <(jq -r --argjson i "$i" '.tiles[$i] | "\(.x) \(.y + 40)"' "$WORK/picker.json")
+        input move "$tx" "$ty" sleep 200 click sleep 100
+        check "a mark picked from it is the badge" wait_for 3 badge_is void
+        check "the menu closes on the pick" wait_for 3 picker_closed
+        check "the pick is kept" file_is "$WORK/state/quickshell/bar/badge" void
+        reload_bar
+        check "and outlives a reload" badge_is void
+        if open_picker; then
+            read -r ax ay < <(jq -r '.automatic | "\(.[0]) \(.[1] + 40)"' "$WORK/picker.json")
+            input move "$ax" "$ay" sleep 200 click sleep 100
+            check "Automatic gives the badge back to os-release" wait_for 3 badge_is auto
+        else
+            fail "the badge's menu after a reload"
+        fi
+    else
+        fail "a click on the badge opens its menu"
+    fi
+    input move 2000 600 sleep 100
+fi
+
+# 15. The suites for modules with windows, on the nested display.
 if QML_TEST_WAYLAND="$RT/$WL" "$REPO/tests/unit/qml.sh" > "$WORK/qml.out"; then
     pass "$(grep -o 'qml: .*' "$WORK/qml.out" | head -1)"
 else

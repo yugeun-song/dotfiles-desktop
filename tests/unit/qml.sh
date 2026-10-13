@@ -20,7 +20,7 @@ command -v qs >/dev/null 2>&1 || { echo "SKIP  qml: quickshell (qs) is not insta
 WORK=$(mktemp -d -p /tmp qs-unit.XXXXXX)
 trap 'rm -rf -- "$WORK"' EXIT
 
-mkdir -p "$WORK/bin" "$WORK/state" "$WORK/config" "$WORK/cache" "$WORK/run"
+mkdir -p "$WORK/bin" "$WORK/state/quickshell/bar" "$WORK/config" "$WORK/cache" "$WORK/run"
 chmod 700 "$WORK/run"
 cp -a "$REPO/quickshell/bar" "$WORK/bar"
 cp "$REPO/tests/unit/qml/shell.qml" "$WORK/bar/shell.qml"

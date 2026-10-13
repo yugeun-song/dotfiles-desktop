@@ -178,6 +178,12 @@ the seat is idle; it never locks or suspends. A window that inhibits idle, an
 open Displays panel or a screen share holds it off. Times live in
 `~/.local/state/quickshell/bar/screensaver`.
 
+**Badge**: the mark of the distribution `/etc/os-release` names (its ID,
+else the first ID_LIKE word with a mark, else Tux). A click opens Automatic
+and every mark the icon font has, 40 with a current Nerd Font; the pick
+persists in `~/.local/state/quickshell/bar/badge`. Lock and sign out are in
+the session menu.
+
 Editing the QML: Nerd Font glyphs are written as code points; quickshell's
 `percentage`, `signalStrength` and `battery` run 0.0 to 1.0; a `pragma
 Singleton` under `services/` must import QtQuick.
@@ -258,3 +264,9 @@ The palette combines [Spaceduck](https://github.com/pineapplegiant/spaceduck)
 by pineapplegiant (background, foreground, greys, selection) and
 [Tokyo Night](https://github.com/folke/tokyonight.nvim) by folke (the
 accents). Only the colour values were taken.
+
+The badge's marks are glyphs of [Font Logos](https://github.com/Lukas-W/font-logos)
+(Unlicense) as Nerd Fonts ships them, drawn from the installed font by code
+point; this repository holds no logo artwork. Each mark is its owner's
+trademark and stands only for that distribution, as Font Logos asks; no
+endorsement is implied.

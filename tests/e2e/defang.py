@@ -117,6 +117,9 @@ probe = '''
         function session(): bool {
             return Session.menuOpen;
         }
+        function badge(): string {
+            return JSON.stringify({ choice: Badge.choice, current: Badge.current.id, offered: Badge.offered.map(m => m.id) });
+        }
     }
 
     QtObject {
