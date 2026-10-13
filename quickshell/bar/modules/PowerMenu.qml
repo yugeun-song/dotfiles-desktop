@@ -59,7 +59,7 @@ Scope {
             // setsid is the weaker fallback. Backgrounded: lock.sh blocks while
             // hyprlock runs.
             command: ["sh", "-c",
-                "l=\"$HOME/.config/hypr/scripts/lock.sh\"; " +
+                "l=\"${XDG_CONFIG_HOME:-$HOME/.config}/hypr/scripts/lock.sh\"; " +
                 "s=\"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar/scripts/app-scope.sh\"; " +
                 "pidof hyprlock >/dev/null 2>&1 || " +
                 "if [ -r \"$s\" ]; then sh \"$s\" -- \"$l\" >/dev/null 2>&1 & " +

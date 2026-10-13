@@ -5,7 +5,9 @@
 -- Hyprland fires EVERY binding on a key, not the first match: never bind one
 -- key twice.
 
-local scripts   = HOME .. "/.config/hypr/scripts"
+-- Beside the loaded hyprland.lua, not under a fixed ~/.config: a config
+-- loaded from XDG_CONFIG_HOME or a test copy calls its own scripts.
+local scripts   = CONFIG .. "/scripts"
 local terminal  = scripts .. "/terminal.sh"
 local capture   = scripts .. "/capture.sh"
 local launch    = scripts .. "/launch.sh"

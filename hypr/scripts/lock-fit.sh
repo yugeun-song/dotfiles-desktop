@@ -25,7 +25,7 @@
 
 set -uo pipefail
 
-CONF="${1:-$HOME/.config/hypr/hyprlock.conf}"
+CONF="${1:-${XDG_CONFIG_HOME:-$HOME/.config}/hypr/hyprlock.conf}"
 RT="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
 OUT="${2:-$RT/hyprlock-fit.conf}"
 
