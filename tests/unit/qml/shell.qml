@@ -48,6 +48,9 @@ ShellRoot {
         check("art: a port on an allowed host", Theme.localArt("https://i.scdn.co:8443/x"), "https://i.scdn.co:8443/x");
         check("art: upper case host", Theme.localArt("https://I.SCDN.CO/x"), "https://I.SCDN.CO/x");
         check("art: empty", Theme.localArt(""), "");
+        check("art: an allowed host after ?@", Theme.localArt("https://evil.example?@i.scdn.co/x"), "");
+        check("art: an allowed host after #@", Theme.localArt("https://evil.example#@i.scdn.co/x"), "");
+        check("art: not a URL", Theme.localArt("https://"), "");
         check("shorten: short", Theme.shorten("kitty", 8), "kitty");
         check("shorten: long", Theme.shorten("abcdefghij", 5), "abcd…");
         check("fit: no screen", Theme.fit(null), 1);

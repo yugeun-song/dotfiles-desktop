@@ -683,14 +683,18 @@ Singleton {
             return "";
         if (url.startsWith("file://"))
             return url;
-        if (!url.startsWith("https://"))
+        // The host as the Image that fetches it will see it: QML's URL is
+        // QUrl. Cut by hand at the first slash, "https://evil.example?@i.scdn.co/x"
+        // passed while QUrl connected to evil.example.
+        let parsed;
+        try {
+            parsed = new URL(url);
+        } catch (e) {
             return "";
-        // The authority is everything before the first slash; userinfo is
-        // dropped and the port ignored, so "i.scdn.co@evil.example" and
-        // "i.scdn.co.evil.example" both fail the exact match below.
-        const authority = url.slice(8).split("/")[0];
-        const host = authority.split("@").pop().split(":")[0].toLowerCase();
-        return root.artHosts.indexOf(host) !== -1 ? url : "";
+        }
+        if (parsed.protocol !== "https:")
+            return "";
+        return root.artHosts.indexOf(parsed.hostname.toLowerCase()) !== -1 ? url : "";
     }
 
     // Single alert threshold for CPU and memory load.
