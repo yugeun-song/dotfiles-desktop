@@ -428,6 +428,9 @@ Singleton {
     readonly property string iconVolumeOff: String.fromCodePoint(0xF0581)
     readonly property string iconAlarm:     String.fromCodePoint(0xF0020)
     readonly property string iconAlarmRing: String.fromCodePoint(0xF0E47)
+    // md-camera_off rather than the newer md-webcam_off: every Nerd Font 3
+    // carries it.
+    readonly property string iconCameraOff: String.fromCodePoint(0xF05DF)
 
     // Rendered and checked, not just found in the cmap (F0A21 exists but is a
     // window grid). One bell for every state: variants repeat the colour and

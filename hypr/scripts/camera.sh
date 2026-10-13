@@ -55,6 +55,14 @@ fi
 # where a sudo fallback would ask for a password nobody can see.
 out=$("$helper" "$verb" </dev/null 2>&1)
 rc=$?
+
+# The bar's indicator reads the new state now rather than at the device
+# events, which a switch with no camera to act on never sends. Detached and
+# bounded: a bar that is down or older (no camera target) changes nothing.
+if command -v qs >/dev/null 2>&1; then
+    ( timeout 2 qs -p "${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar" ipc call camera refresh \
+        >/dev/null 2>&1 & ) 2>/dev/null
+fi
 title=${out%%$'\n'*}
 body=""
 [[ "$out" == *$'\n'* ]] && body=${out#*$'\n'}

@@ -107,6 +107,7 @@ dpms() { n monitors -j | jq -r --arg m "$1" '.[] | select(.name == $m) | .dpmsSt
 benv() {
     env WAYLAND_DISPLAY="$WL" HYPRLAND_INSTANCE_SIGNATURE="$SIG" DBUS_SESSION_BUS_ADDRESS="$BUS" \
         XDG_STATE_HOME="$WORK/state" XDG_CONFIG_HOME="$WORK/config" XDG_CACHE_HOME="$WORK/cache" \
+        CAMERA_SWITCH_SYSTEM="$WORK/bin/camera-switch-stub" CAMERA_SWITCH_FILE="$WORK/camera-off" \
         PATH="$WORK/bin:$PATH" "$@"
 }
 ipc() { benv qs -p "$WORK/bar" ipc call "$@" 2>/dev/null; }
@@ -173,6 +174,17 @@ for tool in ddcutil brightnessctl canberra-gtk-play; do
     printf '#!/bin/sh\necho "%s $*" >> "%s/hardware.log"\n' "$tool" "$WORK" > "$WORK/bin/$tool"
     chmod +x "$WORK/bin/$tool"
 done
+# The camera indicator reads a switch that is on, with no camera: the bar
+# under test must not read this machine's cameras or watch its devices.
+cat > "$WORK/bin/camera-switch-stub" <<'EOF'
+#!/bin/sh
+echo '{"switch": "on", "busy": false, "cameras": [], "power_switches": [], "missing": []}'
+EOF
+cat > "$WORK/bin/udevadm" <<'EOF'
+#!/bin/sh
+exec tail -f /dev/null --pid="$PPID"
+EOF
+chmod +x "$WORK/bin/camera-switch-stub" "$WORK/bin/udevadm"
 
 cp -a "$REPO/hypr" "$WORK/config/hypr"
 cp -a "$REPO/quickshell/bar" "$WORK/bar"

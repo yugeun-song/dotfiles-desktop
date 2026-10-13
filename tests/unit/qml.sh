@@ -29,6 +29,27 @@ for tool in ddcutil brightnessctl hyprctl notify-send canberra-gtk-play fcitx5-r
     printf '#!/bin/sh\nexit 0\n' > "$WORK/bin/$tool"
     chmod +x "$WORK/bin/$tool"
 done
+# The camera indicator's sources, driven by the suite through files in
+# $WORK/camera: the status reading and its exit code, the device events
+# (a line appended is an event), and the switch file. tail follows only
+# while qs lives, or an orphan would outlast the run.
+mkdir -p "$WORK/camera/state"
+printf '{"switch": "off", "busy": false, "cameras": [{"name": "Cam A", "state": "off", "nodes": []}], "power_switches": [], "missing": []}\n' \
+    > "$WORK/camera/status.json"
+: > "$WORK/camera/events"
+cat > "$WORK/bin/camera-switch-stub" <<'EOF'
+#!/bin/sh
+echo run >> "$CAMERA_TEST_DIR/calls"
+code=$(cat "$CAMERA_TEST_DIR/exit" 2>/dev/null || echo 0)
+[ "$code" = 0 ] && cat "$CAMERA_TEST_DIR/status.json"
+exit "$code"
+EOF
+cat > "$WORK/bin/udevadm" <<'EOF'
+#!/bin/sh
+echo "monitor will print the received events for:"
+exec tail -n 0 -F --pid="$PPID" "$CAMERA_TEST_DIR/events"
+EOF
+chmod +x "$WORK/bin/camera-switch-stub" "$WORK/bin/udevadm"
 
 # QML_TEST_WAYLAND names a Wayland display to run on instead (tests/e2e
 # passes its nested one): the Launcher and Displays suites need one.
@@ -55,6 +76,9 @@ out="$WORK/out"
     XDG_STATE_HOME="$WORK/state" \
     XDG_CONFIG_HOME="$WORK/config" \
     XDG_CACHE_HOME="$WORK/cache" \
+    CAMERA_SWITCH_SYSTEM="$WORK/bin/camera-switch-stub" \
+    CAMERA_SWITCH_FILE="$WORK/camera/state/off" \
+    CAMERA_TEST_DIR="$WORK/camera" \
     timeout 60 qs -n -p "$WORK/bar" >"$out" 2>&1; true ) 2>/dev/null
 
 # The colour codes and log prefixes go; the test lines stay.

@@ -37,6 +37,22 @@ Row {
         return "UTC" + sign + h + (m === 0 ? "" : ":" + (m < 10 ? "0" : "") + m);
     }
 
+    // Only while the cameras are off (services/Camera.qml): presence is the
+    // reading, like caps lock. Red when the switch is off and a camera is on
+    // anyway, amber when a camera stayed off after turning them on.
+    // The Mono font fits the glyph to one cell at 118x126 per 200 px, where
+    // the bell draws 144x168 and the wifi arcs 156x153 after their boosts;
+    // the wifi boost brings it to their size.
+    StatusItem {
+        visible: Camera.shown
+        icon: Theme.iconCameraOff
+        iconScale: Theme.statusIconBoostMore
+        accent: Camera.state === "leak" ? Theme.accentRed
+              : Camera.state === "stuck" ? Theme.accentAmber : Theme.fg
+        alert: Camera.state === "leak"
+        tooltip: Camera.tooltip
+    }
+
     StatusItem {
         visible: CapsLock.active
         unknown: Theme.stale(CapsLock.asOf, 0)

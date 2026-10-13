@@ -36,10 +36,16 @@ cat >"$WORK/bin/hyprctl" <<'EOF'
 #!/usr/bin/env bash
 printf 'hyprctl %s\n' "$*" >>"$STUB_LOG"
 EOF
-chmod +x "$WORK/bin/notify-send" "$WORK/bin/hyprctl"
+# Its own log: the refresh is detached and lands in any order.
+cat >"$WORK/bin/qs" <<'EOF'
+#!/usr/bin/env bash
+printf 'qs %s\n' "$*" >>"$STUB_LOG.qs"
+EOF
+chmod +x "$WORK/bin/notify-send" "$WORK/bin/hyprctl" "$WORK/bin/qs"
 # A stand-in that is not found falls through to the real program, which
-# would put these test notices on the desktop: stop before anything runs.
-for tool in notify-send hyprctl; do
+# would put these test notices on the desktop or poke the running bar: stop
+# before anything runs.
+for tool in notify-send hyprctl qs; do
     if [[ "$(command -v "$tool")" != "$WORK/bin/$tool" ]]; then
         echo "FAIL  camera keys: the $tool stand-in is not the one found"
         exit 1
@@ -109,6 +115,16 @@ ok "no notification server: Hyprland's notice, lines joined" "$(logged)" \
 helper system 126 "" "$CAMERA_SWITCH_SYSTEM"
 NOTIFY_FAIL=1 "$SCRIPT" on 2>/dev/null; ok "a dismissed password dialog: pkexec's status" "$?" 126
 ok "a dismissed password dialog: an error notice" "$(logged)" "hyprctl notify 3 8000 0 system notty on"
+
+# Every run asks the bar to read the switch again, failed ones included.
+rm -f -- "$STUB_LOG.qs"
+helper system 1 "" "$CAMERA_SWITCH_SYSTEM"
+"$SCRIPT" off 2>/dev/null
+tries=50
+while (( tries-- > 0 )) && [[ ! -s "$STUB_LOG.qs" ]]; do sleep 0.05; done
+logged >/dev/null
+ok "the bar is asked to refresh" "$(cat "$STUB_LOG.qs" 2>/dev/null)" \
+    "qs -p $HOME/.config/quickshell/bar ipc call camera refresh"
 
 if (( failed )); then
     echo "FAIL  camera keys: $failed of $((passed + failed)) checks"

@@ -255,6 +255,15 @@ check "status says busy while another holds the lock" wait_until 2 held
 wait "$holder"
 check "status says free once the lock is let go" bash -c "/usr/local/bin/camera-switch status --json | grep -q '\"busy\": false'"
 
+# The bar's indicator reads device events from udevadm monitor through a
+# pipe: each must arrive as it happens, not when a stdio buffer fills.
+udevadm monitor --udev --subsystem-match=video4linux >/tmp/monitor.log 2>&1 &
+monitor=$!
+sleep 0.5
+udevadm trigger --action=change --subsystem-match=video4linux
+check "udevadm monitor writes an event at once, not buffered" wait_until 3 grep -q '^UDEV ' /tmp/monitor.log
+kill "$monitor" 2>/dev/null
+
 # A media-controller camera: vimc's capture nodes hang off one platform
 # device with sensor and scaler subdevices. udev's rule runs enforce for its
 # video nodes only, and off and on go through unbind and bind.

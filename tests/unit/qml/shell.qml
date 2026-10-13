@@ -1,5 +1,6 @@
 import QtQuick
 import Quickshell
+import Quickshell.Io
 import "modules"
 import qs.services
 
@@ -94,6 +95,167 @@ ShellRoot {
         KeyFeed.clear();
     }
 
+    function testCamera() {
+        const cam = (name, state) => ({ name: name, state: state, nodes: state === "on" ? ["video0"] : [] });
+        const reading = (sw, cameras, switches) => ({ switch: sw, busy: false, cameras: cameras,
+                                                      power_switches: switches ?? [], missing: [] });
+        check("camera: no reading", Camera.classify(null), "unknown");
+        check("camera: no cameras list", Camera.classify({ switch: "off" }), "unknown");
+        check("camera: on", Camera.classify(reading("on", [cam("A", "on")])), "on");
+        check("camera: on with none", Camera.classify(reading("on", [])), "on");
+        check("camera: off with none", Camera.classify(reading("off", [])), "none");
+        check("camera: off", Camera.classify(reading("off", [cam("A", "off"), cam("B", "off")])), "off");
+        check("camera: off, one live", Camera.classify(reading("off", [cam("A", "off"), cam("B", "on")])), "leak");
+        check("camera: on, one dark", Camera.classify(reading("on", [cam("A", "on"), cam("B", "off")])), "stuck");
+        check("camera: off by firmware alone", Camera.classify(reading("off", [], [{ name: "fw", state: "off" }])), "off");
+        check("camera: on, firmware still off", Camera.classify(reading("on", [], [{ name: "fw", state: "off" }])), "stuck");
+        check("camera: tooltip head", Camera.describe(reading("off", [cam("A", "off")]), "").split("\n")[0], "Cameras off");
+        check("camera: nothing to say while on", Camera.describe(reading("on", [cam("A", "on")]), ""), "");
+        check("camera: a leak names the node",
+              Camera.describe(reading("off", [cam("A", "on")]), "").split("\n")[1], "On        A  video0");
+        check("camera: a failed check is said",
+              Camera.describe(reading("off", [cam("A", "off")]), "exited with 1").split("\n").pop(), "Not rechecked: exited with 1");
+        const gaps = reading("off", [cam("A", "off")]);
+        gaps.missing = ["the udev rule is not installed"];
+        check("camera: setup gaps are pointed at", Camera.describe(gaps, "").indexOf("Setup     incomplete") !== -1, true);
+    }
+
+    // The camera stand-ins of tests/unit/qml.sh, driven through files.
+    readonly property string camDir: Quickshell.env("CAMERA_TEST_DIR") ?? ""
+
+    function sh(cmd) {
+        Quickshell.execDetached(["sh", "-c", cmd, "sh", root.camDir]);
+    }
+
+    function camStatus(sw, state) {
+        const r = { switch: sw, busy: false, cameras: [{ name: "Cam A", state: state, nodes: state === "on" ? ["video0"] : [] }],
+                    power_switches: [], missing: [] };
+        root.sh(`printf '%s\\n' '${JSON.stringify(r)}' > "$1/status.new" && mv "$1/status.new" "$1/status.json"`);
+    }
+
+    function camBusy() {
+        const r = { switch: "off", busy: true, cameras: [{ name: "Cam A", state: "on", nodes: ["video0"] }],
+                    power_switches: [], missing: [] };
+        root.sh(`printf '%s\\n' '${JSON.stringify(r)}' > "$1/status.new" && mv "$1/status.new" "$1/status.json"`);
+    }
+
+    function camEvents(n) {
+        root.sh(`i=0; while [ $i -lt ${n} ]; do i=$((i+1)); echo "UDEV  [1.$i] add      /devices/test/video4linux/video$i (video4linux)" >> "$1/events"; done`);
+    }
+
+    // Counted as the stand-in appends: text() right after reload() still
+    // returns the previous load.
+    property int camCallCount: 0
+
+    function camCalls() {
+        return root.camCallCount;
+    }
+
+    FileView {
+        id: calls
+
+        path: root.camDir + "/calls"
+        watchChanges: true
+        printErrors: false
+
+        onFileChanged: calls.reload()
+        onLoaded: root.camCallCount = calls.text().split("\n").filter(l => l === "run").length
+        onLoadFailed: root.camCallCount = 0
+    }
+
+    // The camera service on events: a step waits, then acts or checks. The
+    // reading starts as switch off, camera off (tests/unit/qml.sh).
+    function cameraSteps() {
+        return [
+            { wait: 600, run: () => {
+                check("camera events: one read at start", root.camCalls(), 1);
+                check("camera events: off at start", Camera.state, "off");
+                check("camera events: shown while off", Camera.shown, true);
+                root.camStatus("on", "on");
+            } },
+            { wait: 150, run: () => root.camEvents(1) },
+            { wait: 700, run: () => {
+                check("camera events: a device event reads", root.camCalls(), 2);
+                check("camera events: on after it", Camera.state, "on");
+                check("camera events: hidden while on", Camera.shown, false);
+                root.camEvents(6);
+            } },
+            { wait: 900, run: () => {
+                check("camera events: a burst is one read", root.camCalls(), 3);
+                root.camBusy();
+            } },
+            { wait: 150, run: () => Camera.refresh() },
+            { wait: 300, run: () => {
+                check("camera events: refresh reads at once", root.camCalls(), 4);
+                check("camera events: a reading under the lock is not shown", Camera.state, "on");
+                root.camStatus("off", "off");
+            } },
+            { wait: 800, run: () => {
+                check("camera events: read again once the lock is free", Camera.state, "off");
+                root.camStatus("off", "on");
+            } },
+            { wait: 150, run: () => root.camEvents(1) },
+            { wait: 700, run: () => {
+                check("camera events: a live camera under an off switch", Camera.state, "leak");
+                root.sh(`echo 1 > "$1/exit"`);
+            } },
+            { wait: 150, run: () => Camera.refresh() },
+            { wait: 400, run: () => {
+                check("camera events: a failed read is noted", Camera.failure !== "", true);
+                check("camera events: the last reading stays", Camera.state, "leak");
+                root.sh(`echo 0 > "$1/exit"`);
+                root.camStatus("off", "off");
+            } },
+            { wait: 2400, run: () => {
+                check("camera events: the retry clears the failure", Camera.failure, "");
+                check("camera events: the retry reads the new state", Camera.state, "off");
+                root.sh(`: > "$1/calls"; touch "$1/state/off"`);
+            } },
+            { wait: 800, run: () => {
+                check("camera events: the switch file is an event", root.camCalls(), 1);
+                root.sh(`echo 127 > "$1/exit"`);
+            } },
+            { wait: 150, run: () => Camera.refresh() },
+            { wait: 400, run: () => {
+                check("camera events: nothing installed, nothing shown", Camera.shown, false);
+                check("camera events: nothing installed", Camera.installed, false);
+                root.sh(`echo 0 > "$1/exit"`);
+            } },
+            { wait: 150, run: () => Camera.refresh() },
+            { wait: 400, run: () => check("camera events: back once installed", Camera.state, "off") }
+        ];
+    }
+
+    // Steps run one after another, each after its wait; DONE follows the last.
+    property var steps: []
+    property int step: 0
+
+    function runSteps() {
+        if (root.step >= root.steps.length) {
+            console.log(`[test] DONE passed=${root.passed} failed=${root.failed}`);
+            Quickshell.execDetached(["kill", "-TERM", String(Quickshell.processId)]);
+            return;
+        }
+        stepTimer.interval = root.steps[root.step].wait;
+        stepTimer.start();
+    }
+
+    Timer {
+        id: stepTimer
+
+        onTriggered: {
+            const current = root.steps[root.step];
+            root.step += 1;
+            try {
+                current.run();
+            } catch (e) {
+                root.failed += 1;
+                console.log(`[test] FAIL step ${root.step}: threw ${e}`);
+            }
+            root.runSteps();
+        }
+    }
+
     function testBrightness() {
         check("internal: eDP", Brightness.isInternal("eDP-1"), true);
         check("internal: HDMI", Brightness.isInternal("HDMI-A-1"), false);
@@ -107,7 +269,7 @@ ShellRoot {
 
         onTriggered: {
             const suites = [root.testTheme, root.testNotifications, root.testScreensaver, root.testKeyFeed,
-                            root.testBrightness];
+                            root.testBrightness, root.testCamera];
             if (modules.item)
                 suites.push(() => modules.item.testLauncher(root.check), () => modules.item.testDisplays(root.check));
             else
@@ -120,8 +282,10 @@ ShellRoot {
                     console.log(`[test] FAIL ${suite.name}: threw ${e}`);
                 }
             }
-            console.log(`[test] DONE passed=${root.passed} failed=${root.failed}`);
-            Quickshell.execDetached(["kill", "-TERM", String(Quickshell.processId)]);
+            root.steps = root.camDir !== "" ? root.cameraSteps() : [];
+            if (root.camDir === "")
+                console.log("[test] SKIP camera events: no CAMERA_TEST_DIR");
+            root.runSteps();
         }
     }
 }
