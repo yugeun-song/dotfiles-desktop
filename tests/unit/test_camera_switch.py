@@ -755,11 +755,13 @@ class PowerSwitches(Case):
         self.assertEqual(self.k.read(attr), "0")
         self.assertFalse(self.k.exists(WEBCAM))
         self.assertEqual(self.k.load_record(), [])
-        self.assertEqual(text, "Cameras off\nNo camera found; one that appears is turned off")
+        # The camera left the bus with the switch; the switch is what is named.
+        self.assertEqual(text, "Cameras off\nCamera power switch (VPC2004:00): off")
         code, text = self.act("on")
         self.assertEqual(code, 0, text)
         self.assertEqual(self.k.read(attr), "1")
-        self.assertEqual(text, "Cameras on\nASUS FHD webcam (USB 3277:0059): on")
+        self.assertEqual(text, "Cameras on\nASUS FHD webcam (USB 3277:0059): on\n"
+                               "Camera power switch (VPC2004:00): on")
 
     def test_switch_that_does_nothing_is_backed_by_the_interfaces(self):
         attr = self.k.platform_switch("asus-nb-wmi", "camera", lambda: laptop_webcam(self.k), works=False)
@@ -777,7 +779,7 @@ class PowerSwitches(Case):
         self.k.platform_switch("eeepc", "camera", lambda: laptop_webcam(self.k), takes=False)
         code, text = self.act("off")
         self.assertEqual(code, 1)
-        self.assertIn("/sys/bus/platform/devices/eeepc/camera: the firmware did not take it", text)
+        self.assertIn("Camera power switch (eeepc): the firmware did not take it", text)
         # The camera itself is still turned off.
         self.assertEqual(self.capture_nodes(), [])
 
@@ -920,14 +922,15 @@ class CommandLine(Case):
         self.assertIn('"state": "on"', out)
         self.assertIn('"switch": "on"', out)
 
-    def elevated(self, argv, tools, results=(0,), tty=False):
+    def elevated(self, argv, tools, results=(0,), tty=False, stderr=""):
         """main() as the user, with only `tools` installed and each command
-        run returning the next of `results`."""
+        run returning the next of `results`, with `stderr` as its complaint."""
         codes = list(results)
 
         def run(cmd, **kwargs):
             done = mock.Mock()
             done.returncode = codes.pop(0) if codes else 0
+            done.stderr = stderr if kwargs.get("stderr") is not None else None
             return done
 
         which = lambda name, path=None: tools.get(name)
@@ -956,6 +959,14 @@ class CommandLine(Case):
         code, out, _ = self.elevated(["off"], {"pkexec": "/usr/bin/pkexec"}, results=(127,))
         self.assertEqual(code, 127)
         self.assertEqual(out.splitlines()[0], "Camera switch not allowed")
+
+    def test_pkexec_reason_comes_after_the_headline(self):
+        # Printed first, pkexec's line became the notification's title.
+        code, out, err = self.elevated(
+            ["off"], {"pkexec": "/usr/bin/pkexec"}, results=(127,),
+            stderr="Error executing command as another user: Not authorized\n\nThis incident has been reported.\n")
+        self.assertEqual(code, 127)
+        self.assertEqual(out.splitlines(), ["Camera switch not allowed", "polkit: Not authorized"])
 
     def test_without_pkexec_sudo_asks_on_a_terminal(self):
         _, _, ran = self.elevated(["on"], {"sudo": "/usr/bin/sudo"}, tty=True)

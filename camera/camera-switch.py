@@ -599,6 +599,10 @@ class PowerSwitch:
         self.path = path
         self.off = off
         self.on = on
+        self.label = f"Camera power switch ({os.path.basename(os.path.dirname(path))})"
+
+    def word(self, value):
+        return "off" if value == self.off else "on" if value == self.on else str(value)
 
 
 def power_switches(host):
@@ -622,15 +626,15 @@ def set_power_switches(host, report, off):
     for sw in power_switches(host):
         want = sw.off if off else sw.on
         if host.read(sw.path) == want:
-            report.switches.append((sw.path, want, None))
+            report.switches.append((sw.label, sw.word(want), None))
             continue
         try:
             host.write(sw.path, want)
         except OSError as e:
-            report.switches.append((sw.path, host.read(sw.path), e.strerror or str(e)))
+            report.switches.append((sw.label, sw.word(host.read(sw.path)), e.strerror or str(e)))
             continue
         now = host.read(sw.path)
-        report.switches.append((sw.path, now, None if now == want else "the firmware did not take it"))
+        report.switches.append((sw.label, sw.word(now), None if now == want else "the firmware did not take it"))
         if now == want:
             changed = True
             host.log(f"{sw.path} set to {want}")
@@ -789,8 +793,9 @@ def summary(report):
     wrong = [c for c, state, _ in report.cameras if state != want]
     if not report.cameras:
         head = "Cameras " + want
-        lines = ["No camera found" + ("; one that appears is turned off"
-                                      if want == "off" and report.enforced else "")]
+        lines = [] if report.switches else [
+            "No camera found" + ("; one that appears is turned off"
+                                 if want == "off" and report.enforced else "")]
     elif wrong:
         n = len(wrong)
         head = f"{n} camera{'s' if n > 1 else ''} still {'on' if want == 'off' else 'off'}"
@@ -805,9 +810,9 @@ def summary(report):
             lines.append(f"{label(cam)}: off, {how}")
         else:
             lines.append(f"{label(cam)}: still {state}, {how}")
-    for path, state, err in report.switches:
-        if err:
-            lines.append(f"{path}: {err}")
+    # The firmware switch is how the camera went: it left the bus with it.
+    for name, state, err in report.switches:
+        lines.append(f"{name}: {err}" if err else f"{name}: {state}")
     return "\n".join([head] + lines + report.notes)
 
 
@@ -837,7 +842,8 @@ def status(host, as_json):
         cams.append({"name": cam.name, "bus": cam.bus, "id": cam.ident, "device": cam.device,
                      "state": "off" if how else "on", "how": how or ", ".join(cam.nodes) or "no driver bound",
                      "nodes": cam.nodes})
-    switches = [{"path": sw.path, "state": "off" if host.read(sw.path) == sw.off else "on"}
+    switches = [{"path": sw.path, "name": sw.label,
+                 "state": "off" if host.read(sw.path) == sw.off else "on"}
                 for sw in power_switches(host)]
     gaps = missing_setup(host)
     if as_json:
@@ -871,11 +877,18 @@ def elevate(verb):
     target = SYSTEM_COPY if Host().owned_by_root(SYSTEM_COPY) else os.path.realpath(__file__)
     pkexec = shutil.which("pkexec", path=TOOL_PATH)
     if pkexec:
-        done = subprocess.run([pkexec, target, verb])
+        # pkexec's complaint is held back: printed before the headline, it
+        # became the notification's title.
+        done = subprocess.run([pkexec, target, verb], stderr=subprocess.PIPE, text=True)
+        said = [line.strip() for line in (done.stderr or "").splitlines() if line.strip()]
+        reason = said[0].replace("Error executing command as another user: ", "") if said else ""
         if done.returncode == 126:
             print("Camera switch cancelled\nThe password dialog was dismissed; nothing changed")
         elif done.returncode == 127:
-            print("Camera switch not allowed\npolkit refused, or no authentication agent was there to ask")
+            print("Camera switch not allowed\n" + (f"polkit: {reason}" if reason else
+                  "polkit refused, or no authentication agent was there to ask"))
+        elif said:
+            print("\n".join(said), file=sys.stderr)
         return done.returncode
     sudo = shutil.which("sudo", path=TOOL_PATH)
     if sudo and sys.stdin.isatty():
@@ -954,7 +967,7 @@ def main(argv):
             return 2
         return elevate(verb)
     syslog.openlog("camera-switch", 0, syslog.LOG_DAEMON)
-    code, text = act(host, verb, os.environ.get("PKEXEC_UID"))
+    code, text = act(host, verb, os.environ.get("PKEXEC_UID") or os.environ.get("SUDO_UID"))
     if text:
         print(text)
     return code
