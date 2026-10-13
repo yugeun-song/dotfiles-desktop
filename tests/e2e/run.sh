@@ -146,6 +146,7 @@ no_qml_warnings() { ! grep -E "WARN scene|ERROR" "$WORK/qs.out" | grep -v -E "po
 session_dialog_open() { has_layer quickshell:powermenu && [[ "$(ipc e2e session)" == true ]]; }
 overlay_on() { has_layer quickshell:keys && key_state_is .enabled true; }
 no_writes() { ! grep -q -E '^(lock|suspend|session-power|ddc-set|backlight-set)' "$WORK/apps.log" 2>/dev/null; }
+shot_saved() { compgen -G "$WORK/home/Pictures/Screenshots/*.png" >/dev/null; }
 
 start_bar() {
     benv qs -n --log-rules 'quickshell.hyprland.ipc.events.debug=false;quickshell.dbus.properties.debug=false' \
@@ -295,7 +296,7 @@ EOF
 
 if (( ! PIL )); then
     skip "power button: python3-pillow is not installed"
-elif ! wait_for 5 power_x; then
+elif ! { x=""; wait_for 5 steady power_x; }; then
     fail "the power button: no glyph at the bar's right end"
 else
     # Waited for, not slept on: on a loaded machine the dialog maps later
@@ -421,7 +422,7 @@ if has_layer quickshell:screensaver HEADLESS-1; then
     check "a region shot lifts the black while it runs" lacks_layer quickshell:screensaver HEADLESS-1
     input move 500 300 sleep 150 down sleep 100 move 700 500 sleep 100 move 800 600 sleep 150 up sleep 1500
     check "the black comes back after the shot" has_layer quickshell:screensaver HEADLESS-1
-    check "the shot was saved" compgen -G "$WORK/home/Pictures/Screenshots/*.png"
+    check "the shot was saved" shot_saved
 else
     fail "region shot: the panel was not black to begin with"
 fi
