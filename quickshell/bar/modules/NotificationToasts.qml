@@ -80,7 +80,35 @@ Scope {
             implicitWidth: Math.round(Theme.notifWidth * win.fit)
             // Rounded up: Text reports fractional heights, and a surface a
             // fraction short clips the card's bottom border.
-            implicitHeight: Math.max(1, Math.ceil(stack.implicitHeight * win.fit))
+            readonly property int wanted: Math.max(1, Math.ceil(stack.implicitHeight * win.fit))
+
+            // Grows at once, shrinks once the stack has stopped moving. Sized
+            // to the collapsing slot, the surface was resized on every frame
+            // of a dismissal, and Hyprland re-places a layer surface at each
+            // size it is asked for: the cards below rose in steps well under
+            // the display's rate. The shrink drops only an empty strip at the
+            // bottom, so it cannot be seen.
+            // Set, not bound: a binding would follow every shrink at once.
+            property int held: 1
+
+            Component.onCompleted: win.held = win.wanted
+            onWantedChanged: {
+                if (win.wanted >= win.held) {
+                    win.held = win.wanted;
+                    settle.stop();
+                } else {
+                    settle.restart();
+                }
+            }
+
+            Timer {
+                id: settle
+
+                interval: 400
+                onTriggered: win.held = win.wanted
+            }
+
+            implicitHeight: win.held
 
             // Laid out at the reference width and scaled to the window.
             Column {
