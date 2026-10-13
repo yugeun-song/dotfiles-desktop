@@ -11,8 +11,11 @@ StartLimitBurst=5
 [Service]
 Type=simple
 ExecStart=%E/hypr/scripts/polkit-agent.sh
-# always, not on-failure: see bar.service.
+# always, not on-failure: see bar.service. 78 is polkit-agent.sh finding no
+# agent to run, which a restart cannot change.
 Restart=always
+RestartPreventExitStatus=78
+SuccessExitStatus=78
 RestartSec=1
 Slice=session.slice
 # See bar.service.

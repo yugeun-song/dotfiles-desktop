@@ -2,7 +2,9 @@
 # Execs the first installed polkit agent so systemd supervises it directly.
 # Preference order: Hyprland's, KDE's, GNOME's, LXQt's, MATE's, each at the
 # paths Arch, Debian/Ubuntu, Fedora and openSUSE give it (they differ in
-# their libexec directory). None installed exits 0: nothing to restart.
+# their libexec directory). None installed exits 78, which the unit neither
+# restarts nor counts as a failure; 0 would be restarted (Restart=always,
+# for an agent that exits or is killed) until the start limit failed it.
 
 set -uo pipefail
 
@@ -26,4 +28,4 @@ do
 done
 
 printf 'polkit-agent: no polkit agent is installed, privileged prompts will not appear\n' >&2
-exit 0
+exit 78
