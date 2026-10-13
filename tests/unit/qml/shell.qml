@@ -93,6 +93,9 @@ ShellRoot {
     }
 
     function testKeyFeed() {
+        // pgrep holds its answer until keyLockSteps lets it go.
+        check("keys: a bar starts locked until it knows there is no lock", KeyFeed.locked, true);
+        KeyFeed.locked = false;
         check("mods: printed order", KeyFeed.symbolsFor(["Super", "Shift", "Ctrl"]),
               Theme.modSymbol.Ctrl + Theme.modSymbol.Shift + Theme.modSymbol.Super);
         check("keys: icon", KeyFeed.keyIsIcon("Playpause"), true);
@@ -109,6 +112,15 @@ ShellRoot {
         KeyFeed.push([], "x");
         check("chords: back after the unlock", KeyFeed.chords.map(c => c.key), ["x"]);
         KeyFeed.clear();
+        // As at the start, until the probe answers.
+        KeyFeed.locked = true;
+    }
+
+    function keyLockSteps() {
+        return [
+            { wait: 50, run: () => Quickshell.execDetached(["touch", Quickshell.env("QML_TEST_PGREP_GO")]) },
+            { wait: 500, run: () => check("keys: no hyprlock running unlocks them", KeyFeed.locked, false) }
+        ];
     }
 
     function testCamera() {
@@ -383,7 +395,8 @@ ShellRoot {
                     console.log(`[test] FAIL ${suite.name}: threw ${e}`);
                 }
             }
-            root.steps = root.cavaSteps()
+            root.steps = root.keyLockSteps()
+                .concat(root.cavaSteps())
                 .concat(root.camDir !== "" ? root.cameraSteps() : [])
                 .concat(root.weatherDir !== "" ? root.weatherSteps() : []);
             if (root.camDir === "")

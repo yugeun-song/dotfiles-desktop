@@ -41,6 +41,14 @@ trap 'sleep 0.3; exit 0' TERM
 while kill -0 "$PPID" 2>/dev/null; do sleep 0.05; done
 EOF
 chmod +x "$WORK/bin/cava"
+# pgrep, asked only by the key overlay whether hyprlock runs: no answer
+# until $WORK/pgrep-go exists, then "none" unless $WORK/hyprlock-running does.
+cat > "$WORK/bin/pgrep" <<EOF
+#!/bin/sh
+while [ ! -e "$WORK/pgrep-go" ] && kill -0 "\$PPID" 2>/dev/null; do sleep 0.05; done
+[ -e "$WORK/hyprlock-running" ]
+EOF
+chmod +x "$WORK/bin/pgrep"
 # The camera indicator's sources, driven by the suite through files in
 # $WORK/camera: the status reading and its exit code, the device events
 # (a line appended is an event), and the switch file. tail follows only
@@ -104,6 +112,7 @@ out="$WORK/out"
     CAMERA_SWITCH_FILE="$WORK/camera/state/off" \
     CAMERA_TEST_DIR="$WORK/camera" \
     WEATHER_TEST_DIR="$WORK/weather" \
+    QML_TEST_PGREP_GO="$WORK/pgrep-go" \
     timeout 60 qs -n -p "$WORK/bar" >"$out" 2>&1; true ) 2>/dev/null
 
 # The colour codes and log prefixes go; the test lines stay.

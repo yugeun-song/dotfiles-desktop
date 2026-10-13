@@ -27,8 +27,13 @@ Singleton {
     // password). hypridle reports the lock and the unlock (on_lock_cmd,
     // on_unlock_cmd), lock.sh the lock as it starts hyprlock; keys in between
     // are dropped. The unlock comes from hypridle only: lock.sh also returns
-    // when hyprlock crashes and the session stays locked.
-    property bool locked: false
+    // when hyprlock crashes and the session stays locked. It starts locked
+    // and asks pgrep at once: a bar restarted during a lock knew nothing of
+    // it and drew the password's last keys at the unlock. The keys of the
+    // milliseconds the answer takes are the cheaper loss.
+    property bool locked: true
+
+    Component.onCompleted: lockProbe.running = true
 
     IpcHandler {
         target: "keys"
