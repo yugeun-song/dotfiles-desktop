@@ -12,14 +12,27 @@ hl.env("SDL_VIDEODRIVER", "wayland")
 hl.env("CLUTTER_BACKEND", "wayland")
 hl.env("MOZ_ENABLE_WAYLAND", "1")
 
+-- Library directories by distribution, for the plugin checks below: Arch,
+-- Void and Alpine use /usr/lib, Fedora, openSUSE and Gentoo /usr/lib64,
+-- Debian and Ubuntu the multiarch directory.
+local LIB_DIRS = { "/usr/lib/", "/usr/lib64/", "/usr/lib/x86_64-linux-gnu/", "/usr/lib/aarch64-linux-gnu/" }
+
+local function installed_under(rest)
+    for _, dir in ipairs(LIB_DIRS) do
+        if file_exists(dir .. rest) then
+            return true
+        end
+    end
+    return false
+end
+
 -- "kde" loads KDEPlasmaPlatformTheme6.so (plasma-integration); without a
 -- platform theme Qt never reads kdeglobals and KDE apps draw light. Named
 -- only where the plugin exists (GTK's as the fallback): a missing one makes
--- every Qt program warn at start. The directory is Arch's Qt 6 plugin path.
-local qt_platform_themes = "/usr/lib/qt6/plugins/platformthemes/"
-if file_exists(qt_platform_themes .. "KDEPlasmaPlatformTheme6.so") then
+-- every Qt program warn at start.
+if installed_under("qt6/plugins/platformthemes/KDEPlasmaPlatformTheme6.so") then
     hl.env("QT_QPA_PLATFORMTHEME", "kde")
-elseif file_exists(qt_platform_themes .. "libqgtk3.so") then
+elseif installed_under("qt6/plugins/platformthemes/libqgtk3.so") then
     hl.env("QT_QPA_PLATFORMTHEME", "gtk3")
 end
 -- No client-side title bars from Qt under a tiling compositor.
@@ -80,7 +93,9 @@ end
 local VA_DRIVERS = { ["0x8086"] = "iHD", ["0x1002"] = "radeonsi", ["0x10de"] = "nvidia" }
 for _, card in ipairs({ "card0", "card1", "card2" }) do
     local driver = VA_DRIVERS[pci_vendor(card) or ""]
-    if driver and file_exists("/usr/lib/dri/" .. driver .. "_drv_video.so") then
+    -- Gentoo keeps libva's drivers in va/drivers, the rest in dri.
+    if driver and (installed_under("dri/" .. driver .. "_drv_video.so")
+                   or file_exists("/usr/lib64/va/drivers/" .. driver .. "_drv_video.so")) then
         hl.env("LIBVA_DRIVER_NAME", driver)
         break
     end

@@ -5,7 +5,12 @@
 set -u
 
 # Loadable sleep builtin: avoids forking /bin/sleep five times a second.
-enable -f /usr/lib/bash/sleep sleep 2>/dev/null || true
+# Arch and Debian (bash-builtins) keep it in /usr/lib/bash, Fedora and
+# openSUSE in /usr/lib64/bash; without one the external sleep runs.
+for _dir in /usr/lib/bash /usr/lib64/bash /usr/local/lib/bash; do
+    enable -f "$_dir/sleep" sleep 2>/dev/null && break
+done
+unset _dir
 
 interval="${CAPSLOCK_POLL_INTERVAL:-0.2}"
 last=""
