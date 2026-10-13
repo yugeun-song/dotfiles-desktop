@@ -44,6 +44,12 @@ Singleton {
     // Wired wins when both are up: it is the route traffic takes.
     readonly property bool preferWired: root.wiredConnected
 
+    // NetworkManager's internet check (Arch's package turns it on): Full is
+    // the moment the internet answers, which trails the link by DHCP and
+    // DNS, a hotspot's uplink, or a captive portal's login. Unknown while
+    // the check is off, so it adds to the link state and replaces nothing.
+    readonly property bool reachable: Networking.connectivity === NetworkConnectivity.Full
+
     function wifiIcon(): string {
         if (!root.wifiRadioOn)
             return Theme.iconWifiOff;

@@ -226,6 +226,50 @@ ShellRoot {
         ];
     }
 
+    readonly property string weatherDir: Quickshell.env("WEATHER_TEST_DIR") ?? ""
+    property int weatherCallCount: 0
+
+    FileView {
+        id: weatherCalls
+
+        path: root.weatherDir + "/calls"
+        watchChanges: true
+        printErrors: false
+
+        onFileChanged: weatherCalls.reload()
+        onLoaded: root.weatherCallCount = weatherCalls.text().split("\n").filter(l => l === "run").length
+        onLoadFailed: root.weatherCallCount = 0
+    }
+
+    // A link or the internet coming up during a fetch (Weather.kick) is not
+    // dropped: it fetches again at once if that fetch failed, and not at all
+    // if it succeeded. The stand-in takes 0.4 s; the first fetch starts as
+    // the service does.
+    function weatherSteps() {
+        return [
+            { wait: 0, run: () => check("weather: nothing before the first fetch", Weather.ready, false) },
+            { wait: 150, run: () => {
+                check("weather: a fetch at start", Weather.fetching, true);
+                Weather.kick();
+                check("weather: a kick during it is kept", Weather.kickQueued, true);
+            } },
+            { wait: 1300, run: () => {
+                check("weather: a failed fetch is followed at once", root.weatherCallCount, 2);
+                check("weather: the kick is spent", Weather.kickQueued, false);
+                Quickshell.execDetached(["sh", "-c", `echo true > "$1/live"`, "sh", root.weatherDir]);
+            } },
+            { wait: 150, run: () => {
+                Weather.kick();
+                Weather.kick();
+            } },
+            { wait: 1300, run: () => {
+                check("weather: after a live fetch the kick fetches nothing more", root.weatherCallCount, 3);
+                check("weather: live resets the failures", Weather.failures, 0);
+                check("weather: the reading is shown", Weather.ready, true);
+            } }
+        ];
+    }
+
     // Steps run one after another, each after its wait; DONE follows the last.
     property var steps: []
     property int step: 0
@@ -282,9 +326,12 @@ ShellRoot {
                     console.log(`[test] FAIL ${suite.name}: threw ${e}`);
                 }
             }
-            root.steps = root.camDir !== "" ? root.cameraSteps() : [];
+            root.steps = (root.camDir !== "" ? root.cameraSteps() : [])
+                .concat(root.weatherDir !== "" ? root.weatherSteps() : []);
             if (root.camDir === "")
                 console.log("[test] SKIP camera events: no CAMERA_TEST_DIR");
+            if (root.weatherDir === "")
+                console.log("[test] SKIP weather: no WEATHER_TEST_DIR");
             root.runSteps();
         }
     }

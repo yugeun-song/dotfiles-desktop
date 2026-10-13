@@ -83,6 +83,13 @@ Singleton {
         if (root.refreshQueued) {
             root.refreshQueued = false;
             root.start(true);
+        } else if (root.kickQueued) {
+            root.kickQueued = false;
+            // The run in flight went out before the network was usable.
+            if (got?.live !== true) {
+                retry.stop();
+                root.start(false);
+            }
         }
     }
 
@@ -105,18 +112,32 @@ Singleton {
             root.start(true);
     }
 
-    // Refetch when the link comes up. If Net's backend is None (NetworkManager
-    // absent at startup) this never fires and the retry backoff is the fallback.
+    // A link coming up, and the internet answering on it, each start the
+    // backoff over and fetch: failures from before (no network at boot, DNS
+    // not up yet when the link came) had put the next try minutes away. One
+    // arriving during a fetch is kept for its end, when that fetch failed. If
+    // Net's backend is None (NetworkManager absent at startup) neither fires
+    // and the retry backoff is the fallback.
     readonly property bool online: Net.wifiConnected || Net.wiredConnected
+    readonly property bool reachable: Net.reachable
+    property bool kickQueued: false
 
-    // A new link starts the backoff over: failures from before it (a hotspot
-    // still coming up at boot) would otherwise put the next try minutes away.
-    onOnlineChanged: {
-        if (!root.online)
-            return;
+    function kick(): void {
         root.failures = 0;
         retry.stop();
-        root.start(false);
+        if (fetch.running)
+            root.kickQueued = true;
+        else
+            root.start(false);
+    }
+
+    onOnlineChanged: {
+        if (root.online)
+            root.kick();
+    }
+    onReachableChanged: {
+        if (root.reachable)
+            root.kick();
     }
 
     Process {

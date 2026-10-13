@@ -6,7 +6,9 @@
 # services call ddcutil (the monitor's i2c bus), brightnessctl and hyprctl the
 # moment they exist. Those become stubs on PATH or in the copy; the session
 # bus is one that does not exist, so the notification server cannot take the
-# running bar's name; state, config and runtime directories are temporary.
+# running bar's name, and so is the system bus, so the network and weather
+# services see no NetworkManager; state, config and runtime directories are
+# temporary.
 # The runtime directory sits in /tmp, not under a long path: quickshell puts
 # its IPC socket there, and a socket path has a 108-byte limit.
 
@@ -50,6 +52,17 @@ echo "monitor will print the received events for:"
 exec tail -n 0 -F --pid="$PPID" "$CAMERA_TEST_DIR/events"
 EOF
 chmod +x "$WORK/bin/camera-switch-stub" "$WORK/bin/udevadm"
+# The weather fetch, in the copy: each run is logged, takes 0.4 s like a
+# slow network, and reports live or not as $WORK/weather/live says.
+mkdir -p "$WORK/weather"
+cat > "$WORK/bar/scripts/weather.sh" <<'EOF'
+#!/bin/sh
+echo run >> "$WEATHER_TEST_DIR/calls"
+sleep 0.4
+live=$(cat "$WEATHER_TEST_DIR/live" 2>/dev/null || echo false)
+echo "{\"place\": \"Test\", \"fetched\": 1, \"live\": $live, \"code\": 0, \"temp\": 20, \"feels\": 20, \"humidity\": 50, \"wind\": 1, \"day\": 1, \"today\": {\"min\": 10, \"max\": 25}}"
+EOF
+chmod +x "$WORK/bar/scripts/weather.sh"
 
 # QML_TEST_WAYLAND names a Wayland display to run on instead (tests/e2e
 # passes its nested one): the Launcher and Displays suites need one.
@@ -72,6 +85,7 @@ out="$WORK/out"
     PATH="$WORK/bin:$PATH" \
     QT_QPA_PLATFORM="$platform" \
     DBUS_SESSION_BUS_ADDRESS="unix:path=$WORK/no-bus" \
+    DBUS_SYSTEM_BUS_ADDRESS="unix:path=$WORK/no-system-bus" \
     XDG_RUNTIME_DIR="$WORK/run" \
     XDG_STATE_HOME="$WORK/state" \
     XDG_CONFIG_HOME="$WORK/config" \
@@ -79,6 +93,7 @@ out="$WORK/out"
     CAMERA_SWITCH_SYSTEM="$WORK/bin/camera-switch-stub" \
     CAMERA_SWITCH_FILE="$WORK/camera/state/off" \
     CAMERA_TEST_DIR="$WORK/camera" \
+    WEATHER_TEST_DIR="$WORK/weather" \
     timeout 60 qs -n -p "$WORK/bar" >"$out" 2>&1; true ) 2>/dev/null
 
 # The colour codes and log prefixes go; the test lines stay.
@@ -93,7 +108,7 @@ fi
 [[ -n "$fails" ]] && awk '{ sub(/^\[test\] FAIL /, "FAIL  qml: "); print }' <<<"$fails"
 grep '^\[test\] SKIP' <<<"$results" | awk '{ sub(/^\[test\] SKIP /, "SKIP  qml: "); print }'
 # A QML error in the bar's own files is a failure even if every check passed.
-errors=$(sed -E 's/\x1b\[[0-9;]*m//g' "$out" | grep -E 'WARN scene|ERROR' | grep -v -E 'portal|Could not register' || true)
+errors=$(sed -E 's/\x1b\[[0-9;]*m//g' "$out" | grep -E 'WARN scene|ERROR' | grep -v -E 'portal|Could not register|Could not find an available backend' || true)
 [[ -n "$errors" ]] && { echo "FAIL  qml: warnings from the bar's QML:"; awk '{ print "      " $0 }' <<<"$errors"; }
 passed=$(sed -E 's/.*passed=([0-9]+).*/\1/' <<<"$done_line")
 failed=$(sed -E 's/.*failed=([0-9]+).*/\1/' <<<"$done_line")
