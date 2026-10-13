@@ -57,12 +57,12 @@ Scope {
             // and suspends only once hyprlock is up. app-scope.sh moves the lock
             // out of bar.service's cgroup, so restarting the bar cannot kill it;
             // setsid is the weaker fallback. Backgrounded: lock.sh blocks while
-            // hyprlock runs.
+            // hyprlock runs. app-scope.sh is bash's: Debian's sh is dash.
             command: ["sh", "-c",
                 "l=\"${XDG_CONFIG_HOME:-$HOME/.config}/hypr/scripts/lock.sh\"; " +
                 "s=\"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar/scripts/app-scope.sh\"; " +
                 "pidof hyprlock >/dev/null 2>&1 || " +
-                "if [ -r \"$s\" ]; then sh \"$s\" -- \"$l\" >/dev/null 2>&1 & " +
+                "if [ -r \"$s\" ]; then bash \"$s\" -- \"$l\" >/dev/null 2>&1 & " +
                 "else setsid -f \"$l\" >/dev/null 2>&1; fi; " +
                 "for _ in $(seq 50); do pidof hyprlock >/dev/null 2>&1 && exec systemctl suspend; sleep 0.1; done; " +
                 "notify-send -u critical 'Sleep cancelled' 'The screen did not lock, so the session was not suspended.'"],
