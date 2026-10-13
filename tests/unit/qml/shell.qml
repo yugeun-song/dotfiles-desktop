@@ -286,6 +286,21 @@ ShellRoot {
         ];
     }
 
+    // Playback paused and resumed four times, each resume before the stopped
+    // cava has exited: no failure is counted, and the meter runs at the end.
+    function cavaSteps() {
+        const flips = [{ wait: 100, run: () => { Cava.active = true; } }];
+        for (let i = 0; i < 4; i++) {
+            flips.push({ wait: 500, run: () => { Cava.active = false; } });
+            flips.push({ wait: 100, run: () => { Cava.active = true; } });
+        }
+        return flips.concat([{ wait: 1500, run: () => {
+            check("cava: a pause and a quick resume are no failure", Cava.quickExits, 0);
+            check("cava: the meter runs after them", Cava.levels.length, 3);
+            Cava.active = false;
+        } }]);
+    }
+
     // Steps run one after another, each after its wait; DONE follows the last.
     property var steps: []
     property int step: 0
@@ -368,7 +383,8 @@ ShellRoot {
                     console.log(`[test] FAIL ${suite.name}: threw ${e}`);
                 }
             }
-            root.steps = (root.camDir !== "" ? root.cameraSteps() : [])
+            root.steps = root.cavaSteps()
+                .concat(root.camDir !== "" ? root.cameraSteps() : [])
                 .concat(root.weatherDir !== "" ? root.weatherSteps() : []);
             if (root.camDir === "")
                 console.log("[test] SKIP camera events: no CAMERA_TEST_DIR");

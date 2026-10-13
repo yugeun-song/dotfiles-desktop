@@ -27,10 +27,20 @@ cp "$REPO/tests/unit/qml/shell.qml" "$WORK/bar/shell.qml"
 cp "$REPO/tests/unit/qml/TestModules.qml" "$WORK/bar/TestModules.qml"
 printf '#!/bin/sh\necho %s\n' "'{\"type\": \"ready\", \"devices\": 0}'; sleep 3600" > "$WORK/bar/scripts/keyfeed.py"
 printf '#!/bin/sh\nexit 0\n' > "$WORK/bar/scripts/app-scope.sh"
-for tool in ddcutil brightnessctl hyprctl notify-send canberra-gtk-play fcitx5-remote gdbus cava; do
+for tool in ddcutil brightnessctl hyprctl notify-send canberra-gtk-play fcitx5-remote gdbus; do
     printf '#!/bin/sh\nexit 0\n' > "$WORK/bin/$tool"
     chmod +x "$WORK/bin/$tool"
 done
+# cava: a line of levels, then alive until stopped or qs is gone. A stop
+# takes 300 ms, as a real cava's can, so the exit arrives after a quick
+# resume (testCava).
+cat > "$WORK/bin/cava" <<'EOF'
+#!/bin/sh
+echo "1;2;3"
+trap 'sleep 0.3; exit 0' TERM
+while kill -0 "$PPID" 2>/dev/null; do sleep 0.05; done
+EOF
+chmod +x "$WORK/bin/cava"
 # The camera indicator's sources, driven by the suite through files in
 # $WORK/camera: the status reading and its exit code, the device events
 # (a line appended is an event), and the switch file. tail follows only

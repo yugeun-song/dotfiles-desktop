@@ -27,6 +27,18 @@ Singleton {
     property double startedAt: 0
     readonly property bool givenUp: root.quickExits >= root.giveUpAfter
 
+    // Starts are counted so an exit can be told apart: one whose process was
+    // running when playback stopped was asked for, even if playback resumed
+    // before the exit arrived. Counted as failures, three quick pause and
+    // resume flips (a track change) gave the meter up for the session.
+    property int generation: 0
+    property int stopped: -1
+
+    onActiveChanged: {
+        if (!root.active)
+            root.stopped = root.generation;
+    }
+
     // cava exits when its capture stream goes away (sink switch, PipeWire
     // restart); without this it stays dead until playback restarts.
     Timer {
@@ -51,12 +63,15 @@ Singleton {
         running: root.active && !root.demo && !root.givenUp
         command: ["cava", "-p", Quickshell.shellPath("cava.conf")]
 
-        onStarted: root.startedAt = Date.now()
+        onStarted: {
+            root.generation += 1;
+            root.startedAt = Date.now();
+        }
 
-        // An exit while inactive is the bar stopping cava (playback paused),
-        // not a failure, and must not count towards giving up.
+        // An exit the bar asked for (playback paused) is not a failure, and
+        // must not count towards giving up.
         onExited: {
-            if (!root.active || root.demo)
+            if (!root.active || root.demo || root.stopped === root.generation)
                 return;
             if (Date.now() - root.startedAt < root.quickExitMs) {
                 root.quickExits = root.quickExits + 1;
