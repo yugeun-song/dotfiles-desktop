@@ -88,6 +88,7 @@ tests/unit/qml.sh || failed=1
 tests/unit/monitor-override.sh || failed=1
 tests/unit/alarm.sh || failed=1
 tests/unit/camera.sh || failed=1
+tests/unit/install.sh || failed=1
 for name in keyfeed inputmethod camera_switch; do
     if out=$(python3 -I "tests/unit/test_$name.py" 2>&1); then
         echo "PASS  $name: $(grep -oE '^Ran [0-9]+ tests' <<<"$out" | sed 's/^Ran //')"
