@@ -294,10 +294,12 @@ if (( ! PIL )); then
 elif ! wait_for 5 power_x; then
     fail "the power button: no glyph at the bar's right end"
 else
-    input move 2000 600 sleep 100 move "$x" 16 sleep 200 click sleep 600
-    check "the power button opens the session dialog" session_dialog_open
-    input key 1 sleep 300
-    check "Esc closes it" lacks_layer quickshell:powermenu
+    # Waited for, not slept on: on a loaded machine the dialog maps later
+    # than any fixed pause, and the check failed once beside a busy build.
+    input move 2000 600 sleep 100 move "$x" 16 sleep 200 click sleep 100
+    check "the power button opens the session dialog" wait_for 3 session_dialog_open
+    input key 1 sleep 100
+    check "Esc closes it" wait_for 2 lacks_layer quickshell:powermenu
 fi
 
 # 3. A long launcher query stays inside the card.
