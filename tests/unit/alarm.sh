@@ -46,16 +46,19 @@ run remove 1111b >/dev/null; ok "remove: a unique prefix" "$?" 0
 ok "remove: the other stays" "$(jq -r '.[0].label' "$STATE")" "a"
 run remove 9999; ok "remove: no match" "$?" 1
 
-# reap: a daily alarm rolls past now, a one-off that just rang goes, an old
-# one-off that never rang is kept and marked, a future one is left alone.
+# reap: a daily alarm rolls past now, a one-off the bar names as rung goes,
+# one due and not rung yet stays, an old one-off that never rang is kept and
+# marked, a future one is left alone.
 now=$(date +%s)
 printf '[{"id":"d","at":"x","label":"daily","epoch":%s,"daily":true,"fired":true},
          {"id":"r","at":"x","label":"rang","epoch":%s,"daily":false,"fired":false},
          {"id":"m","at":"x","label":"missed","epoch":%s,"daily":false,"fired":false},
          {"id":"f","at":"x","label":"future","epoch":%s,"daily":false,"fired":false}]\n' \
     $((now - 2 * 86400 - 60)) $((now - 100)) $((now - 1000)) $((now + 600)) > "$STATE"
-run reap; ok "reap" "$?" 0
-ok "reap: what is left" "$(jq -r '[.[].label] | join(" ")' "$STATE")" "daily missed future"
+jq '. + [{"id":"w","at":"x","label":"waiting","epoch":.[1].epoch,"daily":false,"fired":false}]' "$STATE" > "$STATE.new" \
+    && mv "$STATE.new" "$STATE"
+run reap "r@$((now - 100))"; ok "reap" "$?" 0
+ok "reap: what is left" "$(jq -r '[.[].label] | join(" ")' "$STATE")" "daily missed future waiting"
 daily=$(jq '.[0].epoch' "$STATE")
 ok "reap: the daily one is ahead, within a day" "$(( daily > now && daily <= now + 86400 ))" 1
 ok "reap: the daily one is not fired" "$(jq '.[0].fired' "$STATE")" false

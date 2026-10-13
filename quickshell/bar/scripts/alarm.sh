@@ -11,7 +11,7 @@
 #   alarm.sh list
 #   alarm.sh remove <id>
 #   alarm.sh clear
-#   alarm.sh reap                       drop or roll forward alarms that fired
+#   alarm.sh reap [id@epoch ...]        drop or roll forward the alarms rung
 #
 # Requires: jq, date
 #
@@ -133,15 +133,23 @@ cmd_remove() {
 # Run by the bar: daily alarms step forward until past now (may be days behind).
 # One-offs are dropped only inside the bar's 300 s ring window; older ones never
 # rang, so they are kept and marked fired instead of silently lost.
+# The bar names the alarms it rang (id@epoch): a one-off goes, a daily moves
+# to its next day. Any other alarm past its 300 s window was missed (a
+# suspend, no bar running): a one-off stays, marked fired; a daily moves on.
+# One due and not rung yet stays as it is; by the window alone, the reap
+# after the first of two alarms set for one minute dropped the second.
 cmd_reap() {
-    local now
+    local now rung='[]'
     now=$(date +%s)
-    jq --argjson now "$now" '
+    if (( $# )); then rung=$(printf '%s\n' "$@" | jq -R . | jq -s .) || return 1; fi
+    jq --argjson now "$now" --argjson rung "$rung" '
         [ .[]
-          | if .epoch <= $now then
-                if .daily then (.epoch |= until(. > $now; . + 86400)) | .fired = false
-                elif $now - .epoch < 300 then empty
-                else .fired = true end
+          | "\(.id)@\(.epoch)" as $key
+          | if .epoch > $now then .
+            elif any($rung[]; . == $key) then
+                if .daily then (.epoch |= until(. > $now; . + 86400)) | .fired = false else empty end
+            elif $now - .epoch >= 300 then
+                if .daily then (.epoch |= until(. > $now; . + 86400)) | .fired = false else .fired = true end
             else . end
         ]
     ' "$STATE_FILE" | write
@@ -157,7 +165,7 @@ case "${1:-list}" in
     in)     shift; cmd_in "$@" ;;
     list)   cmd_list ;;
     remove) shift; cmd_remove "$@" ;;
-    reap)   cmd_reap ;;
+    reap)   shift; cmd_reap "$@" ;;
     clear)  cmd_clear ;;
     *)      sed -n '3,16p' "${BASH_SOURCE[0]}" | sed 's/^#\{1,\} \{0,1\}//'; exit 2 ;;
 esac

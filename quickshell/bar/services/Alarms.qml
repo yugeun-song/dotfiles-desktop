@@ -108,11 +108,14 @@ Singleton {
     }
 
     // Rate-limited: a reap that cannot write leaves the entry due, and the
-    // 5 s tick would respawn it forever.
+    // 5 s tick would respawn it forever. It names every rung alarm still in
+    // the file, so one skipped here is reaped by the next.
     function reap() {
         if (clean.running || root.nowSeconds - root.lastReap < 60)
             return;
         root.lastReap = root.nowSeconds;
+        const rung = root.entries.map(a => `${a.id}@${a.epoch}`).filter(k => root.firedKeys.includes(k));
+        clean.command = [Quickshell.shellPath("scripts/alarm.sh"), "reap"].concat(rung);
         clean.running = true;
     }
 
@@ -130,12 +133,15 @@ Singleton {
 
         if (root.ringing !== null)
             return;
-        const due = root.entries.find(a => !a.fired && !root.firedKeys.includes(`${a.id}@${a.epoch}`) && a.epoch <= now && now - a.epoch < 300);
-        if (!due)
+        // Every alarm due now rings at once, under one label: one at a time,
+        // a second set for the same minute waited out its window.
+        const due = root.entries.filter(a => !a.fired && !root.firedKeys.includes(`${a.id}@${a.epoch}`) && a.epoch <= now && now - a.epoch < 300);
+        if (due.length === 0)
             return;
-        // Recorded locally: if reap fails the entry stays due and would re-ring.
-        root.firedKeys = root.firedKeys.concat(`${due.id}@${due.epoch}`);
-        root.ringing = due;
+        // Recorded locally: if reap fails the entries stay due and would re-ring.
+        root.firedKeys = root.firedKeys.concat(due.map(a => `${a.id}@${a.epoch}`));
+        root.ringing = due.length === 1 ? due[0]
+                                         : Object.assign({}, due[0], { label: due.map(a => a.label).join(", ") });
         chime.running = true;
         root.reap();
     }
@@ -180,6 +186,7 @@ Singleton {
     Process {
         id: clean
 
+        // Set by reap(), with the keys of the alarms rung.
         command: [Quickshell.shellPath("scripts/alarm.sh"), "reap"]
 
         onExited: code => {
