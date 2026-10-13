@@ -401,6 +401,10 @@ Scope {
                     slot.away = true;
                 } else {
                     slot.ask(false);
+                    // Lit with nothing changed, so remember() does not run: an
+                    // entry left by a slot that went with its display (a shut
+                    // lid) stayed and darkened it at the next reload.
+                    root.record(slot.name, null);
                 }
                 slot.inheritedDark = false;
             }
