@@ -8,59 +8,53 @@ import Quickshell.Hyprland
 import qs.services
 
 // A screensaver per display, in two stages, once the display has gone
-// unused for its set number of minutes (services/Screensaver.qml; off unless
-// set). Nothing but black is ever shown: the screens are left on overnight
-// in a room someone sleeps in, where a clock is a light of its own. The
-// output stays enabled and keeps its windows, and nothing else stops: no
-// suspend, no lock, programs run on behind the dark screen.
+// unused for its set minutes (services/Screensaver.qml; off unless set).
+// Nothing but black is ever shown: the screens stay on overnight in a room
+// someone sleeps in, where a clock is a light of its own. The output stays
+// enabled with its windows; nothing suspends, locks or stops.
 //
 //   black  The display is unused while someone works on another. Hyprland
 //          fills it with #000000 (a 1x1 layer with dim_around, rules.lua),
 //          which an OLED panel shows as pixels switched off. No modeset, so
 //          it comes and goes at once.
-//   off    Nobody is at the keys. DPMS, through MONITORS.saver in
-//          hypr/config/monitors.lua, since a backlit panel glows even when
-//          black. Every DPMS change stalls the whole compositor for half a
-//          second to a second and a half (see M.saver), which is why off
-//          waits for an empty seat, and why a display that is off stays off
-//          until it is used instead of waking to black.
+//   off    Nobody is at the keys. DPMS through MONITORS.saver
+//          (hypr/config/monitors.lua), since a backlit panel glows even when
+//          black. Every DPMS change stalls the whole compositor for 0.5 to
+//          1.5 s (see M.saver), so off waits for an empty seat, and a display
+//          that is off stays off until used rather than waking to black.
 //
 // Wayland has no per-output idle, so "unused" is derived: input goes to the
 // pointer's screen (Hyprland's focused monitor) and to the screen of the
-// window taking the keys, which Hyprland leaves behind when the pointer
-// crosses onto another screen's bar or empty space. A display is in use
-// exactly while it is one of those and the seat is not idle. Hence two
-// clocks per display. The seat clock is
-// the compositor's (ext-idle-notify): no input for the display's minutes
-// means every display is unused, this one included, unless a visible window
-// anywhere inhibits idle (a film). The away clock starts when focus leaves
-// the display and is cancelled when it returns; when it runs out the display
-// is unused unless a window on it inhibits idle (a film on the external
-// while the panel is typed on).
+// window taking the keys, which stays put when the pointer crosses onto
+// another screen's bar or empty space. A display is in use while it is one
+// of those and the seat is not idle, hence two clocks per display. The seat
+// clock is the compositor's (ext-idle-notify): no input for the display's
+// minutes means every display is unused, unless a visible window anywhere
+// inhibits idle (a film). The away clock runs while focus is off the
+// display; when it runs out the display is unused unless a window on it
+// inhibits idle (a film on the external while the panel is typed on).
 //
 // Both clocks ask `hyprctl clients` about inhibitors when they run out. The
-// compositor's inhibitor-aware clock would do the seat's asking itself, but
-// Hyprland (0.56.2, and main as of October 2026) restarts every such clock
-// whenever focus changes, so a window opening or closing at night, with
-// nobody at the keys, turned the display back on. The cost: an inhibitor
-// that appears once the screens are dark (a film starting by itself) does
-// not wake them.
+// compositor's inhibitor-aware clock would ask for the seat, but Hyprland
+// (0.56.2, and main as of October 2026) restarts it on every focus change,
+// so a window opening or closing at night turned the display back on. The
+// cost: an inhibitor that appears once the screens are dark (a film starting
+// by itself) does not wake them.
 //
 // Moving the pointer onto a dark display or switching to a workspace on it
-// (Super+digit) makes it the focused monitor and lights it: at once from
-// black, after the panel's power-up from off. A press or click anywhere
-// wakes the seat and lights the focused display; the others stay dark until
-// they are used. Once every display is off, the compositor's own wake takes
-// over (*_enables_dpms in general.lua): the first key or pointer motion
-// turns them all on. A display turned on by anything but this module (that
-// wake, a resume, the lid) counts as used, so both its clocks start over.
+// (Super+digit) focuses it and lights it: at once from black, after the
+// panel's power-up from off. A press or click wakes the seat and lights the
+// focused display; the others stay dark until used. Once every display is
+// off, the compositor's own wake takes over (*_enables_dpms in general.lua):
+// the first key or pointer motion turns them all on. A display turned on by
+// anything but this module (that wake, a resume, the lid) counts as used,
+// so both its clocks start over.
 //
 // Nothing goes dark while the Displays panel is open (`paused`), and a
-// display being shared stays up while the share lasts (`shares`). A region
-// shot or a colour pick lifts the black while it runs (`lifted`). A reload
-// hands the dark displays and the shares on to the new instance (`kept`);
-// when the bar stops, bar.service lights whatever it left off
-// (MONITORS.saver_release).
+// shared display stays up while the share lasts (`shares`). A region shot or
+// colour pick lifts the black while it runs (`lifted`). A reload hands the
+// dark displays and the shares to the new instance (`kept`); when the bar
+// stops, bar.service lights whatever it left off (MONITORS.saver_release).
 Scope {
     id: root
 
@@ -126,12 +120,11 @@ Scope {
     property bool paused: false
 
     // What this module did to each display, and the shares under way, kept
-    // across reloads. install.sh reloads the bar, at night too, and the new
-    // instance lit every display the old one had darkened, then waited its
-    // full minutes to darken them again; a share in progress was forgotten,
-    // and its display could go dark under the call. JSON strings, as in
-    // Notifications.qml; state is {name: {off, offSince, away, slept,
-    // blocked}}.
+    // across reloads: install.sh reloads the bar, at night too, and a new
+    // instance lit every darkened display for its full minutes and forgot a
+    // share in progress, whose display could then go dark under the call.
+    // JSON strings, as in Notifications.qml; state is {name: {off, offSince,
+    // away, slept, blocked}}.
     PersistentProperties {
         id: kept
 
@@ -223,17 +216,16 @@ Scope {
         }
     }
 
-    // Screen sharing (a call, a recording) shows a display to someone, so it
-    // must not go dark: a shared output is held up, and a shared window holds
-    // every display, since its frames are drawn with its monitor's. Hyprland
-    // reports any screencopy as a share until half a second after its last
-    // frame, a screenshot included, so a share counts once it has lasted.
+    // A shared display (a call, a recording) must not go dark: a shared
+    // output is held up, and a shared window holds every display, since its
+    // frames are drawn with its monitor's. Hyprland reports any screencopy as
+    // a share until half a second after its last frame, a screenshot
+    // included, so a share counts once it has lasted (Theme.saverShareMs).
     // Keyed "monitor,<output>" or "region,<output>" as screencastv2 gives
-    // them, and "window," for every window share: Hyprland names those by
-    // the window's title as it is when the window is next resized, so a
-    // share may stop under another name than it started with. Values are
-    // { since, count }: when the first of the shares under the key began,
-    // and how many are on (Hyprland sends one start and one stop each).
+    // them, and "window," for every window share, which Hyprland names by the
+    // title as of the window's next resize (a share may stop under another
+    // name). Values { since, count }: when the first share under the key
+    // began, and how many are on (one start and one stop each).
     property var shares: ({})
     // Those that have lasted, as { type, name }.
     property var lasting: []

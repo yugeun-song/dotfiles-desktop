@@ -5,13 +5,10 @@ import Quickshell
 import qs.services
 
 // The focused window's application name, last in the left group because it is
-// the only part whose width changes.
-//
-// Named on the bar of the screen holding that window and left out on the
-// others: beside each bar's own workspace number, a name on every bar put a
-// window next to a screen that was not showing it. Found through keyboard
-// focus, not the focused workspace, which follows the pointer: resting it on
-// the other screen's bar blanked the name while the typing went on.
+// the only part whose width changes. Named only on the bar of the screen
+// holding that window: on every bar it sat beside screens not showing it.
+// Found through keyboard focus, not the focused workspace, which follows the
+// pointer: resting it on the other screen's bar blanked the name mid-typing.
 //
 // No global menu: Wayland has no protocol for one, and only Qt/KDE apps export
 // menus over D-Bus (Chrome, Firefox, kitty and foot do not).

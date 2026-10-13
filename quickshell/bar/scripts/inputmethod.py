@@ -8,13 +8,11 @@ context fcitx5 reports state 0 and an empty name; that is a valid reading.
 Only a call fcitx5 did not answer is a no-reading.
 
 fcitx5 announces no state change on D-Bus (its controller has no such
-signal), so this polls, as the shell script before it did by running
-fcitx5-remote three times a second: a fork and an exec each, a steady 1.1% of
-a core with its children. This keeps one connection to the session bus and
-asks over it, which costs about a tenth of that. The D-Bus wire protocol is
-spoken here directly, in the small subset two argumentless calls need, so
-nothing beyond the standard library is required (python3 already runs the
-key overlay's reader).
+signal), so this polls. The shell script before it ran fcitx5-remote three
+times a second, a steady 1.1% of a core with its forks; one session bus
+connection asked over costs about a tenth of that. The wire protocol is
+spoken directly, the subset two argumentless calls need, so the standard
+library suffices (python3 already runs the key overlay's reader).
 
 Exits when the bus cannot be reached or drops the connection; the bar's
 supervisor (services/Ime.qml) starts it again with a backoff.

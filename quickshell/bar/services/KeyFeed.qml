@@ -11,25 +11,23 @@ import qs.services
 Singleton {
     id: root
 
-    // Off until Super+Y turns it on, and on until Super+Y turns it off. Kept
-    // in the state directory, outside the repository and the installed
-    // config: held in memory only, every start or reload of the bar (a
-    // reboot, install.sh) turned the overlay off behind the user's back. A
-    // missing file is off: an always-on reader is a keylogger nobody asked
-    // for.
+    // Super+Y turns it on and off. Kept in the state directory, outside the
+    // repository and the installed config: in memory only, every start or
+    // reload of the bar (a reboot, install.sh) turned it off behind the
+    // user's back. A missing file is off: an always-on reader is a keylogger
+    // nobody asked for.
     property bool enabled: false
 
     // Set by the first toggle, so a read landing after it does not undo it.
     property bool chosen: false
 
     // The reader sits on evdev, under the compositor, so it reads what is
-    // typed into the lock screen too. The strip is not drawn over hyprlock,
-    // but a chord younger than its dwell was drawn the moment the session
-    // unlocked: the Enter and the last keys of the password. hypridle says
-    // when the session locks and unlocks (on_lock_cmd, on_unlock_cmd), and
-    // lock.sh as it starts hyprlock; keys in between are dropped. The unlock
-    // comes from hypridle only: lock.sh also returns when hyprlock crashes
-    // and the session stays locked.
+    // typed into the lock screen too: a chord younger than its dwell was drawn
+    // the moment the session unlocked (the Enter and the last keys of the
+    // password). hypridle reports the lock and the unlock (on_lock_cmd,
+    // on_unlock_cmd), lock.sh the lock as it starts hyprlock; keys in between
+    // are dropped. The unlock comes from hypridle only: lock.sh also returns
+    // when hyprlock crashes and the session stays locked.
     property bool locked: false
 
     IpcHandler {
@@ -177,11 +175,11 @@ Singleton {
         onSaveFailed: error => console.warn("[keyfeed] could not keep the switch in", store.path, "-", error)
     }
 
-    // A reader that dies while the overlay is on is started again, backing
-    // off from 2 s to a minute like the other helpers. Switching the overlay
-    // off at the first exit lost the user's choice and took down the strip
-    // that would have said why; the strip now shows the reason until the
-    // reader runs again or Super+Y turns the overlay off.
+    // A reader that dies while the overlay is on is started again, 2 s to a
+    // minute apart like the other helpers. Switching the overlay off at the
+    // first exit lost the user's choice and the strip that would have said
+    // why; the strip shows the reason until the reader runs again or Super+Y
+    // turns the overlay off.
     Timer {
         id: supervisor
 

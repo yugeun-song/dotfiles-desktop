@@ -2,17 +2,13 @@
 
 # Makes the drag cursors bigger and heavier than the rest of the theme.
 #
-# Oxygen's open and closed hands are line art; at 24 px they vanish against a
-# busy window at exactly the moment they are the only feedback that a drag is
-# happening. The arrow, by contrast, has a 2 px border and a solid fill.
-#
-# Bigger without blurring: Xcursor images carry a nominal size and their real
-# dimensions, and clients pick by nominal and draw at real. So nominal 24 is
-# answered with a 34 px image resampled down from Oxygen's 48, never an
-# upscaled 24.
-#
-# Heavier: an outline grown from the alpha channel, so it follows the fingers
-# and the gaps between them instead of boxing the hand.
+# Oxygen's open and closed hands are line art: at 24 px they vanish against a
+# busy window just when they are the only sign of a drag, while the arrow has a
+# 2 px border and a solid fill. Bigger: an Xcursor image carries a nominal size
+# and its real dimensions, and clients pick by nominal and draw at real, so
+# nominal 24 is answered with a 34 px image. Heavier: an outline grown from the
+# alpha channel follows the fingers and the gaps between them instead of
+# boxing the hand.
 
 import argparse
 import importlib.util
@@ -21,8 +17,9 @@ import sys
 
 from PIL import Image, ImageFilter
 
-# Every drag shape, by theme name. Each is resolved to its real file: most are
-# symlinks, and writing through one would replace it and lose the alias.
+# Every drag shape, by theme name. Each is resolved to its real file and done
+# once: grab, grabbing, move and all-scroll are aliases of openhand, closedhand
+# or fleur, and enlarging a file once per alias would compound the scale.
 DRAG = ("grab", "grabbing", "move", "all-scroll", "openhand", "closedhand", "fleur")
 
 SCALE = 1.4
@@ -71,7 +68,9 @@ def emphasise(images, scale, ink):
     out = []
     for nominal in sorted(by_nominal):
         target = max(1, round(nominal * scale))
-        # Closest real image, so the resample is a reduction whenever possible.
+        # The real image nearest the target. Oxygen's hands come at 24, 48 and
+        # 72 px, so nominal 24 enlarges the 24 to 34 px and nominal 48 reduces
+        # the 72 to 67.
         src = min(images, key=lambda im: abs(im["w"] - target))
         img = to_image(src).resize((target, target), Image.LANCZOS)
 

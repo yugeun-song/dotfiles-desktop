@@ -2,17 +2,13 @@
 
 # Draws the plain arrow of a generated cursor theme instead of recolouring one.
 #
-# Runs after tint-cursors.py and replaces only left_ptr. The other cursors
-# carry meaning and stay as tinted; redrawing them would be a second cursor
-# theme kept in Python.
-#
-# Drawn, not tinted, because readability is shape, not colour: a recoloured
-# Oxygen arrow keeps its hairline edge and its three bitmap sizes stretched to
-# every other request. Wanted: a heavy dark outline, round joins, flat fill.
-#
-# Every size is rasterised from the path, and the hotspot is read off the
-# rendered tip; a hotspot guessed at the box corner is off by a pixel or two,
-# in a different direction at each size.
+# Runs after tint-cursors.py and replaces only left_ptr; the other cursors carry
+# meaning and stay tinted (redrawing them would be a second theme in Python).
+# Drawn because readability is shape, not colour: a recoloured Oxygen arrow
+# keeps its hairline edge and its three bitmap sizes stretched to every other
+# request. Wanted: a heavy dark outline, round joins, flat fill. Every size is
+# rasterised from the path and the hotspot read off the rendered tip; one
+# guessed at the box corner is off by a pixel or two, differently per size.
 
 import argparse
 import importlib.util
@@ -26,34 +22,32 @@ from PIL import Image
 # The arrow as the centre line of its outline, in a space 90 tall: tip, long
 # edge to the right shoulder, in to the heel (the notch that makes it an arrow,
 # not a play button), out to the tail foot; the left edge closes it.
-#
-# Fitted to the reference drawing: both are classified per pixel as background,
-# fill or outline, and scored by shape overlap at their best alignment (cross
-# correlation). Raw pixel agreement let a shape trade position error for size
-# and it settled 5.7% too wide. Width is pinned to the drawing's ratio, 0.7690
-# of the height including the outline: 94.5% overlap instead of 95.6% floating,
-# but never wider than the original.
+# Fitted to the reference drawing by shape overlap at the best alignment (cross
+# correlation), each pixel classed as background, fill or outline; raw pixel
+# agreement traded position error for size and settled 5.7% too wide. Width is
+# pinned to the drawing's 0.7690 of the height with outline: 94.5% overlap
+# instead of 95.6% floating, but never wider than the original.
 OUTLINE = [(10.00, 3.00), (78.07, 66.50), (39.08, 62.20), (10.35, 93.00)]
 
-# The notch is the one value not taken from the drawing. The drawing's barely
-# cuts in and reads as a clipped triangle, so it is pulled 15% of the way
-# towards the tip. Narrow band: less and the notch vanishes at 24 px; more and it
-# becomes a barbed arrowhead. Depth also eats fill, which carries the colour:
-# fill area at 24 px is 113, 79, 61, 44 px at 0, 20, 30, 40% depth, and past a
-# third the lower barb is outline only.
+# The heel is the one point not taken from the drawing, whose notch barely cuts
+# in and reads as a clipped triangle: it is pulled 15% of the way to the tip.
+# A narrow band: less and the notch vanishes at 24 px, more and it becomes a
+# barbed arrowhead. Depth also eats the fill that carries the colour (fill at
+# 24 px: 113, 79, 61, 44 px at 0, 20, 30, 40% depth; past a third the lower barb
+# is outline only).
 
 # Outline width as a fraction of cursor height: the drawing's 15 px on 290.
 STROKE = 15.0 / 290.0
 
 # Below ~40 px the fraction stops being a line: at 24 (the size in use,
-# hypr/config/env.lua) it is 1.2 px, which antialiasing turns into a soft edge.
-# So small sizes get this floor and are drawn slightly heavier, as icon sets do.
+# hypr/config/env.lua) it is 1.2 px, which antialiasing turns into a soft edge,
+# so small sizes get this floor and draw slightly heavier, as icon sets do.
 MIN_STROKE_PX = 2.0
 
-# Measured from the reference drawing, not taken from Theme.qml. FILL is also
-# the single source of the whole theme's tint: install.sh reads this line and
-# passes it to tint-cursors.py, so the pointer does not change colour on its way
-# onto a link. Keep the `FILL = "#rrggbb"` form; install.sh parses it with sed.
+# Measured from the reference drawing, not taken from Theme.qml. FILL also
+# tints the whole theme, so the pointer keeps its colour moving onto a link:
+# install.sh (sed) and tint-cursors.py (regex) read this line, so keep the
+# `FILL = "#rrggbb"` form.
 FILL = "#1d89e4"
 INK = "#212121"
 
@@ -62,8 +56,8 @@ SIZES = (16, 20, 24, 28, 32, 40, 48, 56, 64, 72, 96, 128)
 
 
 def load_encoder():
-    # tint-cursors.py owns the Xcursor writer; one copy of a binary format.
-    # Loaded by path because of the hyphen in its name.
+    # tint-cursors.py owns the Xcursor writer, one copy of a binary format;
+    # loaded by path because of the hyphen in its name.
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "tint-cursors.py")
     spec = importlib.util.spec_from_file_location("tint_cursors", path)
     mod = importlib.util.module_from_spec(spec)
@@ -175,8 +169,9 @@ def main():
                        "xhot": xh, "yhot": yh, "delay": 0, "px": to_bgra(im)})
 
     target = os.path.join(cursors, args.name)
-    # Refuse a symlink: writing would replace it and lose the alias.
-    # tint-cursors.py writes left_ptr as a real file.
+    # Refuse a link: writing follows it and would put the arrow into the cursor
+    # it names, and into every alias of that. tint-cursors.py writes left_ptr
+    # as a real file.
     if os.path.islink(target):
         print(f"pointer: {args.name} is a link, not the arrow itself", file=sys.stderr)
         return 1

@@ -2,9 +2,9 @@
 
 -- Catch-all for the first frame; config/monitors.lua adds per-output rules.
 -- highrr, not preferred: EDID "preferred" is often 60 Hz (2560x1440@60 on the
--- Philips here), which forced a second modeset to 144 on every start. Modesets
--- are what this GPU is least trusted with; monitors.lua asks for highrr too,
--- so its rule matches this one and costs nothing.
+-- Philips here), which cost a second modeset to 144 on every start, and
+-- modesets are what this GPU is least trusted with. monitors.lua asks for
+-- highrr too, so its rule matches this one for free.
 hl.monitor({
     output = "",
     mode = "highrr",
@@ -30,6 +30,8 @@ hl.config({
 
     input = {
         kb_layout = "kr",
+        -- US letters with Right Alt as Hangul and Right Ctrl as Hanja, the
+        -- keys fcitx5/config triggers on; fcitx5/profile names the same layout.
         kb_variant = "kr104",
         follow_mouse = 1,
         -- Hover focuses without raising; raising breaks drag-and-drop.
@@ -62,10 +64,9 @@ hl.config({
             render_power = 2,
         },
         -- Full strength: the bar's screensaver blacks a display out with a
-        -- dim_around layer rule (rules.lua), so Hyprland itself draws an
-        -- exact #000000 over the output, and no client buffer the size of
-        -- the screen is needed. Nothing else uses dim_around; a window rule
-        -- that did would black out everything around its window.
+        -- dim_around layer rule (rules.lua), an exact #000000 Hyprland draws
+        -- with no screen-sized client buffer. Nothing else may use it: a
+        -- window rule with dim_around would black out everything around it.
         dim_around = 1.0,
     },
 
@@ -86,16 +87,16 @@ hl.config({
         -- nothing but misreport adaptive sync. Revisit on DisplayPort.
         vrr = 0,
         focus_on_activate = false,
-        -- Lets a new locker attach to a session whose locker crashed. The
-        -- session stays locked either way (ext-session-lock); with false the
-        -- attach is denied (SessionLockManager.cpp) and there is no password
-        -- field until a VT switch and kill. Unlocks nothing by itself.
+        -- Lets a new locker attach to a session whose locker crashed; it
+        -- stays locked either way (ext-session-lock). With false the attach
+        -- is denied (SessionLockManager.cpp) and no password field appears
+        -- until a VT switch and a kill. Unlocks nothing by itself.
         allow_session_lock_restore = true,
-        -- Any input wakes DPMS-off outputs; otherwise a screen off after the
-        -- lid or a suspend hides the lock prompt. monitors.lua re-arms the
-        -- compositor-wide DPMS state while an output is lit, so this does not
-        -- wake a shut panel or a display the screensaver turned off; once
-        -- every output is dark, it wakes them all.
+        -- Any input wakes DPMS-off outputs, or a screen off after the lid or
+        -- a suspend hides the lock prompt. monitors.lua re-arms the
+        -- compositor-wide DPMS state while an output is lit, so this wakes
+        -- neither a shut panel nor a display the screensaver turned off;
+        -- once every output is dark it wakes them all.
         mouse_move_enables_dpms = true,
         key_press_enables_dpms = true,
     },
@@ -132,10 +133,10 @@ hl.config({
         scroll_event_delay = 0,
         -- Off: the direction keys stay on the workspace in front of them. On,
         -- a window on the other screen's workspace is a candidate whenever
-        -- its edge meets the focused one's, and at the edge focus and
-        -- windows hop to the next monitor. Only direction dispatchers read
-        -- this: the pointer, focus-follows-mouse and dragging still cross
-        -- screens, and Super+Alt+digit sends a window to any workspace.
+        -- its edge meets the focused one's, and focus and windows hop
+        -- monitors at the edge. Only direction dispatchers read this; the
+        -- pointer, focus-follows-mouse, dragging and Super+Alt+digit still
+        -- cross screens.
         window_direction_monitor_fallback = false,
     },
 

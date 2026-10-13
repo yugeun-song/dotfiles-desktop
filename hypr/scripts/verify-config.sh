@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Parse-check the Hyprland config on a copy with execs.lua emptied, because
-# `Hyprland --verify-config` runs exec calls for real.
-# Catches parse and load-time errors, not errors inside bind callbacks (those
-# need their own pcall). The tracked monitor_settings.lua is copied so a
-# broken preset is reported here too; the machine-local file is not (the
-# policy only warns about it).
+# Parse-checks the Hyprland config on a copy with execs.lua emptied, since
+# `Hyprland --verify-config` runs exec calls for real. Catches parse and
+# load-time errors, not errors inside bind callbacks (those need their own
+# pcall). The tracked monitor_settings.lua is copied so a broken preset is
+# reported too; the machine-local file is not (the policy only warns).
 #
 # Usage: verify-config.sh [config-dir]     (default: the directory above this)
+# Exit: 0 loads, 1 has problems, 2 the check could not run.
 
 set -euo pipefail
 

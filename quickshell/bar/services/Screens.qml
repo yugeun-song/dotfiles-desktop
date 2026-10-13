@@ -6,12 +6,11 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 
-// The screen a surface belongs on, in one place rather than a copy in every
-// overlay. Two answers, because Hyprland keeps two kinds of focus apart: the
-// focused monitor also moves when the pointer crosses onto another screen,
-// while the keyboard stays with the window it was typing into until a window
-// on that screen takes it. Properties, not functions: a singleton's functions
-// are not always callable when a window's first binding runs at start.
+// The screen a surface belongs on, in one place for every overlay. Two
+// answers, since Hyprland keeps two kinds of focus apart: the focused monitor
+// follows the pointer onto another screen, while the keyboard stays with its
+// window until a window there takes it. Properties, not functions: a
+// singleton's functions are not always callable at a window's first binding.
 Singleton {
     id: root
 
@@ -60,11 +59,10 @@ Singleton {
     }
 
     // The shell's panels that take the keyboard while open, by their
-    // WlrLayershell.namespace; a new such panel belongs in this list. They
-    // open on the focused monitor, so while one is up the keys go there
-    // rather than to the window. Counted from Hyprland's layer events: Qt's
-    // application state, the obvious signal, stayed active once the launcher
-    // had closed (nested session).
+    // WlrLayershell.namespace (a new such panel belongs here). They open on
+    // the focused monitor, so while one is up the keys go there. Counted from
+    // Hyprland's layer events: Qt's application state stayed active after the
+    // launcher had closed (nested session).
     readonly property var keyboardPanels: ["quickshell:launcher", "quickshell:powermenu",
         "quickshell:notification-centre", "quickshell:cheatsheet", "quickshell:displays"]
 
@@ -91,13 +89,11 @@ Singleton {
                     focus.panelsOpen = Math.max(0, focus.panelsOpen - 1);
                 break;
             // quickshell 0.3.1 puts a workspacev2 on whichever monitor it last
-            // saw focused. Switching workspace while the pointer rests on the
-            // other screen, Hyprland re-checks the pointer first and sends a
-            // focusedmon for that screen before the workspacev2, so the panel's
-            // bar came to mark the external's workspace (seen in a nested
-            // session). Rereading the monitors puts every workspace back on its
-            // own screen; asked for at once, the answer lands within a few
-            // milliseconds, before the misplaced indicator has visibly moved.
+            // saw focused. Switching workspace with the pointer on the other
+            // screen, Hyprland sends that screen's focusedmon first, so the
+            // panel's bar marked the external's workspace (nested session).
+            // Rereading the monitors puts every workspace back on its screen
+            // within milliseconds, before the misplaced mark visibly moves.
             case "workspacev2":
                 Hyprland.refreshMonitors();
                 break;

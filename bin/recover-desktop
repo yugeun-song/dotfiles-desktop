@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Get a Hyprland session back from a text console (Ctrl+Alt+F2, log in, then
-# Ctrl+Alt+F1 back): disabled panel, test-created output, DPMS off, dead
-# service, hung compositor. A stuck lock screen is `unlock`'s job.
+# Gets a Hyprland session back from a text console (Ctrl+Alt+F2, log in, then
+# Ctrl+Alt+F1 back): a disabled panel, a test-created output, DPMS off, a dead
+# service, a hung compositor. A stuck lock screen is `unlock`'s job.
 #
-# Nothing machine-specific: everything is discovered from the uid, the lock
-# file, sysfs connectors and the session target, since a console login has
-# none of the session's environment.
+# Nothing machine-specific: everything comes from the uid, the lock file,
+# sysfs connectors and the session target, since a console login has none of
+# the session's environment.
 #
 #   recover-desktop            diagnose, then safe repairs (never ends anything)
 #   recover-desktop --status   diagnose only
@@ -146,9 +146,9 @@ if [[ "$MODE" == "--kill" ]]; then
         exit 1
     fi
     describe_process "$HL_PID"
-    # Ending the compositor ends the session and loses its windows. The session
-    # entry (/etc/greetd/sessions) runs start-hyprland, which relaunches only
-    # after a crash; a clean exit returns to the greeter on vt1.
+    # Ending the compositor loses the session's windows. The greetd session
+    # entry runs start-hyprland, which relaunches only after a crash; a clean
+    # exit returns to the greeter on vt1.
     say "sending SIGTERM to Hyprland ($HL_PID); the greeter returns on vt1 and this session's windows are lost"
     kill -TERM "$HL_PID" 2>/dev/null || { warn "could not signal $HL_PID"; exit 1; }
     gone_within 5 "$HL_PID" && { say "it exited"; exit 0; }

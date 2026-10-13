@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
-# Tests config/monitors.lua in a nested Hyprland without touching real outputs.
-# The nested window (WAYLAND-1) plays the built-in panel and headless outputs
-# play externals, so removing the last one exercises the real FALLBACK path.
-# The lid is driven through MONITORS.lid_close/lid_open, the calls the lid
-# binds make, and its state at load through a stand-in for /proc/acpi. The
-# overrides go through scripts/monitor-override.sh against the nested
-# instance's own state directory, so the real desktop's overrides are never
-# touched. Run from a Hyprland session; a window shows for ~80 s with a few
-# harmless notifications (no start-hyprland, transient overlap at 0x0, the
-# refused mode). The window must stay visible: Hyprland applies monitor rules
-# from its render pre-checks, i.e. only when some output draws a frame, and
-# the nested panel draws only while the parent shows it. Parked on a hidden
-# workspace, every case that has to re-light an output (the headless ones
-# being off) fails, and WAYLAND-1 exhausts its three mode retries with "NO
-# PREFERRED MODE". A visible, unfocused workspace is fine:
+# Tests config/monitors.lua in a nested Hyprland without touching real
+# outputs. The nested window (WAYLAND-1) plays the built-in panel and headless
+# outputs play externals, so removing the last one exercises the real
+# FALLBACK path. The lid goes through MONITORS.lid_close/lid_open, the calls
+# the lid binds make, and its state at load through a stand-in for
+# /proc/acpi; overrides go through scripts/monitor-override.sh against the
+# nested instance's own state directory. Run from a Hyprland session: a
+# window shows for ~80 s with a few harmless notifications (no
+# start-hyprland, transient overlap at 0x0, the refused mode).
+#
+# The window must stay visible: Hyprland applies monitor rules from its
+# render pre-checks, only when some output draws a frame, and the nested
+# panel draws only while the parent shows it. On a hidden workspace every
+# case that re-lights an output fails, and WAYLAND-1 exhausts its three mode
+# retries with "NO PREFERRED MODE". A visible, unfocused workspace is fine:
 #   hyprctl dispatch "hl.dsp.exec_cmd('[workspace 1 silent] bash <this file>')"
 #
 # Usage: monitors-selftest.sh [config-dir]     (default: the directory above this)
@@ -47,8 +47,7 @@ cp -a "$SRC/hyprland.lua" "$WORK/"
 cp -a "$SRC/config" "$WORK/"
 # No autostart: it would start a second copy of every session service.
 printf -- '-- emptied by monitors-selftest.sh\n' > "$WORK/config/execs.lua"
-# The real lid must not decide the test's outcome, so the policy reads its
-# lid state from here instead.
+# The real lid must not decide the outcome; the policy reads this one.
 mkdir -p "$WORK/acpi-lid/LID"
 lid() { printf 'state:      %s\n' "$1" > "$WORK/acpi-lid/LID/state"; }
 lid open
@@ -191,10 +190,9 @@ expect_ws "docked: the workspace in use moved to the external" "3@HEADLESS-1"
 expect_panel_holds_one "docked: the panel holds workspace 1 only"
 
 # Gaps and border follow the output's share of the reference screen, floored
-# at the reference: the 1920x1080 headless is 0.75 of 2560x1440, which the
-# floor lifts to 1, so gaps 4/8 and border 3 stay 4/8 and 3 on it (the scale
-# 0.5 case below is where the rule actually scales).
-# gapsIn and gapsOut print as four edges.
+# at the reference: the 1920x1080 headless is 0.75 of 2560x1440, lifted to 1,
+# so gaps 4/8 and border 3 stay as they are (scale 0.5 below is where the
+# rule scales). gapsIn and gapsOut print as four edges.
 fitrule() { n workspacerules -j | jq -c '.[] | select(.workspaceString == "m[HEADLESS-1]") | [.gapsIn[0], .gapsOut[0], .borderSize]' 2>/dev/null | tail -1; }
 expect_fit() {
     local got
@@ -266,8 +264,8 @@ expect "session end: panel off" "WAYLAND-1 disabled=true"
 expect "session end: external still on" "HEADLESS-1 disabled=false"
 expect_panel_holds_none "session end: no workspace left on the panel"
 # The off emission itself may not be logged: apply() prints a stage only when
-# its summary changes, and the lid case above left "WAYLAND-1:off". The panel
-# being off with no disabled rule in the lighting emission shows the split.
+# its summary changes, and the lid case left "WAYLAND-1:off" there. The panel
+# off with no disabled rule in the lighting emission shows the split.
 if since "$m" | grep -q 'monitors: session end -> .*WAYLAND-1:off'; then
     echo "FAIL  session end: the panel was darkened in the same emission that lit the external"
     FAILED=1
@@ -448,7 +446,7 @@ expect_fit "scale 2: gaps and border still at the reference" "[4,8,3]"
 # Scale 0.5: 3840x2160 logical is 1.5 of the reference, so gaps 4/8 and
 # border 3 become 6/12 and 5 (4.5 rounded up). Rounding 18 would become 27,
 # past what hl.window_rule accepts, so it stops at 20; unclamped, the refused
-# rule failed the whole eval and `ov set` exited 1 for an override that took.
+# rule failed the whole eval, and `ov set` exited 1 for an override that took.
 m=$(mark)
 printf 'name:HEADLESS-1\tscale\t0.5\n' | ov set || { echo "FAIL  set: scale 0.5 exited $?"; FAILED=1; }
 sleep 1.2
@@ -507,10 +505,10 @@ else
     echo "FAIL  mirror: the rule did not name the external"; FAILED=1
 fi
 
-# Not reloaded while mirrored: the nested panel has no mode list, and after
-# a reload Hyprland cannot pick a mode for it when the mirror ends ("NO
-# PREFERRED MODE ... retrying"), so it stays a mirror until the parent
-# resizes the window. A real panel offers modes and is not affected.
+# No reload while mirrored: the nested panel has no mode list, and after a
+# reload Hyprland cannot pick one for it when the mirror ends ("NO PREFERRED
+# MODE ... retrying"), so it stays a mirror until the parent resizes the
+# window. A real panel offers modes and is not affected.
 
 # Revert swaps the previous set (side left) back in: the mirror ends, the
 # panel is its own screen again at 0x0 and workspace 1 comes home.
@@ -595,9 +593,8 @@ n output remove HEADLESS-2 >/dev/null
 sleep 2.5
 expect "all unplugged: panel on" "WAYLAND-1 disabled=false"
 
-# auto_scale is off for the nested outputs above (WAYLAND-1's size is whatever
-# the parent gave the window), so the chooser is exercised as a function:
-# nearest integral logical width to the target for the kind.
+# auto_scale is off for the nested outputs (WAYLAND-1's size is whatever the
+# parent gave the window), so the chooser is exercised as a function.
 autoscale() { n repl "return string.format('%g', MONITORS.auto_scale($1, $2, '$3', { internal = 1920, external = 2560 }))" 2>/dev/null | tr -d '[:space:]"'; }
 expect_scale() {
     local label="$1" want="$2" got

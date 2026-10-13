@@ -1,6 +1,6 @@
-# Baloo off. It arrives as a dolphin/gwenview dependency and its enabled user
-# unit (kde-baloo.service) runs on any desktop; nothing outside Plasma reads the
-# index, and a kernel tree under ~ makes it index millions of files.
-# The unit's ExecCondition reads this key; install.sh also disables the unit.
+# Baloo off. A dolphin/gwenview dependency whose enabled user unit
+# (kde-baloo.service) runs on any desktop, though only Plasma reads the index,
+# and a kernel tree under ~ is millions of files to index. The unit's
+# ExecCondition reads this key; install.sh also disables the unit.
 [Basic Settings]
 Indexing-Enabled=false

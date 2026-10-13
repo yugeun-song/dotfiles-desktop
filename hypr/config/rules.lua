@@ -1,9 +1,9 @@
 -- Window and layer rules.
 
--- Client maximize requests are ignored, as in upstream's default config. Since
--- 0.49 kitty remembers whether its last closed window was maximized and asks
--- for that state on every start, so one maximized terminal made every new one
--- cover the workspace. SUPER+D still works: only the client's request is dropped.
+-- Client maximize requests are dropped, as in upstream's default config:
+-- since 0.49 kitty reopens in the state its last window closed in, and a
+-- tiled window reads as maximized to clients, so every new terminal asked to
+-- cover the workspace. SUPER+D still maximizes.
 hl.window_rule({ match = { class = ".*" }, suppress_event = "maximize" })
 
 -- Dialogs and pickers float.
@@ -41,9 +41,8 @@ hl.layer_rule({ match = { namespace = "^(quickshell:keys)$" }, no_anim = true })
 
 -- The screensaver's black: a 1x1 transparent layer whose dim_around fills
 -- its output with #000000 (decoration.dim_around = 1.0, general.lua). Below
--- zero so it covers every other overlay, toasts included. No animation:
--- waking is the black going at once. Never above_lock: the lock screen must
--- still draw over it, since a screensaver is not a lock.
+-- zero to cover every other overlay, toasts included; no animation, so a
+-- wake is instant. Never above_lock: a screensaver is not a lock.
 hl.layer_rule({ match = { namespace = "^(quickshell:screensaver)$" }, dim_around = true, no_anim = true, order = -10 })
 
 -- The Identify badges go over every other layer of their level (the
@@ -51,10 +50,9 @@ hl.layer_rule({ match = { namespace = "^(quickshell:screensaver)$" }, dim_around
 -- be read.
 hl.layer_rule({ match = { namespace = "^(quickshell:displays-identify)$" }, order = -20 })
 
--- The capture overlays (slurp's namespace is "selection") appear and vanish
--- at once. With the popin they came up 100 ms late, and Hyprland releases
--- every held button when an overlay that takes the keyboard maps, so a drag
--- begun before that was lost.
+-- The capture overlays (slurp's namespace is "selection") map at once: with
+-- the popin they came up 100 ms late, and Hyprland releases every held button
+-- when a keyboard-taking overlay maps, so a drag begun earlier was lost.
 hl.layer_rule({ match = { namespace = "^(selection|hyprpicker)$" }, no_anim = true })
 
 -- Idle inhibit only for fullscreen media, not a fullscreen terminal.

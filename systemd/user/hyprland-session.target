@@ -1,11 +1,11 @@
 # dotfiles-desktop
-# The session. Started by hypr/scripts/session-start.sh once the compositor is
-# up, stopped by hypr/scripts/session-watch.sh when it exits. Every session
+# The session: hypr/scripts/session-start.sh starts it once the compositor is
+# up, session-watch.sh stops it when the compositor exits. Every session
 # daemon is Wanted here and PartOf it, so login starts them, logout ends them,
 # and a relaunched compositor restarts them against the new one.
 #
-# BindsTo raises graphical-session.target (portals, hypridle key on it);
-# PropagatesStopTo is needed to take it down too.
+# BindsTo raises graphical-session.target (portals and hypridle key on it);
+# PropagatesStopTo takes it down too.
 [Unit]
 Description=Hyprland session
 BindsTo=graphical-session.target

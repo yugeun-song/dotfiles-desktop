@@ -1,15 +1,14 @@
 #!/usr/bin/env python3
 """Build a tinted XCursor theme from an installed one.
 
-Cursor colours are baked into bitmaps, so a themed pointer has to be drawn.
-Recolouring an existing theme keeps every hotspot, size and alias.
+Cursor colours are baked into bitmaps, so a themed pointer has to be drawn;
+recolouring an existing theme keeps every hotspot, size and alias. Tinting
+follows luminance rather than replacing a colour: the black outline stays
+black, the white body becomes the tint and grey shading lands in proportion,
+so the shape stays readable on dark and light windows.
 
-Tinting is by luminance, not colour replacement: black outline stays black,
-the white body becomes the tint, grey shading lands proportionally, so the
-shape stays readable on dark and light windows.
-
-Output goes to its own directory under ~/.local/share/icons. The source theme
-belongs to a package and is never modified (pacman would silently undo it).
+Output goes to its own directory under ~/.local/share/icons; the source theme
+belongs to a package and is never modified (pacman would undo it silently).
 
 Usage (--tint defaults to pointer.py's FILL, which install.sh also passes):
     tint-cursors.py --from Oxygen_White --name Spaceduck-Sky --tint '#1d89e4'
@@ -25,10 +24,9 @@ import sys
 XCURSOR_MAGIC = b"Xcur"
 CHUNK_IMAGE = 0xFFFD0002
 
-# cursor-shape-v1 names mapped to their legacy X names. Clients on that
-# protocol ask for "default", which Oxygen_White lacks, so the main pointer went
-# untinted while hand-set cursors (X names) were fine. Added only where the
-# target exists, so this completes any source theme rather than assuming one.
+# cursor-shape-v1 names to their legacy X names. Clients on that protocol ask
+# for "default", which Oxygen_White lacks, so the main pointer went untinted.
+# Added only where the target exists: this completes any source theme.
 SHAPE_ALIASES = {
     "default": "left_ptr",
     "context-menu": "left_ptr",
@@ -60,11 +58,8 @@ SHAPE_ALIASES = {
 
 
 def parse(path):
-    """Every image chunk in an Xcursor file, in file order.
-
-    Layout: header, table of contents, chunks. Comment chunks are dropped;
-    nothing reads them.
-    """
+    """Every image chunk in an Xcursor file, in file order (header, table of
+    contents, chunks). Comment chunks are dropped; nothing reads them."""
     with open(path, "rb") as fh:
         data = fh.read()
     if data[:4] != XCURSOR_MAGIC:
@@ -99,10 +94,10 @@ def luminance_of(px, i, a):
 def body_level(images, floor=150):
     """A cursor's body luminance: the commonest opaque level above `floor`.
 
-    Oxygen's bodies differ (arrow #efefef, move #e6e6e6, resize #e8e8e8), and
-    a straight luminance map made three visibly different blues. Normalising to
-    each cursor's own body makes them one colour. The floor keeps the black
-    outline out; the hand is mostly outline and would measure near black.
+    Oxygen's bodies differ (arrow #efefef, move #e6e6e6, resize #e8e8e8), and a
+    plain luminance map made three visibly different blues; normalising to each
+    cursor's own body makes them one. The floor keeps the black outline out: the
+    hand is mostly outline and would measure near black.
     """
     counts = {}
     for im in images:
@@ -205,7 +200,7 @@ def main():
     os.makedirs(dst, exist_ok=True)
 
     made = skipped = linked = 0
-    # Real files first: a symlink cannot be created before its target exists.
+    # Real files first: an alias is linked only to a target already written.
     entries = sorted(os.listdir(src))
     for name in entries:
         path = os.path.join(src, name)

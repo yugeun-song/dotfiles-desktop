@@ -6,15 +6,14 @@ import Quickshell.Services.Mpris
 import Quickshell.Widgets
 import qs.services
 
-// The player card: art and title, then the transport, then the position.
-// The lower two follow the desktop Spotify player: a filled disc for play and
-// pause between the skips, shuffle and repeat at the ends with a dot under
-// them while on, and the elapsed and whole time either side of a thin bar
-// that shows a knob when the pointer is over it. Tones come from the bar's
-// foreground, never a literal white, so the card reads as the bar opening
-// rather than another program's window. The only accent is the sky the card
-// already used for a control that is on, now also on the bar under the
-// pointer, where Spotify's turns green.
+// The player card: art and title, the transport, the position. The lower two
+// follow the desktop Spotify player: a filled disc for play and pause between
+// the skips, shuffle and repeat at the ends with a dot while on, and the
+// elapsed and whole time either side of a thin bar that shows a knob under
+// the pointer. Tones come from the bar's foreground, never a literal white,
+// so the card reads as the bar opening rather than another program; the one
+// accent is sky, for a control that is on and for the bar under the pointer
+// (where Spotify's turns green).
 Item {
     id: root
 
@@ -224,8 +223,7 @@ Item {
                             }
                         }
 
-                        // Shuffle and repeat hold state, so they are marked
-                        // when on.
+                        // Shuffle and repeat hold state: marked when on.
                         readonly property bool engaged: {
                             switch (control.modelData) {
                             case "shuffle":
@@ -261,11 +259,10 @@ Item {
                             }
                         }
 
-                        // Play and pause are drawn, not taken from the icon
-                        // font: its glyphs fill little more than half their
-                        // size, and the pause came out as two slivers in the
-                        // disc. The ink is the bar's background, as if cut out
-                        // of the disc.
+                        // Play and pause are drawn: the icon font's glyphs
+                        // fill little more than half their box, and the pause
+                        // came out as two slivers in the disc. Inked in the
+                        // bar's background, as if cut out of the disc.
                         Item {
                             anchors.centerIn: parent
                             visible: control.disc

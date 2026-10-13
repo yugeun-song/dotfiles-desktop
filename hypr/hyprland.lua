@@ -1,12 +1,12 @@
--- Hyprland configuration; needs nothing outside this directory.
--- Load order matters: env before anything spawns, and execs last so the
--- session starts against a fully configured compositor.
+-- Entry point; needs nothing outside this directory. Order matters: env
+-- before anything spawns, execs last so the session starts on a fully
+-- configured compositor.
 
 HOME = os.getenv("HOME")
 
--- This file's own directory, not a fixed path, so a checkout elsewhere loads
--- its own modules. loadfile rather than `require` (which also resolves next to
--- the main config on 0.56) because load_module then names the failing module.
+-- This file's own directory, not a fixed path, so a checkout elsewhere or a
+-- test copy loads its own modules and scripts. loadfile, not `require` (which
+-- also resolves here on 0.56), so load_module can name the failing module.
 CONFIG = debug.getinfo(1, "S").source:sub(2):match("(.*)/[^/]*$") or (HOME .. "/.config/hypr")
 
 function file_exists(path)
@@ -18,8 +18,8 @@ function file_exists(path)
     return true
 end
 
--- The first line of a sysfs or procfs file, or nil when it cannot be opened;
--- the modules read connector states, the lid and PCI vendors this way.
+-- First line of a sysfs or procfs file, nil when it cannot be opened: how the
+-- modules read connector states, the lid and PCI vendors.
 function read_first_line(path)
     local f = io.open(path, "r")
     if f == nil then

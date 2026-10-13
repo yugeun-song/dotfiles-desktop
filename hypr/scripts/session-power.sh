@@ -3,47 +3,41 @@
 #
 #   session-power.sh poweroff|reboot|logout [--dry-run]
 #
-# Why not plain `systemctl poweroff`: with the external monitor attached, a
-# shutdown started from inside the session has left this machine (Lunar Lake,
-# xe) dark and deaf after userspace had finished, and only holding the power
-# button down ended it. Signing out first and powering off from the greeter
-# did not, as long as the session had ended on the external alone. The journal
-# shows the direct path completing every unit within one second, so the
-# difference is what the compositor and the GPU clients are doing when the
-# kernel shuts the device down: in the direct path they die in that same
-# second, after a sign-out they are long gone. This script reproduces the
-# sign-out order without the trip to the greeter.
+# Not plain `systemctl poweroff`: with the external monitor attached, a
+# shutdown started inside the session left this machine (Lunar Lake, xe) dark
+# and deaf after userspace had finished, until the power button was held.
+# Signing out and powering off from the greeter did not, as long as the
+# session had ended on the external alone. The journal shows the direct path
+# finishing every unit within a second, so what differs is what the
+# compositor and the GPU clients are doing when the kernel shuts the device
+# down: in the direct path they die in that same second, after a sign-out
+# they are long gone. This reproduces the sign-out order without the greeter.
 #
-# The panel: until 28 September 2026 the monitor policy kept the panel off
-# beside the external, and seven power-offs from the greeter after such
-# sessions were all clean. From the 29th both stayed lit, and two of the three
-# power-offs from the greeter that followed needed an EC reset. So before a
-# sign-out or power-off with both lit, the panel goes off first
-# (MONITORS.prepare_exit in config/monitors.lua), and the session ends on the
-# external alone. A small sample and no known mechanism: this reproduces the
-# state that held. A restart skips it: it never enters S5, and restarts have
-# not hung here.
+# The panel: until 28 September 2026 the policy kept the panel off beside the
+# external, and seven power-offs from the greeter after such sessions were
+# clean. From the 29th both stayed lit, and two of the next three needed an EC
+# reset. So before a sign-out or power-off with both lit, the panel goes off
+# first (MONITORS.prepare_exit in config/monitors.lua). A small sample and no
+# known mechanism: this reproduces the state that held. A restart skips it: it
+# never enters S5, and restarts have not hung here.
 #
-# How the order is enforced: the action is requested under a logind delay
-# inhibitor. logind accepts it at once but holds the shutdown transaction
-# until the lock is released, for at most InhibitDelayMaxSec (5 s by default),
-# which also bounds the damage should anything here hang. Inside that window
-# the compositor is asked to exit and waited for; only then does the lock go.
-# A failed request leaves the session untouched, and the panel is lit again.
+# Order: the action is requested under a logind delay inhibitor, which holds
+# the shutdown transaction until released, for at most InhibitDelayMaxSec (5 s
+# by default, which also bounds any hang here). Inside that window the
+# compositor is asked to exit and waited for; only then does the lock go. A
+# failed request leaves the session untouched and the panel lit again.
 #
-# Where it runs: in a transient user unit in app.slice, not in the caller's
-# cgroup. bar.service and everything it spawns die with hyprland-session.target
-# the moment the compositor's lock file goes, and a keybind's child sits in the
-# session scope; neither reliably still holds the inhibitor while the
-# compositor finishes releasing the GPU. The user manager itself stops when
-# the last session ends, so both the inhibitor and the inner copy ignore
-# SIGTERM, and TimeoutStopSec keeps that from holding the manager's stop for
-# the default 90 s.
+# Where: a transient user unit in app.slice, not the caller's cgroup.
+# bar.service and its children die with hyprland-session.target when the
+# compositor's lock file goes, and a keybind's child sits in the session
+# scope; neither reliably holds the inhibitor while the compositor releases
+# the GPU. The user manager stops when the last session ends, so the
+# inhibitor and the inner copy ignore SIGTERM, and TimeoutStopSec keeps that
+# from holding the manager's stop for the default 90 s.
 #
-# Stages, carried in SESSION_POWER_STAGE: none (relocate into the unit), unit
-# (prepare the outputs, then take the inhibitor, or just sign out), inhibited
-# (do the work). Each step is logged with a "session-power:" prefix; read it
-# with journalctl --user -u session-power-*.
+# Stages, in SESSION_POWER_STAGE: none (move into the unit), unit (prepare the
+# outputs, then take the inhibitor or just sign out), inhibited (the work).
+# Log: journalctl --user -u session-power-*
 
 set -uo pipefail
 
@@ -75,10 +69,9 @@ STAGE="${SESSION_POWER_STAGE:-}"
 UNIT="session-power-$ACTION"
 (( DRY_RUN )) && UNIT="$UNIT-dryrun"
 
-# The compositor's lit outputs as "internal" and "external" words, one per
-# output. The patterns are the policy's default internal and synthetic ones
-# (config/monitors.lua: policy.internal, policy.synthetic); only whether each
-# kind is lit matters here.
+# The lit outputs as "internal" and "external", one word each. The patterns
+# are the policy's default internal and synthetic ones (config/monitors.lua
+# policy.internal, policy.synthetic); only whether each kind is lit matters.
 lit_kinds() {
     timeout 2 hyprctl monitors -j 2>/dev/null | jq -r '.[].name' 2>/dev/null \
         | while read -r name; do
@@ -93,9 +86,8 @@ lit_kinds() {
 # Panel off beside a lit external, then a pause before the session ends.
 # Returns 0 only when the panel was asked to go off, so the caller knows to
 # light it again if the power-off is refused. The pause is a margin, not a
-# measurement: the sessions that powered off cleanly had the panel off long
-# before they ended, and the panel's own power-down sequence takes up to about
-# a second after the modeset.
+# measurement: the clean sessions had the panel off long before they ended,
+# and its power-down sequence takes up to about a second after the modeset.
 prepare_outputs() {
     if ! command -v hyprctl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
         log "hyprctl or jq is missing; the outputs stay as they are"
@@ -196,10 +188,10 @@ fi
 # ---------------------------------------------------------------------------
 # Stage 3, under the lock: request, then end the compositor, then release.
 # ---------------------------------------------------------------------------
-# Again here: systemd-inhibit resets signal dispositions in its child, so the
-# ignore from stage 2 protects only systemd-inhibit itself. Everything below is
-# bounded (each wait has a limit), so ignoring the manager's SIGTERM costs a
-# few seconds at most, and TimeoutStopSec still ends it.
+# Again here: systemd-inhibit resets signal dispositions in its child, so
+# stage 2's ignore covers only systemd-inhibit itself. Every wait below is
+# bounded, so ignoring the manager's SIGTERM costs a few seconds at most, and
+# TimeoutStopSec still ends it.
 trap '' TERM
 
 RT="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
@@ -261,10 +253,10 @@ if [[ -d "/proc/$PID" ]]; then
 fi
 log "the compositor exited after $(( $(now_ms) - started )) ms; releasing the lock"
 # A moment for the driver to settle on the console, within what is left. For
-# a power-off, up to 3.5 s: a sign-out followed by a power-off from the
-# greeter, the clean path, leaves about four seconds between the compositor's
-# exit and the kernel shutting the GPU down, and the transaction after the
-# release adds about one. A restart never enters S5 and keeps half a second.
+# a power-off up to 3.5 s: the clean path (sign-out, then power-off from the
+# greeter) leaves about four seconds between the compositor's exit and the
+# kernel shutting the GPU down, and the transaction after the release adds
+# about one. A restart never enters S5 and keeps half a second.
 cap=500
 [[ "$ACTION" == poweroff ]] && cap=3500
 left=$(remaining)

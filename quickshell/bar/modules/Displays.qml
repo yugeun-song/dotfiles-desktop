@@ -7,14 +7,13 @@ import Quickshell.Io
 import Quickshell.Hyprland
 import qs.services
 
-// Display settings: which outputs are on, at what mode, scale and rotation,
-// and how the built-in panel sits beside an external. It edits the override
-// file hypr/config/monitors.lua reads (see the header there); the policy
-// keeps the last word, so nothing chosen here can leave every screen dark.
-// Writes go through hypr/scripts/monitor-override.sh, which validates the
-// lines, keeps the previous file for a revert, records an Apply's deadline
-// so the revert survives the bar, and asks the compositor to re-evaluate.
-// This file never touches the state directory itself.
+// Display settings: which outputs are on, their mode, scale and rotation, and
+// where the built-in panel sits beside an external. Edits the override file
+// hypr/config/monitors.lua reads; the policy keeps the last word, so nothing
+// chosen here can leave every screen dark. Every write goes through
+// hypr/scripts/monitor-override.sh (validation, the previous file kept for
+// the revert, an Apply's deadline that outlives the bar, the re-evaluation);
+// this file never touches the state directory itself.
 Scope {
     id: root
 
@@ -42,9 +41,8 @@ Scope {
     }
 
     // Left open, the panel held every screensaver off all night (shell.qml
-    // pauses the saver while it is open). It closes once nothing has been
-    // done for the shortest time a display has set; a countdown under way
-    // reverts by itself first.
+    // pauses the saver while it is open), so it closes after the shortest
+    // screensaver time with nothing done; a running countdown reverts first.
     readonly property int idleMinutes: {
         const set = Object.values(Screensaver.minutesByName).filter(n => n > 0);
         return set.length > 0 ? Math.min(...set) : 0;
@@ -65,11 +63,10 @@ Scope {
     readonly property string script: Paths.hyprScripts + "/monitor-override.sh"
 
     // ---- what the compositor has ----------------------------------------
-    // Outputs as `hyprctl monitors all` lists them, enabled ones first by x
-    // then y so the numbers follow the desk left to right, disabled ones
-    // after. Each: { name, description, internal, disabled, width, height,
-    // refresh, scale, x, y, transform, mirrorOf, modes: [{ key, label, w,
-    // h, r }] }.
+    // `hyprctl monitors all`: enabled outputs by x then y, so the numbers
+    // follow the desk left to right, then disabled ones. Each: { name,
+    // description, internal, disabled, width, height, refresh, scale, x, y,
+    // transform, mirrorOf, modes: [{ key, label, w, h, r }] }.
     property var outputs: []
     property string error: ""
     property string hint: ""
@@ -80,14 +77,14 @@ Scope {
     // The file's lines, [selector, field, value], as last read.
     property var rawOverrides: []
 
-    // Edits waiting for Apply, keyed by output name: { enabled, mode, scale,
-    // transform, side, mirror }, every value a string; a missing key means
-    // automatic, i.e. whatever the policy decides.
+    // Edits waiting for Apply, by output name: { enabled, mode, scale,
+    // transform, side, mirror }, all strings; a missing key leaves the field
+    // to the policy.
     property var pending: ({})
 
-    // Set when opening and after an apply: the next complete read replaces
-    // the pending edits. Not on a hotplug refresh, which must not discard
-    // what the user is in the middle of choosing.
+    // Set on opening and after an apply: the next complete read replaces the
+    // pending edits. A hotplug refresh leaves it, so a choice in progress
+    // survives.
     property bool resetPendingOnLoad: true
     property bool monitorsFresh: false
     property bool overridesFresh: false
@@ -283,11 +280,10 @@ Scope {
         root.maybeResetPending();
     }
 
-    // An output that appears while the panel is open (switched on by hand,
-    // back from a dropped link) brings its saved settings into the edits.
-    // Its file lines stop being kept verbatim once it is present, so without
-    // this the next Apply wrote the file without them and dropped its
-    // screensaver time.
+    // An output that appears while the panel is open (switched on, back from
+    // a dropped link) brings its saved settings into the edits: once present
+    // its file lines are no longer kept verbatim, and the next Apply dropped
+    // them, screensaver time included.
     function adoptNewcomers(newcomers) {
         if (newcomers.length === 0 || root.resetPendingOnLoad || !root.overridesFresh)
             return;
@@ -331,10 +327,9 @@ Scope {
     }
 
     // ---- the screensaver (services/Screensaver.qml's file) ------------
-    // Minutes per connector, 0 for off. Pending like the fields above and
-    // written by Apply, so the panel has one way of taking a change; the
-    // countdown does not cover it, since a screensaver time is nothing a
-    // screen can fail to show.
+    // Minutes per connector, 0 for off; pending and applied like the fields
+    // above. The countdown does not cover it: a screensaver time is nothing
+    // a screen can fail to show.
     property var pendingSaver: ({})
     // The last number a display had while on, so the switch brings it back.
     property var saverMemory: ({})
@@ -583,11 +578,10 @@ Scope {
         return want === "auto" ? "right" : want;
     }
 
-    // One wheel notch moves the built-in panel one side round the first
-    // external, clockwise for wheel down. The only arrangement the policy
-    // takes is the panel's side, so the picture offers that and not free
-    // placement. Notches are counted so a touchpad's fine steps do not
-    // race round.
+    // A wheel notch moves the panel one side round the first external,
+    // clockwise for wheel down: the panel's side is the only arrangement the
+    // policy takes, so there is no free placement. Whole notches only, so a
+    // touchpad's fine steps do not race round.
     property real wheelBalance: 0
 
     function wheelSide(delta) {
@@ -618,11 +612,10 @@ Scope {
         root.commitPending(next);
     }
 
-    // Lit after the pending edits, ignoring the lid (the policy handles it).
-    // Overridden on counts, overridden off does not, and an output the
-    // policy itself has off (the lid-shut panel, keep_internal = false)
-    // counts only when the edits turn it on; the policy would ignore an off
-    // that leaves nothing lit, so the panel must not offer one.
+    // Lit after the pending edits, the lid left to the policy: overridden on
+    // counts, overridden off does not, and an output the policy has off (a
+    // shut lid, keep_internal = false) counts only when turned on. The policy
+    // ignores an off that leaves nothing lit, so the panel must not offer one.
     function litWith(map) {
         return root.outputs.filter(o => {
             const enabled = map[o.name]?.enabled ?? "auto";
@@ -688,9 +681,8 @@ Scope {
         return found ? found.what : "";
     }
 
-    // One line under the heading saying which tile the desk is on now, in
-    // words, and where Apply would take it when the selection differs: the
-    // highlighted tile alone said nothing about what was applied.
+    // Which tile the desk is on now, in words, and where Apply would take it:
+    // the highlighted tile alone said nothing about what was applied.
     readonly property string layoutCaption: {
         const now = root.currentPreset;
         const next = root.preset;
@@ -797,10 +789,9 @@ Scope {
         }
         root.busy = true;
         root.error = "";
-        // The content travels as an argument, never through the shell's
-        // parser: descriptions are whatever the display claims to be. A
-        // trial: the script keeps the deadline, so a bar that goes away
-        // during the countdown still reverts (see the script's header).
+        // The content is an argument, never parsed by the shell: descriptions
+        // are whatever the display claims to be. `try` has the script keep
+        // the deadline, so a bar gone during the countdown still reverts.
         setProc.command = ["sh", "-c", "printf '%s' \"$1\" | \"$2\" try \"$3\"", "_", root.pendingTsv, root.script,
                            String(Theme.displaysRevertSeconds)];
         setProc.running = true;
@@ -809,11 +800,10 @@ Scope {
     Process {
         id: setProc
 
-        // Exit 2 means nothing was written. Anything else wrote the file, so
-        // the countdown runs even when the compositor did not re-evaluate:
-        // that override would otherwise apply itself at the next reload or
-        // login with no revert on offer, and the next Apply would overwrite
-        // .prev, losing the state before it.
+        // Exit 2: nothing written. Any other exit wrote the file, so the
+        // countdown runs even when the compositor did not re-evaluate;
+        // otherwise the override would apply at the next reload or login with
+        // no revert on offer, and the next Apply would overwrite .prev.
         onExited: code => {
             root.busy = false;
             if (code === 2) {
@@ -1271,10 +1261,10 @@ Scope {
                         event.accepted = true;
                         return;
                     }
-                    // During the countdown Esc reverts at once instead of
-                    // closing: a close that let the clock run on would undo
-                    // the change 30 s after the user had walked away, and on
-                    // a screen gone dark Esc is the key anyone reaches for.
+                    // During the countdown Esc reverts at once rather than
+                    // closing: a close would let the clock undo the change
+                    // after the user had walked away, and on a screen gone
+                    // dark Esc is the key anyone reaches for.
                     if (event.key === Qt.Key_Escape) {
                         if (root.countdown > 0)
                             root.revert();
@@ -1407,13 +1397,11 @@ Scope {
                                 readonly property var boxes: stage.place(root.outputs, stage.width, stage.height, root.pendingSide)
 
                                 // Enabled outputs keep their logical geometry
-                                // (x, y, size over scale, sides swapped when
-                                // rotated); disabled ones queue up to the
-                                // right at their last size. The whole is
-                                // scaled to fit and centred. A pending side
-                                // for the panel that differs from the one in
-                                // force is drawn as it will be, beside the
-                                // first external, so the wheel shows its
+                                // (size over scale, sides swapped when
+                                // rotated); disabled ones queue on the right
+                                // at their last size; all scaled to fit and
+                                // centred. A pending panel side is drawn
+                                // where it will be, so the wheel shows its
                                 // effect before Apply.
                                 function place(list, w, h, side) {
                                     if (list.length === 0 || w <= 0 || h <= 0)
@@ -1653,10 +1641,9 @@ Scope {
                                         border.width: Math.max(1, Theme.px(2))
                                         border.color: tile.active ? Theme.accentIndigo : "transparent"
 
-                                        // Marks the desk as it is, apart from
-                                        // the selection outline, so choosing
-                                        // another tile never hides where the
-                                        // outputs are right now.
+                                        // The desk as it is, apart from the
+                                        // selection outline, so choosing
+                                        // another tile never hides it.
                                         Rectangle {
                                             visible: root.currentPreset === tile.kind
                                             anchors.top: parent.top
@@ -2231,10 +2218,9 @@ Scope {
                             }
 
                             // Screensaver: the bar's own setting, not an
-                            // override, but pending and applied like the
-                            // rest so the panel has one way of taking a
-                            // change. A switch, as Power: the number is a
-                            // separate choice from whether it is on.
+                            // override, yet pending and applied like the
+                            // rest. A switch, as Power: whether it is on is
+                            // a separate choice from the number.
                             Item {
                                 id: saverRow
 
@@ -2298,10 +2284,9 @@ Scope {
                                     spacing: Theme.px(12)
 
                                     // One switch with both states written on
-                                    // it: a press anywhere on it toggles, and
-                                    // the lit half slides to the new state.
-                                    // Two chips read as two settings; one
-                                    // frame reads as one choice.
+                                    // it, the lit half sliding on a press:
+                                    // two chips read as two settings, one
+                                    // frame as one choice.
                                     Rectangle {
                                         id: saverSwitch
 
@@ -2408,8 +2393,8 @@ Scope {
                                         }
                                     }
 
-                                    // What is left of the row: the line ran
-                                    // past the card at the old wording.
+                                    // Held to the rest of the row and elided:
+                                    // a longer wording once ran past the card.
                                     Text {
                                         anchors.verticalCenter: parent.verticalCenter
                                         width: Math.max(0, saverRow.width - Theme.displaysLabelWidth - x)
@@ -2519,9 +2504,8 @@ Scope {
                     }
 
                     // The mode list, above everything in the card, placed
-                    // under its button when opened. Placed once per opening:
-                    // mapToItem is not a binding, and the card does not move
-                    // while the list is up.
+                    // under its button once per opening: mapToItem is not a
+                    // binding, and the card does not move while it is up.
                     Connections {
                         target: root
 

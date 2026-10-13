@@ -4,19 +4,17 @@ import QtQuick
 import Quickshell.Hyprland
 import qs.services
 
-// Workspace numbers with a sliding indicator. Always the ten containing the
+// Workspace numbers with a sliding indicator: always the ten containing the
 // current workspace (1-10, 11-20, ...), so the row never changes width and a
-// target never moves under the pointer.
+// target never moves under the pointer. The indicator's edges animate at
+// different speeds (150 ms / 520 ms) so it stretches toward the destination
+// and reads as one moving object.
 //
-// The indicator's edges animate at different speeds (150 ms / 520 ms) so it
-// stretches toward the destination and reads as one moving object.
-//
-// Each bar marks the workspace its own screen shows. With the focused one on
+// Each bar marks the workspace its own screen shows: with the focused one on
 // every bar, the panel's bar lit a number the panel was not showing, and the
-// pointer crossing onto the other screen moved both indicators. Which screen
-// is in use is told by the fill instead: solid where the focused window is,
-// a quiet tint on the other screens. Which workspaces hold windows is the
-// same on every bar.
+// pointer crossing screens moved both indicators. The fill tells which screen
+// is in use (solid where the focused window is, a quiet tint elsewhere);
+// which workspaces hold windows is the same on every bar.
 Item {
     id: root
 
@@ -183,7 +181,8 @@ Item {
         // full 120-unit notch.
         property real notch: 0
 
-        // Keep in sync with MIN_/MAX_WORKSPACE in hypr/config/keybinds.lua.
+        // Keep in step with MIN_WORKSPACE in hypr/config/keybinds.lua and
+        // LAST_WORKSPACE in hypr/config/monitors.lua.
         readonly property int minWorkspace: 1
         readonly property int maxWorkspace: 100
 

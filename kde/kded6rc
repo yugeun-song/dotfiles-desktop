@@ -1,6 +1,5 @@
-# kded6's gtkconfig module rewrites the GTK ini files and dconf from KDE
-# settings (breeze_cursors among them), overriding the cursor set in
-# hypr/config/env.lua. Off, so gtk/*-settings.ini and gsettings-apply.sh are
-# the only writers.
+# Off: kded6's gtkconfig rewrites the GTK ini files and dconf from KDE settings
+# (breeze_cursors among them) over the cursor hypr/config/env.lua sets, so
+# gtk/*-settings.ini and gsettings-apply.sh stay the only writers.
 [Module-gtkconfig]
 autoload=false

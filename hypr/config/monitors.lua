@@ -5,95 +5,78 @@
 --   external, lid shut   -> externals only, built-in panel off
 --   no external output   -> built-in panel is the desktop
 --
--- Workspaces follow the `workspaces` scheme (settings, or the override
--- file's "*" line the Displays panel writes): "dynamic" leaves them to
--- Hyprland, "panel-first" keeps 1 on the panel and 2..100 on the main
--- external, "blocks" also gives each further external ten of its own. The
--- main external is the preset's `main`, else the largest.
+-- Workspaces follow a scheme, "dynamic", "panel-first" or "blocks" (see
+-- bindings_for), from the settings or the override file's "*" line.
+-- keep_internal = false turns the panel off beside an external with the lid
+-- open too; a keep-internal marker file undoes that without an edit.
 --
--- keep_internal = false in the settings turns the panel off beside an
--- external with the lid open too; a keep-internal marker file undoes that
--- without editing the settings.
+-- Settings are a preset, not one machine's description: monitor_settings.lua
+-- (tracked) holds what this desktop wants everywhere, monitor_settings.local
+-- .lua (untracked) the deviations of the machine at hand, winning per field
+-- and per scale entry. What the preset names but the machine lacks is inert;
+-- what the machine has but the preset does not name is derived from what is
+-- detected: the scale from pixel size and kind (auto_scale), the mode from
+-- highrr, the panel from its connector type. A bad or missing file is
+-- reported and ignored, and every default is a working desktop.
+-- MONITORS.describe() prints where each value came from.
 --
--- Settings are a preset, not a description of one machine: monitor_settings
--- .lua (tracked) holds the values this desktop wants everywhere, and
--- monitor_settings.local.lua (untracked) the deviations of the machine at
--- hand, same fields, winning per field and per scale entry. What the preset
--- names but the machine lacks is inert (a scale entry for an absent panel
--- matches nothing); what the machine has but the preset does not name is
--- derived from what is detected: the scale from the output's pixel size and
--- kind (auto_scale), the mode from highrr, the panel from its connector
--- type. A bad or missing file is reported and ignored, and every default is
--- a working desktop. MONITORS.describe() prints where each value came from.
---
--- Overrides. On top of that policy sits OVERRIDES_FILE, written by
--- scripts/monitor-override.sh (the bar's display panel calls it): per output,
--- enabled, mode, scale, transform, and for the panel its side of the first
--- external and whether it mirrors. The file is re-read at load and when the
--- script asks (MONITORS.reload_overrides), never on the event path. An
--- override narrows what the policy does; it cannot leave the desktop dark:
---   - the panel off only counts while a desired external is lit, exactly as
---     keep_internal = false does, and the lid still wins over enabled = true;
---   - an external off is suspended while the lid is shut, so the shut laptop
---     is never left with every screen off;
+-- Overrides: OVERRIDES_FILE, written by scripts/monitor-override.sh for the
+-- bar's Displays panel. Per output enabled, mode, scale, transform, and for
+-- the panel its side of the main external and whether it mirrors. Read at
+-- load and on request (MONITORS.reload_overrides), never on the event path.
+-- An override narrows the policy but cannot leave the desktop dark:
+--   - the panel off counts only while a desired external is lit, as with
+--     keep_internal = false, and the lid still wins over enabled = true;
+--   - an external off is suspended while the lid is shut;
 --   - a mode the output does not list falls back to highrr with one warning;
---   - every disabling is stage two (see below), and it is skipped if nothing
---     would stay lit.
--- Every override is also honoured before an output lights (a rule for an
--- absent output waits for it), so a display overridden off stays off when
--- it is plugged in.
+--   - every disabling is stage two (see Stage two), skipped if nothing would
+--     stay lit.
+-- A rule for an absent output waits for it, so a display overridden off
+-- stays off when it is plugged in.
 --
 -- Facts from the Hyprland 0.56.2 sources that shape the code:
 --
 --   FALLBACK    When the last output goes, the compositor creates a headless
---               output named FALLBACK that shows up like a real screen. Counted
---               as external it kept the panel off (black screen on unplug), so
---               FALLBACK and HEADLESS-* are ignored.
+--               output named FALLBACK that looks like a real screen. Counted
+--               as external it kept the panel off (black screen on unplug),
+--               so FALLBACK and HEADLESS-* are ignored.
 --
---   reload      hyprctl reload drops all monitor and workspace rules and all
---               timers, re-runs this file, then re-checks outputs. So the
---               policy also runs at load (a docked reload leaves each screen
---               as it was, without blinking) and the verify timer is re-armed
---               there.
+--   reload      hyprctl reload drops every monitor and workspace rule and
+--               every timer, re-runs this file, then re-checks outputs. So
+--               the policy also runs at load (a docked reload leaves each
+--               screen as it was, without blinking) and re-arms verify there.
 --
---   idempotent  A rule matching current state costs nothing, so each
---               evaluation emits the full desired state; no bookkeeping.
---               Two fields do not default when left out: a rule without
---               mirror keeps an earlier mirror, and transform likewise, so
---               every enabling rule names both.
+--   idempotent  A rule matching the current state costs nothing, so each
+--               evaluation emits the full desired state. A rule without
+--               mirror or transform keeps the earlier value, so every
+--               enabling rule names both.
 --
 --   invisible   hl.get_monitors() and hl.get_monitor() see enabled outputs
---               only: a disabled output and a mirroring one both read as
---               absent. Names come from sysfs and STATE_FILE instead, and a
---               mirroring panel is treated as holding no workspaces.
+--               only: a disabled or a mirroring output reads as absent. Names
+--               come from sysfs and STATE_FILE instead, descriptions and
+--               sizes from STATE_FILE, and a mirroring panel is treated as
+--               holding no workspaces.
 --
 --   workspaces  A workspace rule binds a workspace to an output by name.
---               Hyprland opens a bound workspace on its output, and when an
---               output connects it takes its default = true workspace, then
---               every bound workspace is moved home. That move is queued
---               behind the monitor.added event, so rules emitted from the
---               event already count. A rule naming an output that is absent
---               or disabled places nothing, so the rules stand in every
---               state.
+--               Hyprland opens a bound workspace on its output; an output
+--               that connects takes its default = true workspace, then every
+--               bound workspace moves home, queued behind the monitor.added
+--               event, so rules emitted from the event already count. A rule
+--               naming an absent or disabled output places nothing, so the
+--               rules stand in every state.
 --
---   lid         libinput, not Hyprland, reports a lid that is already shut,
---               and only when it adds the switch at compositor start. A
---               reload re-runs this file without that event, so the state at
---               load comes from ACPI.
+--   lid         libinput, not Hyprland, reports a lid already shut, and only
+--               when it adds the switch at compositor start. A reload has no
+--               such event, so the state at load comes from ACPI.
 --
--- hl.get_monitors() lists enabled outputs only, so the panel name comes from
--- sysfs and its description (for scale matching) from STATE_FILE.
---
--- Limits: verify counts enabled outputs, not visible ones; an enabled but
--- dark external keeps a panel that is due off (lid shut, keep_internal =
--- false, overridden off) off (use ~/recover-desktop from a console).
--- A wlr-output-management client (wlr-randr, wdisplays, kanshi) overrides
--- every rule for the session unseen; do not run one alongside this.
+-- Limits: verify counts enabled outputs, not visible ones, so an enabled but
+-- dark external keeps a panel that is due off, off (~/recover-desktop from a
+-- console). A wlr-output-management client (wlr-randr, wdisplays, kanshi)
+-- overrides every rule unseen; do not run one alongside this.
 --
 -- Callbacks must fit the 50 ms budget: nothing spawns, and the only file I/O
--- on the event path is one open of the keep-internal marker (the lid's ACPI
--- state is read at load and on resume only; the overrides at load and on
--- request only).
+-- on the event path is one open of the keep-internal marker (ACPI is read at
+-- load and resume, the overrides at load and on request).
 --
 -- Manual run: hyprctl eval 'MONITORS.evaluate("manual")'
 --             hyprctl eval 'MONITORS.reload_overrides("manual")'
@@ -120,11 +103,10 @@ local STATE_FILE = STATE_DIR .. "/monitors.state"
 local OVERRIDES_FILE = STATE_DIR .. "/monitor-overrides"
 
 -- Defaults. Connector type decides internal vs external. Removal settles
--- fast (the desktop is dark until the panel returns); arrival settles long
--- (both screens on is harmless, a training link may flap). settle_max_ms
--- forces an evaluation during endless flapping.
--- settle_synthetic_ms, panel_off_*, sysfs and acpi_lid are not settable from
--- the settings file (see load_settings).
+-- fast (the desktop is dark until the panel returns), arrival slowly (both
+-- screens on is harmless, a training link may flap); settle_max_ms forces an
+-- evaluation through endless flapping. settle_synthetic_ms, panel_off_*,
+-- sysfs and acpi_lid are not settable from the settings file.
 local policy = {
     internal = { "^eDP", "^LVDS", "^DSI" },
     synthetic = { "^FALLBACK$", "^HEADLESS%-" },
@@ -136,16 +118,12 @@ local policy = {
     -- description prefix, matched like a scales entry. nil: the largest
     -- logical area, then name order.
     main = nil,
-    -- How workspaces are spread over the outputs: "dynamic" is Hyprland's own
-    -- behaviour (nothing bound), "panel-first" is this desktop's preset
-    -- (1 on the panel, 2..LAST_WORKSPACE on the main external), "blocks" gives
-    -- each further external ten of its own (11-20, 21-30). The override file
-    -- can replace it (the Displays panel writes that line).
+    -- See bindings_for; the override file's "*" line replaces it.
     workspaces = "dynamic",
     keep_internal = true,
     settle_removed_ms = 400,
     settle_added_ms = 2000,
-    -- FALLBACK means no screen is left; waiting cannot help. Just long
+    -- FALLBACK means no screen is left, so waiting cannot help; just long
     -- enough to leave the event handler.
     settle_synthetic_ms = 60,
     settle_max_ms = 6000,
@@ -174,9 +152,9 @@ local function is_string_list(value)
     return true
 end
 
--- Per-field validation: one bad value falls back alone, with a warning.
--- Called for the preset, then for the local file, whose fields win; its
--- scale entries go in front so they match first.
+-- Per field: one bad value falls back alone, with a warning. Called for the
+-- preset, then for the local file, whose fields win and whose scale entries
+-- go in front so they match first.
 local function load_settings(path, local_file)
     local chunk, err = loadfile(path)
     if not chunk then
@@ -211,8 +189,8 @@ local function load_settings(path, local_file)
     local function positive(value)
         return type(value) == "number" and value > 0
     end
-    -- A bad pattern would raise in string.find at load, which fails the whole
-    -- config (no binds). Test-compile each one first.
+    -- A bad pattern would raise in string.find at load and fail the whole
+    -- config (no binds), so each one is test-compiled first.
     local function is_pattern_list(value)
         if not is_string_list(value) or #value == 0 then
             return false
@@ -287,8 +265,8 @@ end
 load_settings(SETTINGS_FILE, false)
 load_settings(LOCAL_SETTINGS_FILE, true)
 
--- Set by scripts/monitors-selftest.sh (nested compositor: WAYLAND-1 is the
--- panel, HEADLESS-* the externals). Wins over the settings file.
+-- Set by the nested tests (scripts/monitors-selftest.sh, tests/e2e/run.sh),
+-- whose stand-in outputs need their own patterns. Wins over the settings.
 if type(MONITOR_POLICY_OVERRIDE) == "table" then
     for key, value in pairs(MONITOR_POLICY_OVERRIDE) do
         policy[key] = value
@@ -297,10 +275,9 @@ end
 
 -- Every id the binds reach is bound, not only 2..10: an unbound workspace
 -- opens on the focused output, which may be the panel. One rule per id: a
--- range selector (r[2-100]) is honoured for existing workspaces but not for
--- one being created, so a range could not keep a new workspace off the
--- panel; 100 rules cost nothing measurable, more only buys ids nobody
--- reaches. Exported: config/keybinds.lua clamps its workspace walk to it.
+-- range selector (r[2-100]) binds existing workspaces but not one being
+-- created. 100 rules cost nothing measurable; config/keybinds.lua clamps its
+-- workspace walk to this.
 local LAST_WORKSPACE = 100
 M.LAST_WORKSPACE = LAST_WORKSPACE
 
@@ -337,8 +314,8 @@ local function read_lines(path)
 end
 
 -- Descriptions are compared with commas dropped and edges trimmed, the form
--- the preset's `match`, the override selectors and the Displays panel all
--- use; the raw string from Hyprland keeps its commas.
+-- the preset's `match`, the override selectors and the Displays panel use;
+-- Hyprland's raw string keeps its commas.
 local function normalize_description(description)
     return (tostring(description or ""):gsub(",", ""):gsub("^%s+", ""):gsub("%s+$", ""))
 end
@@ -371,13 +348,13 @@ end
 -- The scale for an output no entry names, from its pixel size alone: the
 -- step, among those that keep both logical dimensions integral (Hyprland
 -- corrects any other with a notification), whose logical width is nearest
--- the target for its kind. Physical size is not used: EDIDs lie about it,
--- and the targets already encode how far each kind of screen is read from.
--- Ties fall to the smaller step, the crisper one.
+-- the target for its kind. Not the physical size: EDIDs lie about it, and
+-- the targets already encode the viewing distance of each kind. Ties fall
+-- to the smaller, crisper step.
 local SCALE_STEPS = { 1, 1.25, 1.5, 1.75, 2, 2.5, 3 }
 
--- targets defaults to the settings' auto_scale; passed explicitly by the
--- selftest, which runs with the automatic choice switched off.
+-- targets defaults to the settings' auto_scale; the selftest, which runs
+-- with the automatic choice off, passes its own.
 function M.auto_scale(width, height, class, targets)
     targets = targets or policy.auto_scale
     if not targets or not width or not height or width <= 0 or height <= 0 then
@@ -400,12 +377,11 @@ end
 -- ---------------------------------------------------------------------------
 -- What outputs exist, whether or not the compositor has one enabled.
 -- ---------------------------------------------------------------------------
--- known: name -> description of every real output seen, and sizes: name ->
--- { width, height } of its last mode. A disabled output's description and
--- size cannot be queried, so both persist in STATE_FILE (one line per
--- output: name, description, width, height; the size fields are absent in
--- files written before auto_scale existed). Stale entries only yield rules
--- for outputs that never appear, which is harmless.
+-- known: name -> description of every real output seen; sizes: name ->
+-- { width, height } of its last mode. Neither can be queried while the
+-- output is disabled, so both persist in STATE_FILE, one line per output
+-- (name, description, width, height; files from before auto_scale lack the
+-- sizes). A stale entry only yields rules for an output that never appears.
 local known = {}
 local sizes = {}
 
@@ -428,9 +404,9 @@ local function load_state()
     end
 end
 
--- Atomic write (temp + rename), since the next launch may follow a crash.
--- From its own timer so a stalled disk cannot delay verify. Warned once:
--- otherwise the only symptom is scale 1 after a docked boot.
+-- Temp and rename, since the next launch may follow a crash; on its own
+-- timer so a stalled disk cannot delay verify. Warned once, since otherwise
+-- the only symptom is scale 1 after a docked boot.
 local state_dirty = false
 local state_write_failed = false
 
@@ -549,11 +525,10 @@ end
 -- Overrides: what the display panel, or a hand-edited file, asked for.
 -- ---------------------------------------------------------------------------
 -- One line per override, <selector> TAB <field> TAB <value>; the selector is
--- the output's description (so the override follows the display across
--- connectors) or "name:" plus the connector. Parsed once here; a line that
--- does not parse is dropped with a warning and the rest still count, since
--- the script validates before writing and a hand edit should not undo every
--- other override.
+-- the output's description (so it follows the display across connectors) or
+-- "name:" plus the connector. A line that does not parse is dropped with a
+-- warning and the rest still count: the script validates before writing,
+-- and a slip in a hand edit should not undo every other override.
 local by_description = {}
 local by_name = {}
 -- Lines whose selector is "*": settings for the desk rather than an output
@@ -703,15 +678,10 @@ end
 -- ---------------------------------------------------------------------------
 -- The desired state, as rules.
 -- ---------------------------------------------------------------------------
--- highrr matches the catch-all in general.lua, so it costs nothing. mirror
--- and transform are always named (see idempotent above). A mode that the
--- output does not offer is refused here, while it can still be checked; a
--- disabled output's list cannot be read, and Hyprland then falls back on its
--- own.
 -- The preset entry if one names the output, else the automatic choice from
--- its pixel size (live, or the size on record while it is off), else 1 for
--- an output never lit yet: the rule that lights it is corrected on its
--- monitor.added, a relayout and not a modeset.
+-- its pixel size (live, or on record while it is off), else 1 for an output
+-- never lit: the rule that lights it is corrected on its monitor.added, a
+-- relayout and not a modeset.
 local function scale_for(name)
     local entry = scale_entry(name, known[name])
     if entry then
@@ -735,6 +705,10 @@ end
 
 local mode_warned = {}
 
+-- highrr matches general.lua's catch-all, so it costs nothing; mirror and
+-- transform are always named (see idempotent). A mode the output does not
+-- offer is refused here, while it can still be checked; a disabled output's
+-- list cannot be read, and Hyprland then falls back on its own.
 local function enabled_rule(name, position, mirror_of)
     local override = override_for(name)
     local mode = "highrr"
@@ -760,8 +734,8 @@ local function enabled_rule(name, position, mirror_of)
     }
 end
 
--- One line per known output saying where its scale comes from: the
--- override, a preset entry, the automatic choice, or the default 1 with why.
+-- Per known output, where its scale comes from (override, preset entry,
+-- automatic choice, or 1 and why), then status().
 -- Read with: hyprctl repl 'return MONITORS.describe()'
 function M.describe()
     local lines = {}
@@ -804,14 +778,11 @@ local exiting = false
 -- Connector states read at load (see plan).
 local sysfs = {}
 
--- Once per set of overrides: the panel asked off with no external left to
--- show anything is a state the policy refuses, and silently would look like
--- an override that does not work.
+-- Once per set of overrides: the panel asked off with no external left is a
+-- state the policy refuses, and refused silently it would look like an
+-- override that does not work.
 local kept_warned = false
 
--- The main external first: the preset's `main` if it names a lit one, else
--- the largest logical area, then name order (the list arrives sorted).
--- Returns why, for describe().
 -- Width and height in logical pixels for a lit output, or nil. `planned`
 -- takes the values the current evaluation asks for (an override's mode and
 -- scale, or the automatic scale) instead of what the output shows now, which
@@ -847,6 +818,9 @@ local function logical_area(name)
     return width * height
 end
 
+-- Puts the main external first: the preset's `main` if it names a lit one,
+-- else the largest logical area, then name order (the list arrives sorted).
+-- Returns why, for status().
 local function order_externals(list)
     if #list == 0 then
         return "none"
@@ -923,10 +897,10 @@ local function bindings_for(p)
     return list
 end
 
--- The whole desired state for one evaluation, from what is lit now, what is
+-- The desired state for one evaluation, from what is lit now, what is
 -- known, the lid and the overrides:
---   externals   desired-on externals that are lit now, sorted; the first
---               takes 0x0 and the workspaces
+--   externals   desired-on externals lit now, the main one first (it takes
+--               0x0 and the workspaces)
 --   on          every output due an enabling rule (lit or not)
 --   off         every output due a disabled rule (lit or not)
 --   pending     the subset of off that is lit now, i.e. needs a modeset
@@ -934,8 +908,7 @@ end
 -- The panel off only counts beside a lit desired external, as with
 -- keep_internal = false, so the desired set cannot be empty by construction;
 -- an external off is suspended while the lid is shut for the same reason.
--- quiet: a read-only caller (status, describe), which must not raise the
--- warning below.
+-- quiet: a read-only caller (status, describe), which must not warn.
 local function plan(state, at_load, quiet)
     local p = { externals = {}, on = {}, off = {}, off_set = {}, pending = {}, side = "right" }
     local lit = {}
@@ -996,11 +969,10 @@ local function plan(state, at_load, quiet)
         end
     end
 
-    -- The panel. Beside a lit external it goes off with the lid shut, where
-    -- it would hold workspace 1 out of sight, when keep_internal is off
-    -- (enabled = true undoes that, the lid it cannot), when overridden off,
-    -- or while the session ends (prepare_exit, which enabled = true cannot
-    -- undo either).
+    -- The panel. Beside a lit external it goes off with the lid shut (it
+    -- would hold workspace 1 out of sight), with keep_internal off (enabled =
+    -- true undoes that, not the lid), when overridden off, and while the
+    -- session ends (prepare_exit, which enabled = true cannot undo either).
     local internals = {}
     for name in pairs(known) do
         if classify(name) == "internal" then
@@ -1040,13 +1012,12 @@ local function plan(state, at_load, quiet)
         end
     end
 
-    -- Workspaces, per scheme (bindings_for). The panel that holds 1 is the
-    -- lit one, else the connected or last seen one.
+    -- Workspaces, per scheme (bindings_for). 1 goes to the lit panel, else to
+    -- the connected or last seen one: default = true only counts if the rule
+    -- stands before the panel lights.
     p.ws_external = p.externals[1]
     local panel = state.internal[1]
     if not panel then
-        -- The connected or last seen one: default = true only counts if the
-        -- rule stands before the panel lights.
         local names = {}
         for name in pairs(internals) do
             if sysfs[name] ~= false then
@@ -1070,13 +1041,13 @@ end
 
 -- Lighting is safe in any order; darkening is not. Turning the panel off
 -- frees a CRTC, and batched with an external's enable the two modesets
--- become one commit through a no-output state, where the compositor once
+-- became one commit through a no-output state, where the compositor once
 -- stayed wedged. So everything due off goes off separately, second.
 
--- Enabling rules only. An output due off gets no rule at all, so its last
--- rule stands and it does not blink on between stages or on reload. The
--- first external is pinned at 0x0 (the bar treats the leftmost screen as
--- main) unless the panel is put on its left.
+-- Enabling rules only: an output due off gets no rule here, so its last rule
+-- stands and it does not blink on between stages or on reload. The main
+-- external takes 0x0, the origin the panel's side is placed against; with
+-- side = left the panel takes it instead.
 local function lit_rules(p)
     local rules = {}
     for _, name in ipairs(p.on) do
@@ -1138,21 +1109,22 @@ local function apply(rules, reason, stage)
 end
 
 -- ---------------------------------------------------------------------------
--- Evaluation, and the net under it.
+-- Verify state; schedule_verify, the net under every evaluation, is defined
+-- after M.evaluate.
 -- ---------------------------------------------------------------------------
 local verify_generation = 0
 local verify_failures = 0
 local schedule_verify
 
 -- ---------------------------------------------------------------------------
--- Workspaces: 1 on the panel, every other one on the first external.
+-- Workspaces, bound per scheme.
 -- ---------------------------------------------------------------------------
--- The rules do the placing (see workspaces above); plan() lists them per
--- scheme in bindings_for. Rules are replaced, never accumulated: Hyprland
--- keeps one rule per workspace string (the last add wins), and a disabled
--- handle stops matching, so switching to dynamic turns the previous set off
--- and leaves every workspace where it is. Rebinding happens only when the set
--- changes, since every rule schedules a refresh of all outputs and windows.
+-- The rules do the placing (see workspaces above), as bindings_for lists
+-- them. Replaced, never accumulated: Hyprland keeps one rule per workspace
+-- string (the last add wins) and a disabled handle stops matching, so a
+-- switch to dynamic turns the previous set off and leaves every workspace
+-- where it is. Rebound only when the set changes, since every rule schedules
+-- a refresh of all outputs and windows.
 local bound_signature = nil
 local bound_handles = {}
 
@@ -1185,14 +1157,13 @@ local function bind_workspaces(bindings)
 end
 
 -- Hyprland applies the rules to existing workspaces only when an output
--- connects. This catches the rest while both are lit: the first external
+-- connects. This catches the rest while both are lit: the main external
 -- changed and the old one's workspaces fell back to the panel, or a
 -- workspace reached the panel by a way no rule covers. Workspace 1 goes
--- first, so the panel has it to show when the others leave.
--- Only two kinds of stray are corrected, as before the schemes: workspace 1
--- away from home, and workspaces sitting on the panel that belong to an
--- external. Ones on another external are left alone (Hyprland's own
--- placement), so a hand move between externals sticks.
+-- first, so the panel has it to show when the others leave. Only two kinds
+-- of stray are corrected, 1 away from home and an external's workspace on
+-- the panel; one on another external stays, so a hand move between
+-- externals sticks.
 local function owner_of(id, p)
     local key = tostring(id)
     for _, b in ipairs(p.bindings) do
@@ -1237,7 +1208,6 @@ end
 -- ---------------------------------------------------------------------------
 local off_generation = 0
 
--- Invalidates a pending off stage via its generation counter.
 local function cancel_off()
     off_generation = off_generation + 1
 end
@@ -1246,8 +1216,8 @@ local function off_now(reason, generation)
     if generation ~= off_generation then
         return
     end
-    -- Re-read: in the gap an external may have gone, failed its modeset, the
-    -- lid may have opened, keep-internal or an override may have changed.
+    -- Re-read: in the gap an external may have gone or failed its modeset,
+    -- the lid opened, keep-internal or an override changed.
     local state = present()
     local p = plan(state, false)
     if #p.pending == 0 then
@@ -1286,26 +1256,23 @@ end
 -- Gaps, border and rounding per output.
 -- ---------------------------------------------------------------------------
 -- general.lua sets them for the reference output, the 2560x1440 desk monitor
--- the desktop was tuned on; every lit output gets them scaled by the square
--- root of its logical area over the reference's, the number the bar's
--- Theme.fit uses for its own surfaces, so what Hyprland draws keeps the same
--- share of each screen. Floored at FIT_MIN like Theme.fit: a screen smaller
--- than the reference keeps the reference pixels rather than the share, since
--- the bar became unreadable at the share and the two numbers must agree for
--- the bar's corners to match the windows'. Capped at FIT_MAX against a huge
--- logical screen. A workspace rule with the monitor selector carries
--- the gaps and border (the last rule for a selector wins), a window rule
--- matched on the same selector the rounding. Blur size and shadow range have
--- no per-output form and stay as set. Old handles are switched off before
--- new values go in, since window rules accumulate.
+-- the desktop was tuned on. Every lit output gets them scaled by the square
+-- root of its logical area over the reference's, the factor the bar's
+-- Theme.fit uses, so what Hyprland draws keeps its share of each screen.
+-- Floored at FIT_MIN like Theme.fit: a screen smaller than the reference
+-- keeps the reference pixels (at its share the bar was unreadable), and the
+-- two must agree for the bar's corners to match the windows'. Capped at
+-- FIT_MAX against a huge logical screen. A workspace rule on the monitor
+-- selector carries gaps and border (the last rule for a selector wins), a
+-- window rule on the same selector the rounding; blur and shadow have no
+-- per-output form. Window rules accumulate, so old handles go off first.
 local FIT_REFERENCE = { width = 2560, height = 1440 }
 local FIT_MIN, FIT_MAX = 1, 2
 -- hl.window_rule refuses a rounding above 20 (0.56.2: "value 27 is more than
--- the maximum of 20"). The refusal is not a Lua error: the pcall below does
--- not catch it, and it comes back as the error of the whole eval that
--- triggered it, so an override set from the shell reported a failure it had
--- in fact applied. The gaps are unbounded; only the corner radius stops
--- growing past a 1.11 fit.
+-- the maximum of 20"), and not as a Lua error: pcall does not catch it, it
+-- comes back as the error of the whole eval, so an override set from the
+-- shell reported a failure it had in fact applied. Only the corner radius
+-- stops growing, past a 1.11 fit.
 local FIT_ROUNDING_MAX = 20
 local fit_base = nil
 local fit_applied = {}
@@ -1334,7 +1301,7 @@ local function read_fit_base()
 end
 
 -- From the planned size, so a scale or mode override is answered in the
--- same evaluation; the timer below re-checks against what the output then
+-- same evaluation; schedule_fit_recheck compares with what the output then
 -- shows, in case Hyprland corrected the scale.
 local function fit_for(name, planned)
     local width, height = logical_size(name, planned)
@@ -1405,8 +1372,8 @@ local function apply_fit_rules(state, planned)
     end
 end
 
--- Once the rules have had a frame to land, the planned and the shown sizes
--- agree unless Hyprland refused a scale; this catches that case.
+-- Once the rules have had a frame to land, planned and shown sizes agree
+-- unless Hyprland refused a scale.
 local function schedule_fit_recheck()
     fit_recheck_generation = fit_recheck_generation + 1
     local generation = fit_recheck_generation
@@ -1423,10 +1390,10 @@ function M.evaluate(reason, at_load)
     local p = plan(state, at_load)
     bind_workspaces(p.bindings)
     -- Armed before applying, so a watchdog-cut callback still leaves the net.
-    -- 1 s instead of verify_ms when the panel went off on sysfs alone: FALLBACK
-    -- appears ~2 s in and applies queued rules on its first frame, which a 3 s
-    -- verify can miss if the external never materialises. A mitigation for an
-    -- unreproduced race, not a proof.
+    -- 1 s rather than verify_ms when the panel went off on sysfs alone:
+    -- FALLBACK appears ~2 s in and applies queued rules on its first frame,
+    -- which a 3 s verify can miss if the external never materialises. A
+    -- mitigation for an unreproduced race, not a proof.
     schedule_verify(p.sysfs_only and math.min(1000, policy.verify_ms) or nil)
     apply(lit_rules(p), reason, "lit")
     apply_fit_rules(state, true)
@@ -1434,8 +1401,8 @@ function M.evaluate(reason, at_load)
 
     if #p.pending == 0 then
         cancel_off()
-        -- Rules for outputs that are off already, or not plugged in yet:
-        -- no modeset, so nothing to keep apart from the lighting.
+        -- For outputs already off or not plugged in: no modeset, nothing to
+        -- keep apart from the lighting.
         if #p.off > 0 then
             apply(off_rules(p), reason .. " (off)", "off")
         end
@@ -1465,17 +1432,16 @@ function M.status()
         p.ws_external or "-", (p.main_reason or "none"):gsub(" ", "_"), p.ws_panel or "-")
 end
 
--- Re-read the overrides (scripts/monitor-override.sh calls this after
--- writing) and act on them at once.
+-- scripts/monitor-override.sh calls this after each write.
 function M.reload_overrides(reason)
     load_overrides()
     kept_warned = false
     M.evaluate(reason or "overrides", false)
 end
 
--- Safety net: no real output enabled means re-evaluate, which lights the
--- panel. Bounded by verify_limit so an unusable panel is not retried forever.
--- Also armed at load; hyprland.start re-arms it at first launch.
+-- Safety net: with no real output enabled, re-evaluate, which lights the
+-- panel; bounded by verify_limit so an unusable panel is not retried forever.
+-- Armed at load too, and again by hyprland.start at first launch.
 schedule_verify = function(delay_ms)
     verify_generation = verify_generation + 1
     local generation = verify_generation
@@ -1500,8 +1466,8 @@ end
 -- ---------------------------------------------------------------------------
 -- Events.
 -- ---------------------------------------------------------------------------
--- Each event restarts the settle timer; the last event of a burst evaluates,
--- or settle_max_ms forces one (os.time() 1 s granularity is enough for that).
+-- Each event restarts the settle timer, so the last of a burst evaluates;
+-- settle_max_ms forces one (os.time()'s 1 s granularity is enough for that).
 local settle_generation = 0
 local settle_since = nil
 
@@ -1530,8 +1496,8 @@ hl.on("monitor.added", function(monitor)
     local name = monitor.name
     if name then
         note(name, monitor.description or "")
-        -- A re-enabled panel keeps its old DPMS state (maybe off from the
-        -- lid); light it unless the lid is shut.
+        -- A re-enabled panel keeps its old DPMS state (off from the lid,
+        -- say); lit unless the lid is shut.
         if classify(name) == "internal" and not lid_closed and hl.get_monitor(name) then
             hl.dispatch(hl.dsp.dpms({ action = "enable", monitor = name }))
         end
@@ -1541,8 +1507,8 @@ hl.on("monitor.added", function(monitor)
     -- 2.. from the panel in the same step.
     local p = plan(present(), false)
     bind_workspaces(p.bindings)
-    -- An arriving external waits; a synthetic one (FALLBACK: no screen left)
-    -- is answered almost at once, since waiting only prolongs the dark.
+    -- An arriving external waits; FALLBACK (no screen left) is answered
+    -- almost at once, since waiting only prolongs the dark.
     local delay = policy.settle_removed_ms
     if name then
         local class = classify(name)
@@ -1568,10 +1534,10 @@ end)
 -- ---------------------------------------------------------------------------
 -- A per-output DPMS request also sets the compositor-wide state (0.56.2), so
 -- after an off, with *_enables_dpms on (general.lua), any input would re-light
--- every dark output: the panel in a shut lid, a display the screensaver turned
--- off. Enabling an output that is lit already changes nothing on it and resets
+-- every dark output: the panel in a shut lid, a display the screensaver
+-- turned off. Enabling an output already lit changes nothing on it and resets
 -- that state to on. A dark output is never the one enabled, and with nothing
--- lit the state stays off, so input still wakes a desk that went all dark.
+-- lit the state stays off, so input still wakes a desk gone all dark.
 local function rearm_dpms()
     for _, monitor in ipairs(hl.get_monitors()) do
         local name = monitor.name
@@ -1583,9 +1549,9 @@ local function rearm_dpms()
 end
 
 -- Display only: no suspend, input untouched. DPMS darkens the panel at once;
--- beside an external the evaluation that follows also turns it off, which
--- moves workspace 1 to a screen in view. Alone the panel stays enabled, as
--- re-enabling is a modeset. Per output, and resolved first: dpms with an
+-- beside an external the evaluation that follows also turns it off, moving
+-- workspace 1 to a screen in view. Alone the panel stays enabled, since
+-- re-enabling is a modeset. Per output and resolved first: dpms with an
 -- unresolvable name silently hits every output.
 local function dpms_internal(action)
     local state = present()
@@ -1629,10 +1595,10 @@ local function lid_shut_now()
 end
 
 -- After a suspend (hypridle's after_sleep_cmd). No lid event crosses a
--- sleep, so the lid is re-read from ACPI; then the lit externals are woken,
--- the panel only with the lid open (a plain dpms enable lit it inside the
--- closed lid and re-armed the compositor-wide state the lid code keeps off).
--- The evaluation that follows catches outputs that re-enumerated in sleep.
+-- sleep, so the lid is re-read from ACPI; the lit externals are woken, the
+-- panel only with the lid open (a plain dpms enable lit it inside the shut
+-- lid and re-armed the compositor-wide state the lid code keeps off). The
+-- evaluation that follows catches outputs that re-enumerated in sleep.
 function M.resume()
     lid_closed = lid_shut_now()
     local state = present()
@@ -1655,26 +1621,24 @@ end
 -- Screensaver.
 -- ---------------------------------------------------------------------------
 -- The bar's screensaver (quickshell/bar/modules/ScreensaverDpms.qml) blacks
--- an unused display out by itself and calls this only once nobody is at the
--- keys, to turn a display off, and when it is used again, to turn it back on.
--- DPMS only: the output stays enabled with its workspaces and windows, and
--- nothing is suspended or locked. While another output is lit, input does
--- not wake the dark one (rearm_dpms); the bar wakes it when focus reaches it.
--- Once every output is dark, the first key or pointer motion wakes them all.
--- The panel in a shut lid stays dark whatever the bar asks.
+-- an unused display out itself and calls this only to turn a display off
+-- once nobody is at the keys, and on again when it is used. DPMS only: the
+-- output stays enabled with its workspaces and windows, nothing is suspended
+-- or locked. While another output is lit, input does not wake the dark one
+-- (rearm_dpms); the bar wakes it when focus reaches it. Once every output is
+-- dark, the first key or pointer motion wakes them all. The panel in a shut
+-- lid stays dark whatever the bar asks.
 --
 -- Each call stalls the whole compositor (0.56.2, aquamarine 0.15.1, measured
--- on the Lunar Lake panel 2026-10-05): the commit is a blocking modeset on
--- the main thread (about 0.4 s off, 0.6 s on), and every change of an
--- output's enabled state makes aquamarine probe every connector again (up
--- to 1.1 s). Hence the bar's black for a display unused while someone works
--- on another.
+-- on the Lunar Lake panel 2026-10-05): a blocking modeset on the main thread
+-- (about 0.4 s off, 0.6 s on), and every change of an output's enabled state
+-- makes aquamarine probe every connector again (up to 1.1 s). Hence the
+-- bar's black for a display unused while someone works on another.
 --
--- An output already in the state asked for is left alone. The bar asks for
--- every display to be lit whenever it starts or reloads and whenever an
--- output appears (a display an earlier bar left off must not stay off), so
--- most requests are for the state an output already has; none of them is
--- sent on as a DPMS dispatch, which may cost a commit like the one above.
+-- An output already in the asked state is left alone: the bar asks for every
+-- display lit whenever it starts or reloads and whenever an output appears
+-- (a display an earlier bar left off must not stay off), so most requests
+-- match the state already there, and none of them may cost such a commit.
 function M.saver(name, off)
     if type(name) ~= "string" then
         return
@@ -1693,9 +1657,9 @@ function M.saver(name, off)
     end
 end
 
--- Lights every output that is off but the panel in a shut lid. bar.service
--- runs it whenever the bar stops, since nothing else would wake an output
--- the screensaver left off.
+-- Lights every output that is off, except the panel in a shut lid.
+-- bar.service runs it whenever the bar stops, since nothing else would wake
+-- an output the screensaver left off.
 function M.saver_release()
     for _, monitor in ipairs(hl.get_monitors()) do
         local name = monitor.name
@@ -1715,18 +1679,18 @@ end
 -- it, so the session ends on the external alone.
 --
 -- Why: on the Lunar Lake laptop this was written on, a power-off with HDMI
--- attached sometimes never reaches S5 and only an EC reset (a long power
--- button hold) ends it. In September 2026, seven sign-outs that ended on the
+-- attached sometimes never reaches S5, and only an EC reset (a long power
+-- button hold) ends it. In September 2026 seven sign-outs that ended on the
 -- external alone were each followed by a clean power-off from the greeter;
 -- of three that ended with the panel lit as well, two were not. The sample
 -- is small and the mechanism unknown: this reproduces the state that held,
 -- it does not fix a cause.
 --
--- An external the screensaver turned off is still enabled, so it counts as
--- lit: the plan turned the panel off beside it, and the session ended with no
--- output lit at all, a state the evidence above never covered. Such an
--- external is lit first. Not the panel, which goes off here anyway: lit and
--- then disabled, it flashed as the session ended.
+-- An external the screensaver turned off is still enabled and counts as
+-- lit, so the plan turned the panel off beside it and the session ended with
+-- no output lit, a state the evidence above never covered. Such an external
+-- is lit first. Not the panel, which goes off here anyway: lit and then
+-- disabled, it flashed as the session ended.
 function M.prepare_exit()
     exiting = true
     for _, monitor in ipairs(hl.get_monitors()) do

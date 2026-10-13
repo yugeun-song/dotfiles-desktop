@@ -1,27 +1,19 @@
 #!/usr/bin/env python3
 """Emit one JSON line per key press, read straight from the evdev devices.
 
-This is the only part of the key visualiser that needs a permission, and the
-permission is membership of the input group rather than root or a polkit agent.
-Everything above it is ordinary QML.
+The only part of the key overlay that needs a permission: membership of the
+input group, not root or a polkit agent. What it reads goes nowhere but these
+lines on stdout, a pipe to the bar, which keeps at most five chords, each for
+under a second. It opens no socket and no file but the devices, the kernel's
+key header and sysfs, writes no file, logs no key, leaves no core (see
+undumpable), and runs only while the overlay is on.
 
-What it reads goes nowhere but these lines on stdout, a pipe to the bar,
-which keeps at most five chords, each for under a second. It opens no socket
-and no file but the devices, the kernel's key header and sysfs, writes no
-file, logs no key, and leaves no core (see undumpable). It runs only while
-the overlay is on.
-
-The output is a line protocol on purpose. It is the seam that lets this be
-replaced by a Rust binary later without the overlay changing at all: anything
-that prints the same lines will do.
-
-Physical keys are reported, not composed characters. That is what a key
-visualiser is for, and it is also the only honest answer here: Hangul syllables
-are assembled by fcitx5 from several keystrokes and never appear as one.
-
-Names, not symbols. Whether Escape is drawn as a word or as U+238B is a question
-about the overlay, and keeping it there means a reader that prints these same
-lines can be swapped in without carrying a table of glyphs with it.
+A line protocol on purpose: anything that prints the same lines (a Rust
+binary, later) can replace this without the overlay changing. Physical keys,
+not composed characters: that is what a key overlay shows, and fcitx5
+assembles a Hangul syllable from several keystrokes anyway. Names, not
+symbols: how Escape is drawn is the overlay's question, so a replacement
+reader carries no glyph table.
 """
 
 import json
@@ -69,9 +61,9 @@ PRETTY = {
 def key_names():
     """codes to KEY_ names, read from the kernel header rather than hardcoded.
 
-    A table written out here would be a copy that drifts the first time a code
-    is added. The header is installed by linux-api-headers and is the same file
-    the kernel was built from.
+    A table written out here would drift the first time a code is added. The
+    header is the kernel's userspace API, installed by linux-api-headers; a code
+    newer than it prints as #<code> (label).
     """
     path = "/usr/include/linux/input-event-codes.h"
     names = {}

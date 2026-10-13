@@ -87,16 +87,14 @@ Scope {
     ]
 
     // Not `systemctl poweroff` straight from here: started inside the session
-    // with the external monitor attached, the shutdown has hung this machine
-    // after userspace was done, while signing out first never did.
-    // session-power.sh reproduces that order (request the action under a
-    // logind delay lock, end the compositor, then let it go); its header has
-    // the details. It moves itself into a transient user unit in app.slice
-    // first, because this process and its children die with
-    // hyprland-session.target the moment the compositor's lock file goes,
-    // which is before the compositor has released the GPU, and a delay lock
-    // held here would go with them. Failures are in
-    // journalctl --user -u session-power-<action>.
+    // with the external attached, the shutdown has hung this machine after
+    // userspace was done, while signing out first never did. session-power.sh
+    // keeps that order (the action requested under a logind delay lock, the
+    // compositor ended, then the action let go; see its header). It first
+    // moves into a transient user unit in app.slice: this process and its
+    // children die with hyprland-session.target the moment the compositor's
+    // lock file goes, before the GPU is released, and a delay lock held here
+    // would go with them. Failures: journalctl --user -u session-power-<action>.
     function sessionPower(action) {
         return [Paths.hyprScripts + "/session-power.sh", action];
     }

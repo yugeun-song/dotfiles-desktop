@@ -6,20 +6,19 @@ import Quickshell.Io
 import Quickshell.Hyprland
 import qs.services
 
-// The screensaver's per-display setting: after how many minutes without input
-// on a display the saver takes it (black while someone works on another, off
-// when nobody is at the keys), 0 for never. Off everywhere by default, on
-// this machine and on the next one: the file is state (XDG_STATE_HOME), never
-// installed or tracked, and a missing file means off. The Displays panel
-// writes it; modules/ScreensaverDpms.qml reads the resolved minutes from here.
+// The screensaver's per-display setting: minutes without input on a display
+// before the saver takes it (black while someone works on another, off when
+// nobody is at the keys), 0 for never. Off everywhere by default, here and on
+// the next machine: the file is state (XDG_STATE_HOME), never installed or
+// tracked, and a missing file means off. The Displays panel writes it;
+// modules/ScreensaverDpms.qml reads the resolved minutes from here.
 //
 // One line per display, <selector> TAB <minutes>, the selector as in the
 // monitor overrides: the description as `hyprctl monitors` prints it with
-// commas dropped (so it follows the display across connectors), or
-// name:<connector>. A description line wins over a name: line for the same
-// output, as override_for in monitors.lua resolves them. Comments and lines
-// that do not parse are kept as they are, so a hand edit is never lost to the
-// panel's next write.
+// commas dropped (it follows the display across connectors), or
+// name:<connector>. A description line wins over a name: line, as
+// override_for in monitors.lua resolves them. Comments and lines that do not
+// parse are kept, so a hand edit survives the panel's next write.
 Singleton {
     id: root
 

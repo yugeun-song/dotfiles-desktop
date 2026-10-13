@@ -1,12 +1,10 @@
-# Colour scheme for Qt and KDE applications.
-#
-# Palette sources:
+# Colour scheme for Qt and KDE applications: the bar's palette
+# (quickshell/bar/services/Theme.qml), kept here rather than taken from the AUR.
 #   Spaceduck    https://github.com/pineapplegiant/spaceduck   (bg, fg, greys, selection)
 #   Tokyo Night  https://github.com/folke/tokyonight.nvim      (blue, cyan, purple, green, orange)
 #
-# Same palette as the bar (quickshell/bar/services/Theme.qml), kept in-repo to
-# avoid the AUR. Applications read the copy in kde/kdeglobals; this file is only
-# what the settings dialog applies by name. Keep the colour blocks identical.
+# Applications read the copy in kde/kdeglobals; this file is only what the
+# settings dialog applies by name. Keep the colour blocks identical to it.
 
 [General]
 Name=Spaceduck Dark

@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
-# Writes the per-output overrides that config/monitors.lua lays over its
-# policy: which outputs are on, at what mode, scale and rotation, where the
-# built-in panel sits, whether it mirrors. The bar's display panel calls this;
-# it is also the way from a shell. The file is state, not configuration
-# (XDG_STATE_HOME): neither installed nor tracked, and the policy runs without
-# it. Validation lives here rather than in the widget so a hand-written file
-# and a widget-written one meet the same rules.
+# Writes the per-output overrides config/monitors.lua lays over its policy:
+# which outputs are on, at what mode, scale and rotation, where the built-in
+# panel sits and whether it mirrors. The bar's Displays panel calls this; it
+# is also the way from a shell. The file is state (XDG_STATE_HOME), neither
+# installed nor tracked, and the policy runs without it. Validation lives
+# here, not in the widget, so a hand-written file meets the same rules.
 #
 #   monitor-override.sh show            print the current overrides
 #   monitor-override.sh set  < lines    replace them with stdin (checked first)
@@ -28,28 +27,27 @@
 #   scale      0.5 .. 3 | auto
 #   transform  0 .. 7 (Hyprland's transform enum) | auto
 #   side       left | right | above | below   panel only: its side of the
-#                                             first external
-#   mirror     true | false                   panel only: mirror the first
+#                                             main external
+#   mirror     true | false                   panel only: mirror the main
 #                                             external
 # One desk-wide line uses the selector "*":
 #   workspaces dynamic | panel-first | blocks | auto   how workspaces are
 #              spread over the outputs (auto: the preset decides)
 # The policy keeps the last word: the panel off counts only beside a lit
-# external, an external off is suspended while the lid is shut, so no set of
-# overrides leaves every screen dark.
+# external, and an external off is suspended while the lid is shut, so no
+# set of overrides leaves every screen dark.
 #
 # revert swaps <file>.prev back; an empty .prev means there was no file. Exit
 # codes: 0 ok, 1 could not write or reload, 2 usage or a line that does not
 # parse (then nothing is written).
 #
-# A trial is the display panel's Apply: the panel counts down and reverts
-# unless the user keeps the change. The countdown lived only in the running
-# bar, so a reload, a crash or a forced power-off in those seconds (when a
-# mode has gone wrong, say) left the untested set in force at every later
-# login, and the next Apply overwrote .prev, the last state known to work.
-# <file>.trial holds the deadline instead; a bar that starts reads it and
-# resumes the countdown or reverts at once. Anything that settles the state
-# (set, keep, clear, revert) ends the trial.
+# A trial is the Displays panel's Apply: it counts down and reverts unless
+# the change is kept. With the countdown only in the running bar, a reload, a
+# crash or a forced power-off in those seconds (a mode gone wrong, say) left
+# the untested set in force at every later login, and the next Apply
+# overwrote .prev, the last state known to work. <file>.trial holds the
+# deadline instead; a starting bar resumes the countdown or reverts at once.
+# Anything that settles the state (set, keep, clear, revert) ends the trial.
 
 set -uo pipefail
 
@@ -245,9 +243,8 @@ case "${1:-}" in
         ;;
     revert)
         [[ $# -eq 1 ]] || usage
-        # Over before the swap: a marker left behind by a failed reload
-        # would revert again at the next start, and a second revert undoes
-        # the first.
+        # The trial ends before the swap: a marker left by a failed reload
+        # would revert again at the next start.
         rm -f -- "$TRIAL"
         if [[ ! -f "$PREV" ]]; then
             say "nothing to revert"

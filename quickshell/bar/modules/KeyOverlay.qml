@@ -6,17 +6,16 @@ import Quickshell.Wayland
 import Quickshell.Hyprland
 import qs.services
 
-// Pressed keys near the bottom-right corner, where they sit beside a video's
-// controls rather than over its subtitles.
+// Pressed keys near the bottom-right corner, beside a video's controls
+// rather than over its subtitles.
 //
-// The surface is a strip of fixed size, not sized to the caps. Hyprland
-// places a layer from the size it asks for and draws the buffer it has, so
-// a surface that grew and shrank with its content jumped by the difference
-// for a frame at every change; anchored to the right edge, every jump landed
-// on every cap, and the collapse that closed a gap resized it on each frame
-// of the animation. Inside the strip the caps are laid out right to left,
-// newest at the corner: the oldest leaving moves nothing, and a new cap
-// arriving slides the others left, animated in one place.
+// The surface is a strip of fixed size, not sized to the caps: Hyprland
+// places a layer from the size it asks for and draws the buffer it has, so a
+// surface that followed its content jumped by the difference for a frame at
+// every change, every jump landing on every cap (anchored right), and a
+// closing gap resized it every frame. Inside the strip the caps run right to
+// left, newest at the corner: the oldest leaving moves nothing, and a new cap
+// slides the others left in one animation.
 Scope {
     id: root
 
@@ -33,12 +32,10 @@ Scope {
         PanelWindow {
             id: win
 
-            // The screen being typed on, and only that one: the caps belong
-            // beside the window they went to. Without a screen the compositor
-            // placed the strip once, on the monitor focused at Super+Y, and it
-            // stayed there while the typing moved to the other screen. Not the
-            // focused monitor either, which follows the pointer across an empty
-            // stretch of the other screen while the keys still go here.
+            // The screen being typed on: the caps belong beside the window
+            // they went to. Unset, the compositor placed the strip once, on the
+            // monitor focused at Super+Y; the focused monitor would follow the
+            // pointer across the other screen while the keys still go here.
             screen: Screens.keyboard
 
             color: "transparent"

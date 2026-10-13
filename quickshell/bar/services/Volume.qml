@@ -5,8 +5,9 @@ import Quickshell
 import Quickshell.Io
 import Quickshell.Services.Pipewire
 
-// Default sink volume. Observe-only for the keys: Hyprland binds them to wpctl
-// so they work without the shell, and changes from any source show up here.
+// Default sink volume. Observe-only for the keys: Hyprland binds them to
+// hypr/scripts/volume.sh (wpctl first) so they work without the shell, and
+// changes from any source show up here.
 Singleton {
     id: root
 
@@ -53,7 +54,6 @@ Singleton {
     }
 
     // ---- writing --------------------------------------------------------
-    //
     // For the bar, not the keys. Writes go through Pipewire once known, else
     // wpctl: an unbound node returns defaults, so toggleMute would invert an
     // unread value.

@@ -1,12 +1,10 @@
--- Key bindings. Conventions: vim keys and arrows are bound together; apps
--- launch through launch.sh with a candidate list, so a key works with any
--- installed alternative and reports when none is; nothing binds to a program
--- outside this repository's package list.
--- Hyprland fires EVERY binding on a key, not the first match: never bind one
--- key twice.
+-- Key bindings. Vim keys and arrows are bound together; apps launch through
+-- launch.sh with a candidate list, so a key works with any installed
+-- alternative and says so when none is. Hyprland fires EVERY binding on a
+-- key, not the first match: never bind one key twice.
 
--- Beside the loaded hyprland.lua, not under a fixed ~/.config: a config
--- loaded from XDG_CONFIG_HOME or a test copy calls its own scripts.
+-- Beside the loaded hyprland.lua, not a fixed ~/.config path, so a config
+-- under XDG_CONFIG_HOME or a test copy calls its own scripts.
 local scripts   = CONFIG .. "/scripts"
 local terminal  = scripts .. "/terminal.sh"
 local capture   = scripts .. "/capture.sh"
@@ -58,18 +56,18 @@ local function shell_is_up()
 end
 
 --##! Shell surfaces
--- Lone Super tap. Must be a release bind: on press the SUPER mask is not set
--- yet. Fires only for a short tap without another key. Through a script, not
--- hl.dsp.global, which would deliver a release the press-edge toggle ignores.
+-- Lone Super tap: a release bind, since on press the SUPER mask is not set
+-- yet; fires only for a short tap without another key. Through a script, not
+-- hl.dsp.global, which delivers only a release the press-edge toggle ignores.
 for _, key in ipairs({ "SUPER_L", "SUPER_R" }) do
     hl.bind("SUPER + " .. key, hl.dsp.exec_cmd(shellkey .. " launcher"),
         { release = true, description = "Application launcher" })
 end
--- Needs logind HandlePowerKey=ignore. The 4 s hardware override still works.
--- The dialog is the bar's: with the bar down (a crash loop past its start
--- limit) these keys did nothing at all. They now start the bar again and say
--- so in the compositor's own notice, which needs no bar; the power-off that
--- needs none is Ctrl+Shift+Alt+Super+Delete. A failed check counts as up.
+-- Needs logind HandlePowerKey=ignore; the 4 s hardware override still works.
+-- The dialog is the bar's, so with the bar down (a crash loop past its start
+-- limit) these keys did nothing. Now they start the bar again and say so in
+-- the compositor's own notice; Ctrl+Shift+Alt+Super+Delete powers off without
+-- the bar. A failed check counts as up.
 local function session_dialog()
     local to_shell = hl.dsp.global("quickshell:powerMenu")
     local restart = hl.dsp.exec_cmd(HOME .. "/.local/bin/bar")
@@ -93,14 +91,13 @@ hl.bind("CTRL + SUPER + R", hl.dsp.exec_cmd("systemd-cat -t session-start " .. s
 
 --##! Window focus
 -- movefocus wraps at the edge; this vetoes the step when nothing lies that
--- way and otherwise lets Hyprland pick the target, which stays on this
--- workspace (window_direction_monitor_fallback is off in general.lua). A Lua
--- callback, not a hyprctl script, so rapid presses cannot race on a stale
--- answer.
+-- way and otherwise lets Hyprland pick the target, on this workspace
+-- (window_direction_monitor_fallback is off in general.lua). A Lua callback,
+-- not a hyprctl script, so rapid presses cannot race on a stale answer.
 -- Unknown filter keys are dropped silently, a bad dispatcher argument returns
--- nil (logged, but the bind still registers) and dispatching nil is a no-op,
--- so every failure falls back to the plain step plus one notification:
--- wrapping beats a dead key.
+-- nil (logged, the bind still registers) and dispatching nil is a no-op, so
+-- every failure falls back to the plain step plus one notification: wrapping
+-- beats a dead key.
 
 -- Any window whose centre is strictly beyond, diagonals included.
 local beyond = {
@@ -246,12 +243,12 @@ end
 -- Keypad digits are not bound: keysyms differ with NumLock (KP_End vs KP_1),
 -- so both sets would be needed and could double-fire.
 
--- Clamped walk by number (vertical keys step 5). Not r+n/r-n, which wrap from
--- the first workspace to the last. A callback rather than a hyprctl script, so
--- a wheel flick cannot race two steps into one. By number, not over existing
--- workspaces: Hyprland creates an empty one on arrival. The ceiling is
--- config/monitors.lua's, which binds every id up to it to the external; the
--- fallback covers a monitors module that failed to load.
+-- Clamped walk by number (vertical keys step 5), not r+n/r-n, which wrap
+-- from the first workspace to the last. A callback rather than a hyprctl
+-- script, so a wheel flick cannot race two steps into one. By number, not over
+-- existing workspaces: Hyprland creates an empty one on arrival. The ceiling
+-- is config/monitors.lua's (it binds every id up to it); the fallback covers
+-- a monitors module that failed to load.
 local MIN_WORKSPACE = 1
 local MAX_WORKSPACE = (MONITORS and MONITORS.LAST_WORKSPACE) or 100
 
@@ -369,10 +366,9 @@ hl.bind("SUPER + Y", hl.dsp.global("quickshell:keyOverlay"),
     { description = "Show the keys being pressed" })
 
 --##! Displays
--- The output panel in the bar: presets (laptop only, external only, extend,
--- mirror), per-output mode, scale and rotation, written to the override file
--- config/monitors.lua reads. XF86Display is the laptop's own display key;
--- Super+O because Super+P is taken by pin.
+-- The bar's Displays panel, which writes the override file
+-- config/monitors.lua reads. XF86Display is the laptop's display key;
+-- Super+O since Super+P is pin.
 hl.bind("XF86Display", hl.dsp.global("quickshell:displays"),
     { description = "Display settings" })
 hl.bind("SUPER + O", hl.dsp.global("quickshell:displays"),
@@ -412,8 +408,7 @@ hl.bind("SUPER + SHIFT + M", hl.dsp.exec_cmd(volume .. " mute"),
 hl.bind("SUPER + ALT + M", hl.dsp.exec_cmd(volume .. " mic-mute"),
     { locked = true, description = "Mute microphone" })
 -- Alt marks the privacy keys: M for the microphone, C for the cameras. Not
--- locked, unlike the mute keys: the lock screen must not be a way to turn
--- the cameras on.
+-- locked, unlike the mute keys: the lock screen must not turn cameras on.
 hl.bind("SUPER + ALT + C", hl.dsp.exec_cmd(camera .. " toggle"),
     { description = "Cameras off or on" })
 
@@ -497,11 +492,10 @@ hl.bind("CTRL + ALT + L", hl.dsp.exec_cmd("loginctl lock-session"), { descriptio
 hl.bind("CTRL + ALT + SHIFT + U", hl.dsp.exec_cmd("hyprctl eval 'hl.clear_crashed_lockscreen()'"),
     { locked = true, description = "Clear a crashed lock screen" })
 -- Through scripts/session-power.sh, which ends the compositor before the
--- shutdown transaction starts (a direct poweroff with an external output lit
--- hung this machine after userspace had finished; a sign-out first did not).
--- The script moves itself into a transient unit outside the session target,
--- since a child of this bind sits in the session scope and would not outlive
--- the compositor it waits for.
+-- shutdown transaction starts (a direct poweroff with an external lit hung
+-- this machine after userspace had finished; a sign-out first did not). The
+-- script moves itself into a transient unit, since a child of this bind sits
+-- in the session scope and would not outlive the compositor it waits for.
 hl.bind("CTRL + SHIFT + ALT + SUPER + Delete", hl.dsp.exec_cmd(scripts .. "/session-power.sh poweroff"),
     { description = "Shut down" })
 

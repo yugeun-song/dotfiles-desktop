@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Execs the first installed polkit agent (in preference order) so systemd
-# supervises it directly. None installed exits 0: nothing to restart.
+# Execs the first installed polkit agent (preference order, Arch's paths) so
+# systemd supervises it directly. None installed exits 0: nothing to restart.
 
 set -uo pipefail
 

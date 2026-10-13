@@ -6,12 +6,10 @@ import qs.services
 
 // The player card, opened by hovering the media chip. Built like
 // CalendarPopup: the open state is this bar's own, so the card opens under
-// the chip the pointer is on and on no other screen, while what it shows
-// (Media) is the same everywhere.
-//
-// A PopupWindow anchored to the chip, not a layer surface: a layer surface is
-// placed after other exclusive zones regardless of exclusion mode (measured),
-// so it could not sit flush against the bar.
+// the chip the pointer is on and nowhere else, while what it shows (Media)
+// is the same everywhere. A PopupWindow anchored to the chip: a layer surface
+// is placed after other exclusive zones whatever its exclusion mode
+// (measured), so it could not sit flush against the bar.
 Item {
     id: root
 

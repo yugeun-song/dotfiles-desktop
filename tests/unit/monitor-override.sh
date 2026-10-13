@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Tests hypr/scripts/monitor-override.sh: what it accepts, and set, try, keep,
-# trial, revert and clear. Its state goes to a temporary XDG_STATE_HOME and
-# hyprctl is a stub that records the reload, so no compositor is touched.
+# trial, revert and clear. State goes to a temporary XDG_STATE_HOME and
+# hyprctl is a stub that records the reload: no compositor is touched.
 
 set -uo pipefail
 
@@ -77,7 +77,7 @@ HYPRCTL_FAIL=1 put 'name:eDP-1\tscale\t1\n' try 30; ok "a refused reload" "$?" 1
 ok "a refused reload keeps the trial" "$(( $(run trial) > 0 ))" 1
 ok "a refused reload keeps the lines" "$(cat "$FILE")" $'name:eDP-1\tscale\t1'
 
-# A trial that cannot be written is no trial.
+# Refused before anything is written: a zero or overlong trial, a bad line.
 put 'name:eDP-1\tscale\t2\n' try 0; ok "try 0" "$?" 2
 put 'name:eDP-1\tscale\t2\n' try 10000; ok "try past the limit" "$?" 2
 put 'bad\n' try 30; ok "try with a bad line" "$?" 2

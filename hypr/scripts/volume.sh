@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 # The volume keys:  volume.sh up|down|mute|mic-mute [step]
 #
-# wpctl (PipeWire, what this desktop runs) first, then pactl (PulseAudio),
-# then amixer (bare ALSA), so the keys work on whatever the machine has; a
-# machine with none of them gets one notification instead of dead keys. The
-# step is a percentage (default 2). Only wpctl can cap at 100%: pactl and
-# amixer are left uncapped, as they are on those desktops.
+# wpctl (PipeWire, this desktop's) first, then pactl (PulseAudio), then
+# amixer (bare ALSA), so the keys work on whatever the machine has; with none,
+# one notification instead of dead keys. The step is a percentage (default 2).
+# Only wpctl caps at 100%; pactl and amixer stay uncapped, as on those desktops.
 set -uo pipefail
 
 action="${1:-}"

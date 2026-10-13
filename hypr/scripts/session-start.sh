@@ -1,13 +1,12 @@
 #!/usr/bin/env bash
-# Joins the compositor to hyprland-session.target: push the compositor's
-# environment into the user manager (synchronously, before any unit starts),
-# then start the target. Idempotent. Called from config/execs.lua (start and
-# reload handlers) and Ctrl+Super+R.
+# Joins the compositor to hyprland-session.target: its environment goes into
+# the user manager first (synchronously, before any unit starts), then the
+# target starts. Idempotent; called from config/execs.lua and Ctrl+Super+R.
 #
 # A compositor relaunched by start-hyprland has a new signature while the
-# target may still be active for the old one. The signature the target was
-# started for is recorded in $STARTED_FOR; a mismatch restarts the target.
-# flock: the start and reload handlers can fire together.
+# target may still be up for the old one, so the signature it was started for
+# is kept in $STARTED_FOR and a mismatch restarts the target. flock: the start
+# and reload handlers can fire together.
 
 set -uo pipefail
 
@@ -36,12 +35,12 @@ previous=""
 [[ -r "$STARTED_FOR" ]] && read -r previous < "$STARTED_FOR"
 
 # The signature must name a live session compositor, or a stale environment
-# (old terminal, tmux) would restart the session against a dead display:
+# (an old terminal, tmux) would restart the session against a dead display:
 # - hyprland.start fires before the lock file exists; a listening IPC socket
-#   means "starting", so wait for the lock briefly.
+#   means "starting", so the lock is waited for briefly.
 # - A crash leaves the lock behind, so its pid must be alive and be Hyprland.
-# - A nested or second-VT Hyprland has WAYLAND_DISPLAY in its environment; the
-#   DRM session compositor does not. Leave the session alone for those.
+# - A nested or second-VT Hyprland has WAYLAND_DISPLAY in its environment, the
+#   DRM session compositor does not; the session is left alone for those.
 listening() { grep -qsF -- "/hypr/$1/.socket.sock" /proc/net/unix; }
 lock_pid() { local p; read -r p < "$1" 2>/dev/null; [[ "$p" =~ ^[0-9]+$ ]] && printf '%s' "$p"; }
 alive() {

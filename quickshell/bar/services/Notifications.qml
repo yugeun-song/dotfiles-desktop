@@ -127,7 +127,7 @@ Singleton {
             appIcon: n.appIcon || "",
             summary: n.summary || "",
             body: root.withoutImages(n.body || ""),
-            // Critical never expires on a timer.
+            // Drawn in red, and toasted longer (NotificationToasts.criticalDwellMs).
             critical: n.urgency === NotificationUrgency.Critical,
             actions: actions,
             hasDefault: hasDefault,

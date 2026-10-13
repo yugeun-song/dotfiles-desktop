@@ -1,37 +1,18 @@
 <!--
 A design, not an implementation: bin/theme, theme/palettes/ and
-theme/templates/ do not exist yet. Written 2026-08-26 from a survey of every
-place a colour is written; re-checked against the tree 2026-09-23 (section 0).
-Until it is built, colours live where the tables below say.
-References name files and symbols, not line numbers: those move.
+theme/templates/ do not exist yet; colours live where the tables below say.
+Surveyed 2026-08-26 from every place a colour is written, re-checked against
+the tree 2026-10-14. References name files and symbols, not line numbers.
 -->
 
 # Theme system design
 
-## 0. Drift since the survey (checked 2026-09-23)
-
-| Then | Now |
-|---|---|
-| Bar was a row of coloured pills | Bar is mostly monochrome (`bg`/`fg`/`muted`); accents survive in menus and alerts; the OSD is monochrome too |
-| Hyprland active border `#5ccc96` (green) | `rgba(ecf0c1ff)`, the bar's `fg`, on purpose (`hypr/config/general.lua`). Pinned-window rule is `fg` + `muted` (`hypr/config/rules.lua`) |
-| hyprlock carried 13 palette literals | hyprlock is black and white only (`rgba(ffffff..)`, `rgba(000000..)`); not a palette consumer |
-| Five `Qt.rgba(1, 1, 1, a)` literals | Four: `PopupMenu.qml` (2), `Launcher.qml`, `PowerMenu.qml`. `Osd.qml`'s is gone |
-| `Theme.qml` rules `batteryColor`, `loadColor` | Gone. Hand-written rules now: `weatherColor()`, and the `ink`-vs-`fg` pick by WCAG contrast |
-| `Pill.qml` 90 ms `ColorAnimation` | `Pill.qml` is gone; the 90 ms `ColorAnimation` lives in `StatusItem.qml`, `MediaChip.qml`, `SystemBadge.qml`, `Workspaces.qml` |
-| slurp ran with no colours | `hypr/scripts/capture.sh` already takes `SLURP_BORDER`, `SLURP_FILL`, `SLURP_DIM`, `SLURP_FONT` from the environment |
-| kded6 `gtkconfig` on | Already off via `kde/kded6rc` (for the cursor, not for colour); option B in 3.5 is half done |
-| zshrc fzf colours were Catppuccin | `FZF_DEFAULT_OPTS` in `dotfiles-terminal/zsh/zshrc` now uses spaceduck values |
-| matugen leftovers on the host | Gone except `~/.config/xsettingsd/xsettingsd.conf`; `~/.config/kdedefaults/kdeglobals` no longer exists |
-| 22 colour slots in `Theme.qml` | 28 (see 2.1 for the added ones) |
-
----
-
 ## 1. What is being built
 
-A generator. The only hand-written colour file is a palette, which files each
-value under its role ("primary accent"), not its look ("blue"). The generator
-translates the role table into every consumer's format. Several palettes may
-exist, chosen by name. No colours are extracted from wallpapers.
+A generator. The one hand-written colour file is a palette that files each
+value under its role ("primary accent"), not its look ("blue"); the generator
+writes the role table in every consumer's format. Palettes are chosen by
+name; none comes from a wallpaper.
 
 ```
  hand written (tracked)       theme/palettes/<name>.json, theme/templates/*.in
@@ -47,8 +28,8 @@ exist, chosen by name. No colours are extracted from wallpapers.
                               fcitx5-remote -r, tmux source-file, hyprctl eval
 ```
 
-Rule: `build` runs only when a palette changes and its output is committed;
-`set` runs any time and never dirties the tree.
+`build` runs only when a palette changes, and its output is committed; `set`
+runs any time and never dirties the tree.
 
 ---
 
@@ -56,7 +37,7 @@ Rule: `build` runs only when a palette changes and its output is committed;
 
 ### 2.1 Roles
 
-Name by role, never by appearance: a light or green theme would otherwise put
+Named by role, never by look: a light or green theme would otherwise put
 green inside something called `blue`. 17 roles.
 
 **Surfaces and text (7)**
@@ -71,11 +52,11 @@ green inside something called `blue`. 17 roles.
 | `fill` | Bright face with no meaning (key caps) | `#ecf0c1` | `Theme.beige` |
 | `ink` | Text on a coloured face | `#0f111b` | `Theme.ink` |
 
-- `ink` is not `bg`: in a light theme `bg` goes white and `ink` stays dark.
-- `border` is not `dim`: a borderless theme sets `border` to `bg`.
+`ink` is not `bg` (a light theme turns `bg` white and keeps `ink` dark), and
+`border` is not `dim` (a borderless theme sets `border` to `bg`).
 
-**Meaning (4).** Demanded by name by kdeglobals (`ForegroundNegative/Neutral/Positive`)
-and GTK (`error/warning/success_color_breeze`).
+**Meaning (4).** Demanded by name by kdeglobals
+(`ForegroundNegative/Neutral/Positive`) and GTK (`error/warning/success_color_breeze`).
 
 | Role | Job | spaceduck | Source today |
 |---|---|---|---|
@@ -84,7 +65,7 @@ and GTK (`error/warning/success_color_breeze`).
 | `caution` | Take note: Hangul state | `#e0af68` | `Theme.accentAmber` |
 | `critical` | Wrong: alerts, caps lock, critical toasts, logout, auth fail | `#f7768e` | `Theme.accentRed`, `caps-lock.zsh` |
 
-**Distinction (6).** No meaning; only look different side by side. Which tone
+**Distinction (6).** No meaning; they only differ side by side. Which tone
 goes where is a rule and stays in `Theme.qml`.
 
 | Role | spaceduck | Source today | Assigned (survey-era bar) |
@@ -96,28 +77,29 @@ goes where is a rule and stays in `Theme.qml`.
 | `tone5` | `#ff9e64` | `Theme.accentOrange` | CPU load |
 | `tone6` | `#c0caf5` | `Theme.accentQuiet` | quiet default pill, battery normal |
 
-The "assigned" column describes the pill bar; the current bar uses tones only in
-`weatherColor()` (`accentSky`, `accentPurple`, `accentQuiet`) and `PowerMenu.qml`
-/ `MediaPlayer.qml` (`accentSky`). Reassign when implementing.
+"Assigned" is the survey-era bar of coloured pills. The bar is now mostly
+monochrome (`bg`, `fg`, `muted`; the OSD too), accents surviving in menus and
+alerts, and tones appear only in `weatherColor()` (`accentSky`,
+`accentPurple`, `accentQuiet`), `PowerMenu.qml` and `MediaPlayer.qml`
+(`accentSky`). Reassign when implementing. Ground spaceduck, accents Tokyo
+Night (sources in `Theme.qml`): the mix is this theme's identity, and
+reconciling it is a new theme, not an edit.
 
-The ground is spaceduck, the accents Tokyo Night (sources in `Theme.qml`). The
-mix is this theme's identity; reconciling it is a new theme, not an edit.
-
-**`Theme.qml` slots that are not roles**
+**`Theme.qml`'s 27 colour literals that are not roles**
 
 | Slot | Value | Fate |
 |---|---|---|
-| `red`, `green`, `blue` | `#e33400`, `#5ccc96`, `#00a3cc` | Unreferenced. Delete |
+| `red`, `green`, `blue` | `#e33400`, `#5ccc96`, `#00a3cc` | Unreferenced; delete |
 | `purple` | `#b3a1e6` | Unreferenced; merges into `tone1` |
-| `capsLock` | `#f7768e` | Removed from `Theme.qml`: it was an unreferenced duplicate of `accentRed`. `caps-lock.zsh` still hard-codes the same value; the generator's `critical` + `ink` replaces that cross-repo sync |
-| `accentTeal` | `#73daca` | A PowerMenu item. Becomes `positive` |
-| `accentSaffron` | `#e4bf58` | Added after the survey; `StatusItem` active fill. Role undecided (`caution` is closest) |
+| `capsLock` | `#f7768e` | Removed (an unreferenced duplicate of `accentRed`). `caps-lock.zsh` still hard-codes the value; the generator's `critical` + `ink` replaces that cross-repo sync |
+| `accentTeal` | `#73daca` | A PowerMenu item; becomes `positive` |
+| `accentSaffron` | `#e4bf58` | Added after the survey; `StatusItem`'s active fill. Role undecided (`caution` is closest) |
 | `accentJade`, `accentAzure`, `accentViolet`, `accentRose` | `#4dcbaa`, `#6a9ae7`, `#a076db`, `#d5729d` | Added after the survey; unreferenced |
-| `accentAlert` | `#ef3963` | Unreferenced; kept in `Theme.qml` as a record |
+| `accentAlert` | `#ef3963` | Unreferenced; kept as a record |
 
-**ANSI 0-15 are a contract, not roles.** `ls`, `git`, `vim` address colours by
-index. They live in a separate `ansi` array; only kitty consumes it, and p10k
-indexes 0-15 follow from it.
+**ANSI 0-15 are a contract, not roles.** `ls`, `git` and `vim` address
+colours by index. They live in a separate `ansi` array that only kitty
+consumes; p10k's indexes 0-15 follow from it.
 
 ### 2.2 File format
 
@@ -144,14 +126,16 @@ indexes 0-15 follow from it.
 }
 ```
 
-- `ansi` slots 3 and 5 hold purple and yellow deliberately: spaceduck's author
-  swapped them (`dotfiles-terminal/kitty/spaceduck.conf` disclaimer). The array
-  carries the swap; the generator knows nothing of it.
+- `ansi` slots 3 and 5 hold purple and yellow on purpose: spaceduck's author
+  swapped them (the disclaimer in `dotfiles-terminal/kitty/spaceduck.conf`).
+  The array carries the swap; the generator knows nothing of it.
 - `scheme` (`dark`/`light`) only drives gsettings `color-scheme`.
 - `name` = file name = `theme set` argument. `label` is the KDE scheme name;
-  spaces removed it is the `.colors` file name / `ColorScheme` id.
-- Value change on adoption: the KDE selection and launcher row are `accent`.
-  The Hyprland border is `fg` (section 0), not `accent`.
+  without spaces it is the `.colors` file name and `ColorScheme` id.
+- On adoption the KDE selection and the launcher row become `accent`. The
+  Hyprland border stays `fg` on purpose (`rgba(ecf0c1ff)` in
+  `hypr/config/general.lua`; the pin rule in `hypr/config/rules.lua` is `fg` +
+  `dim`).
 
 ---
 
@@ -168,7 +152,7 @@ indexes 0-15 follow from it.
 | `theme show [name]` | Role table with values (current if omitted) |
 | `theme build [name...]` | Writes `theme/out/<name>/`. Modifies the repo |
 | `theme set <name> [--reload-hypr]` | Installs `theme/out/<name>/`, signals. `hyprctl reload` only when asked (3.7) |
-| `theme check` | Outputs and `Theme.qml` fallback match the palettes; non-zero otherwise |
+| `theme check` | Outputs and the `Theme.qml` fallback match the palettes; non-zero otherwise |
 | `theme sync-fallback` | Rewrites the `Theme.qml` fallback block from `spaceduck.json` |
 
 ### 3.2 Core functions
@@ -235,13 +219,12 @@ emit() {
 
 ### 3.3 kdeglobals and `<Label>.colors`
 
-92 colour fields, 10 distinct values. One function `kde_colors` feeds both
-files, so they cannot drift (reapplying a scheme by name would otherwise jump
-the screen). `kdeglobals` = `theme/templates/kdeglobals.head` (the non-colour
-parts of today's `kde/kdeglobals`: `[General]` fonts and `widgetStyle`,
-`[Icons]`, `[KDE]`, `[Sounds]`) + `kde_colors`. The `.colors` copy exists only
+92 colour fields, 10 distinct values. One function, `kde_colors`, feeds both
+files so they cannot drift (reapplying a scheme by name would make the screen
+jump). `kdeglobals` = `theme/templates/kdeglobals.head` (today's
+`kde/kdeglobals` minus colours: `[General]` fonts and `widgetStyle`,
+`[Icons]`, `[KDE]`, `[Sounds]`) + `kde_colors`; the `.colors` copy exists only
 to be listed in System Settings and found by `plasma-apply-colorscheme`.
-
 `[General]`: `ColorScheme=$SCHEME_ID`, `Name=$LABEL`.
 
 | Block | BackgroundNormal | BackgroundAlternate |
@@ -265,27 +248,28 @@ to be listed in System Settings and found by `plasma-apply-colorscheme`.
 `bg`, inactiveForeground `dim`, activeBlend `accent`, inactiveBlend `dim`.
 `[ColorEffects:Disabled]`: Color `dim`, ContrastAmount 0.65, ContrastEffect 1,
 others 0. `[ColorEffects:Inactive]`: `Enable=false`,
-`ChangeSelectionColor=false`, Color `dim`, all amounts/effects 0 (no fading of
-unfocused windows).
+`ChangeSelectionColor=false`, Color `dim`, all amounts and effects 0 (no
+fading of unfocused windows).
 
 ### 3.4 Quickshell bar
 
-`palette.json` = `{ name, scheme, roles, _generated }` via `jq`. JSON has no
-comments, so the marker is the `_generated` key; `Theme.qml` reads only `.roles`.
+`palette.json` = `{ name, scheme, roles, _generated }` via `jq`; JSON has no
+comments, so the marker is the `_generated` key, and `Theme.qml` reads only
+`.roles`. `Theme.qml` changes:
 
-`Theme.qml` changes:
-
-- Reads `${XDG_STATE_HOME:-~/.local/state}/theme/palette.json` at run time with
-  a `FileView`. State, not config: it is generated, and a file inside the
-  quickshell config dir makes quickshell's watcher restart the whole shell.
-- Declare the `FileView` before `palette` so no eager binding sees a missing id.
-- `blockLoading: true`: async load paints the first frame from the fallback,
-  then the 90 ms `ColorAnimation`s smear every colour at startup.
-- `watchChanges: true` plus an `IpcHandler { target: "theme"; reload() }`.
-  `theme set` calls the IPC because whether the watcher follows an inode swap
+- Reads `${XDG_STATE_HOME:-~/.local/state}/theme/palette.json` at run time
+  with a `FileView` declared before `palette` (no eager binding may see a
+  missing id). State, not config: it is generated, and a file inside the
+  quickshell config dir makes the watcher restart the whole shell.
+- `blockLoading: true`: an async load paints the first frame from the
+  fallback, then the `ColorAnimation`s (90-160 ms, in `StatusItem`,
+  `SystemBadge`, `MediaPlayer`, `Workspaces`, `MediaChip`,
+  `NotificationCentre`) smear every colour at startup.
+- `watchChanges: true` plus an `IpcHandler { target: "theme"; reload() }`,
+  which `theme set` calls: whether the watcher follows an inode swap
   (`mv -T`) is unconfirmed.
-- `onLoadFailed`: stay quiet on `FileNotFound` (never set), warn otherwise.
-- `readPalette()`: `JSON.parse(text)?.roles ?? {}`, `{}` on any exception.
+- `onLoadFailed`: quiet on `FileNotFound` (never set), a warning otherwise.
+  `readPalette()`: `JSON.parse(text)?.roles ?? {}`, `{}` on any exception.
 - Each role: `readonly property color <role>: root.palette.<role> ?? "<spaceduck value>"`,
   between `// THEME-FALLBACK-BEGIN` and `// THEME-FALLBACK-END`. Only
   `sync-fallback` writes that block (committed); `check` guards it.
@@ -307,12 +291,14 @@ sync_fallback() {
 }
 ```
 
-Consumer QML: a `sed` rename (`bgAlt`→`surface`, `muted`→`dim`,
+Consumer QML gets a `sed` rename (`bgAlt`→`surface`, `muted`→`dim`,
 `beige`→`fill`, `accentIndigo`→`accent`, and the 2.1 mappings). The four
-`Qt.rgba(1, 1, 1, a)` literals become `Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, a)`:
-left white, the face vanishes in a light theme. `Theme.qml`'s own derived
-colours (`menuBarLine`, `menuHover`, `surfaceDim`, ...) already follow `fg`.
-Rules (`weatherColor()`, the contrast pick) stay hand-written; only names change.
+`Qt.rgba(1, 1, 1, a)` literals (`PopupMenu.qml` twice, `Launcher.qml`,
+`PowerMenu.qml`) become `Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, a)`:
+left white, the face vanishes in a light theme. The derived colours
+(`menuBarLine`, `menuHover`, `surfaceDim`, ...) already follow `fg`, and the
+rules (`weatherColor()`, `readableOn()`'s WCAG contrast pick of `ink` or `fg`)
+stay hand-written; only names change.
 
 ### 3.5 Other consumers
 
@@ -333,14 +319,12 @@ Rules (`weatherColor()`, the contrast pick) stay hand-written; only names change
 | zsh fzf, caps lock | `fzf.env` | link | sourced by `zshrc` | new shell |
 | quickshell bar | `palette.json` | `~/.local/state/theme/palette.json` | copy | `qs ipc call theme reload` |
 
-"Link" = the consumer reads an absolute path under `~/.local/state/theme/current`.
-Why some must be real files:
-
-- `kdeglobals`: `plasma-apply-colorscheme` rewrites it via KConfig `QSaveFile`;
-  symlink behaviour unconfirmed.
-- `gtk-3.0/colors.css`: `libcolorreload-gtk-module.so` watches the path with
-  `g_file_monitor_file`; the path must stay live.
-- `hypr/palette.lua`: must sit at a fixed path under `CONFIG` (`hypr/hyprland.lua`).
+"Link" = the consumer reads an absolute path under
+`~/.local/state/theme/current`. Real files where a link is unsafe:
+`kdeglobals` (`plasma-apply-colorscheme` rewrites it through KConfig
+`QSaveFile`; symlink behaviour unconfirmed), `gtk-3.0/colors.css`
+(`libcolorreload-gtk-module.so` watches the path with `g_file_monitor_file`,
+so it must stay live) and `hypr/palette.lua` (a fixed path under `CONFIG`).
 
 **Hyprland.** Before `load_module("env")` in `hypr/hyprland.lua`:
 
@@ -355,47 +339,49 @@ end
 PALETTE = PALETTE or { border = "rgba(ecf0c1ff)", dim = "rgba(686f9aff)", clear = "rgba(00000000)" }
 ```
 
-`general.lua` then uses `active_border = PALETTE.border` (from `fg`),
-`inactive_border = PALETTE.clear`; `rules.lua` pin rule uses
+`general.lua` then sets `active_border = PALETTE.border` (from `fg`) and
+`inactive_border = PALETTE.clear`; the `rules.lua` pin rule uses
 `PALETTE.border .. " " .. PALETTE.dim`.
 
-**hyprlock.** Monochrome now; no template. If it takes palette colours again:
-`source = ~/.config/hypr/palette.conf` at the top, and Pango markup kept whole in
-one variable (e.g. `$failText = <span foreground="@pango:critical@">$FAIL</span>`),
-because variable expansion inside a string is unconfirmed.
+**hyprlock** is black and white only (`rgba(ffffff..)`, `rgba(000000..)`) and
+needs no template. If it takes palette colours again:
+`source = ~/.config/hypr/palette.conf` at the top, with Pango markup kept
+whole in one variable (e.g. `$failText = <span foreground="@pango:critical@">$FAIL</span>`),
+since variable expansion inside a string is unconfirmed.
 
 **dotfiles-terminal** must work without this repo: fallback first, generated
 override second.
 
-- `kitty/kitty.conf`: `include ./spaceduck.conf` then
-  `include ~/.local/state/theme/current/kitty.conf` (missing file: one stderr
-  line, spaceduck stands). Auto-reload only works if the included file existed
-  at kitty start.
+- `kitty/kitty.conf`: `include ./spaceduck.conf`, then
+  `include ~/.local/state/theme/current/kitty.conf` (a missing file costs one
+  stderr line; spaceduck stands). Auto-reload works only if the included file
+  existed at kitty start.
 - `tmux/tmux.conf` end: `source-file -q ~/.local/state/theme/current/tmux.conf`.
-- `zsh/zshrc`: `[[ -r ~/.local/state/theme/current/fzf.env ]] && source ...`
-  (no colour beats wrong colour).
+- `zsh/zshrc` (its `FZF_DEFAULT_OPTS` already holds spaceduck values):
+  `[[ -r ~/.local/state/theme/current/fzf.env ]] && source ...` (no colour
+  beats wrong colour).
 - `zsh/config/caps-lock.zsh`: `-b "${THEME_CRITICAL:-#f7768e}" -f "${THEME_INK:-#0f111b}"`.
 
-**capture.sh.** Already reads `SLURP_BORDER` (`fg`), `SLURP_FILL` (`accent` at
+**capture.sh** already reads `SLURP_BORDER` (`fg`), `SLURP_FILL` (`accent` at
 `33` alpha), `SLURP_DIM` (`bg` at `99` alpha) and `SLURP_FONT` from the
-environment with spaceduck defaults. `slurp.env` exports those; `capture.sh`
-sources it when readable.
+environment with spaceduck defaults; `slurp.env` exports them, and
+`capture.sh` sources it when readable.
 
-**GTK: option B.** Keep kded6 `gtkconfig` off (already so in `kde/kded6rc`) and
-write `colors.css` ourselves: the module replaces the `settings.ini` symlink with
-a real file and applies a kdeglobals→GTK mapping we do not control.
+**GTK: option B.** kded6 `gtkconfig` stays off (`kde/kded6rc`, done for the
+cursor) and `colors.css` is written here: the module replaces the
+`settings.ini` symlink with a real file and applies a kdeglobals-to-GTK
+mapping nobody here controls.
 
 `gtk-colors.css.in` redeclares Breeze-Dark's colour names; the 4465-line
 `/usr/share/themes/Breeze-Dark/gtk-3.0/gtk.css` refers to nothing else, so no
-rules are written. It declares 78 `*_breeze` names and also references three it
-never declares: `theme_header_background_breeze`,
-`theme_header_background_backdrop_breeze`, `unfocused_insensitive_color_breeze`.
-The template defines all 81. kde-gtk-config's generated `colors.css` sets both
-`theme_header_background*` names to the button background, hence `surface`
-below. Neither Breeze nor kde-gtk-config defines
-`unfocused_insensitive_color_breeze`; mapping it to `dim` is this design's
-choice, matching `insensitive_fg_color`. GTK4 Breeze-Dark uses the same set, so one file
-serves both. Core mapping:
+rules are written. It declares 78 `*_breeze` names and references three more
+it never declares: `theme_header_background_breeze`,
+`theme_header_background_backdrop_breeze`, `unfocused_insensitive_color_breeze`;
+the template defines all 81. kde-gtk-config's generated `colors.css` sets both
+`theme_header_background*` to the button background, hence `surface` below;
+neither project defines `unfocused_insensitive_color_breeze`, so mapping it to
+`dim` (as `insensitive_fg_color`) is this design's choice. GTK4 Breeze-Dark
+uses the same set, so one file serves both. Core mapping:
 
 | Breeze name | Role |
 |---|---|
@@ -411,13 +397,13 @@ serves both. Core mapping:
 | `insensitive_fg_color`, `unfocused_insensitive_color` | `dim` |
 | `print_paper_backdrop` | `fill` |
 
-(each name carries the `_breeze` suffix). `unfocused_*` / `backdrop_*` reuse the
-same values: no fading on focus loss, as with `[ColorEffects:Inactive]`. The
-other five `theme_header_*` names in today's live `colors.css` are unused by
-Breeze-Dark and are dropped.
+Each name carries the `_breeze` suffix. `unfocused_*` and `backdrop_*` reuse
+the same values (no fading on focus loss, as with `[ColorEffects:Inactive]`);
+the other five `theme_header_*` names in today's live `colors.css` are unused
+by Breeze-Dark and are dropped.
 
 `gtk4.css.in` covers libadwaita, which ignores `gtk-theme-name` and the
-`_breeze` names:
+`_breeze` names, and ends with `@import 'colors.css';`:
 
 | libadwaita name | Role |
 |---|---|
@@ -428,53 +414,56 @@ Breeze-Dark and are dropped.
 | `destructive_bg_color` / `warning_bg_color` / `success_bg_color` | `critical` / `caution` / `positive` |
 | `accent_fg_color`, `destructive_fg_color`, `warning_fg_color`, `success_fg_color` | `ink` |
 
-It ends with `@import 'colors.css';`.
-
 ### 3.6 build and set
 
-`cmd_build [names]` (default: every palette): `load_palette`, `guard_hand_edits`
-(5.2), then `kde_colors` into `kdeglobals` and `<SCHEME_ID>.colors`, `palette.json`
-via `jq`, and `render | emit` for each template with its comment leader:
-`/*!` for the two CSS files, `--` for `hypr-palette.lua`, `#` for swappy,
-slurp, fuzzel, fcitx5, kitty, tmux, fzf.
+`cmd_build [names]` (default: every palette): `load_palette`,
+`guard_hand_edits` (5.2), then `kde_colors` into `kdeglobals` and
+`<SCHEME_ID>.colors`, `palette.json` via `jq`, and `render | emit` for each
+template with its comment leader (`/*!` for the two CSS files, `--` for
+`hypr-palette.lua`, `#` for swappy, slurp, fuzzel, fcitx5, kitty, tmux, fzf).
 
 `cmd_set <name>`:
 
-1. `load_palette`; stop if `theme/out/<name>/` is missing (nothing on screen changes).
-2. Swap the link atomically: `ln -sfn "$out" current.new && mv -T current.new current`.
-   kitty repaints within ~0.1 s; the next slurp uses the new colours.
-3. `install -Dm644` each real file to its path in 3.5 (install keeps the watched
-   path and replaces contents). Copy fcitx5 `arrow next prev radio` PNGs from
-   `/usr/share/fcitx5/themes/default-dark/` if absent. GTK3 apps repaint as
-   `gtk-3.0/colors.css` lands (`gtk/gtk-3.0-settings.ini` loads
-   `colorreload-gtk-module`; swappy links `libgtk-3.so.0`, so its open window follows).
+1. `load_palette`; stop if `theme/out/<name>/` is missing (nothing on screen
+   changes).
+2. Swap the link atomically (`ln -sfn "$out" current.new && mv -T current.new current`):
+   kitty repaints within ~0.1 s, the next slurp uses the new colours.
+3. `install -Dm644` each real file to its path in 3.5 (install keeps the
+   watched path and replaces the contents), and copy fcitx5's
+   `arrow next prev radio` PNGs from `/usr/share/fcitx5/themes/default-dark/`
+   if absent. GTK3 apps repaint as `gtk-3.0/colors.css` lands
+   (`gtk/gtk-3.0-settings.ini` loads `colorreload-gtk-module`; swappy links
+   `libgtk-3.so.0`, so an open swappy follows).
 4. Record the name in `~/.local/state/theme/name`.
-5. Signals, each `|| true` (the next start picks it up):
-   - `qs -p "$CONFIG/quickshell/bar" ipc call theme reload`: bar re-reads, cross-fades 90 ms, no rebuild, no reload popup.
-   - `plasma-apply-colorscheme "$SCHEME_ID"`: emits `org.kde.KGlobalSettings.notifyChange`;
-     `KDEPlasmaPlatformTheme6.so` repaints running Qt apps. Overwriting the file
-     alone does not: KConfig signals only API writes. Its KWin `BlendChanges`
-     call fails quietly under Hyprland.
+5. Signals, each `|| true` (the next start picks the change up):
+   - `qs -p "$CONFIG/quickshell/bar" ipc call theme reload`: the bar re-reads
+     and cross-fades through its `ColorAnimation`s; no rebuild, no popup.
+   - `plasma-apply-colorscheme "$SCHEME_ID"`: emits
+     `org.kde.KGlobalSettings.notifyChange`, and `KDEPlasmaPlatformTheme6.so`
+     repaints running Qt apps; overwriting the file alone does not (KConfig
+     signals only API writes). Its KWin `BlendChanges` call fails quietly
+     under Hyprland.
    - `fcitx5-remote -r`: `ReloadConfig`, not a restart; input contexts survive.
    - `tmux source-file "$STATE/theme/current/tmux.conf"`.
    - gsettings `color-scheme`: `default` for light, `prefer-dark` otherwise.
-6. `apply_hypr_border`: `hyprctl keyword` is unusable (the binary says
-   `keyword can't work with non-legacy parsers. Use eval.`; config is Lua), so
+6. `apply_hypr_border`: `hyprctl keyword` is unusable (Hyprland answers
+   `keyword can't work with non-legacy parsers. Use eval.`; the config is
+   Lua), so
    `hyprctl eval 'hl.config({ general = { col = { active_border = ..., inactive_border = "rgba(00000000)" } } })'`
-   with `R_fg`, then read `hyprctl getoption general:col.active_border` back. If
-   it did not take: print `window border unchanged; run 'hyprctl reload' or relogin`.
+   with `R_fg`, read back with `hyprctl getoption general:col.active_border`.
+   If it did not take: `window border unchanged; run 'hyprctl reload' or relogin`.
 
 ### 3.7 What the script must not do
 
 | Never | Why |
 |---|---|
 | `hyprctl reload` unless `--reload-hypr` | Drops every monitor rule and timer and re-runs the `monitors.lua` output policy (and `execs.lua`); too much churn for colours |
-| Touch mode setting (`hl.monitor`, scale, enable/disable) | A modeset is the one operation this GPU is not trusted with (`hypr/config/general.lua`) |
-| Restart the bar (`bin/bar --restart`) | Drops every pill's state; the IPC reload suffices, else the next start reads it |
+| Touch mode setting (`hl.monitor`, scale, enable/disable) | A modeset is what this GPU is least trusted with (`hypr/config/general.lua`) |
+| Restart the bar (`bin/bar --restart`) | Drops the bar's in-memory state; the IPC reload suffices, else the next start reads the file |
 | Restart fcitx5 | Costs every window its input context (`install.sh`); `-r` is a reload |
 | Set gsettings `gtk-theme`, `icon-theme`, `cursor-*` | Owned by `hypr/scripts/gsettings-apply.sh`; only `color-scheme` is ours |
 | Change the wallpaper | User state; deriving colours from it is rejected |
-| End or prompt for ending the session | Say what needs a restart and stop |
+| End or offer to end the session | Say what needs a restart and stop |
 | Overwrite a hand-edited generated file | `build` stops (5.2) |
 
 ---
@@ -484,9 +473,9 @@ slurp, fuzzel, fcitx5, kitty, tmux, fzf.
 | Consumer | When | Why |
 |---|---|---|
 | GTK4, libadwaita | App restart | No `colorreload` equivalent; whether GTK4 watches `gtk.css` is unconfirmed |
-| zsh prompt, fzf | New shell | p10k reads config once at start |
-| hyprlock | Next lock | No reload path; `reload_cmd` is for label widgets, SIGUSR1 unlocks. It is monochrome now anyway |
-| fuzzel, swappy `custom_color` | Next run | Launched per invocation; fuzzel has no SIGUSR/inotify |
+| zsh prompt, fzf | New shell | p10k reads its config once at start |
+| hyprlock | Next lock | No reload path (`reload_cmd` is for label widgets, SIGUSR1 unlocks); monochrome now anyway |
+| fuzzel, swappy `custom_color` | Next run | Launched per invocation; fuzzel has no SIGUSR or inotify |
 | Rendered icons, Breeze GTK asset PNGs | Never | Baked images (section 7) |
 
 ---
@@ -501,10 +490,10 @@ slurp, fuzzel, fcitx5, kitty, tmux, fzf.
 | `theme/default` | hand written; one line, the palette a fresh install sets |
 | `theme/out/<name>/*` | generated, marked, tracked |
 | `quickshell/bar/services/Theme.qml` | hand written except the fallback block |
-| `~/.local/state/theme/{current,palette.json,name}` | untracked run-time state; `theme set` recreates |
+| `~/.local/state/theme/{current,palette.json,name}` | untracked run-time state; `theme set` recreates it |
 
-`theme/out/` is tracked so `install.sh` only copies and never needs `jq`.
-`install.sh` appends:
+`theme/out/` is tracked so `install.sh` only copies and never needs `jq`; it
+appends:
 
 ```bash
 "$SRC/bin/theme" set "$(cat "$SRC/theme/default")"
@@ -513,8 +502,8 @@ slurp, fuzzel, fcitx5, kitty, tmux, fzf.
 
 ### 5.2 Marker and checks
 
-Rebuilding silently erases hand edits; the marker makes that impossible. Every
-generated file starts with three lines (comment leader per format):
+A rebuild would silently erase hand edits; the marker makes that impossible.
+Every generated file starts with three lines (comment leader per format):
 
 ```
 # generated by bin/theme from theme/palettes/spaceduck.json
@@ -541,29 +530,26 @@ guard_hand_edits() {
 ```
 
 `--force` only on an explicit request to discard. `palette.json` carries the
-same three facts in its `_generated` key.
-
-`cmd_check` runs `guard_hand_edits` over every palette's output, then checks
-each role's value inside `THEME-FALLBACK-BEGIN`/`END` in `Theme.qml` against
-`spaceduck.json` (awk: find `property color <role>:`, require `"<value>"`,
-fail if missing). A drifted fallback would otherwise only show when the bar
-fails to read the state file.
+same three facts in its `_generated` key. `cmd_check` runs `guard_hand_edits`
+over every palette's output, then checks each role's value between
+`THEME-FALLBACK-BEGIN` and `END` in `Theme.qml` against `spaceduck.json` (awk:
+find `property color <role>:`, require `"<value>"`); a drifted fallback would
+otherwise show only when the bar fails to read the state file.
 
 ### 5.3 Host cleanup (pointed at, never deleted by `install.sh`)
 
 Matugen leftovers once overrode the repo (GTK was Material You grey-purple).
-As of 2026-09-23 only `~/.config/xsettingsd/xsettingsd.conf` remains. The rest
-of the original list (`~/.config/matugen/`, `window_decorations.css` and
-`assets/` in gtk-3.0/4.0, `fuzzel_theme.ini`, `qt5ct`, `qt6ct`, `Kvantum`,
-`MaterialYou*.colors`, `~/.config/kdedefaults/kdeglobals` with
-`ColorScheme=BreezeDark`) is gone. `gtk-3.0/gtk.css` and `gtk-4.0/colors.css`
-stay: `theme set` overwrites them.
+As of 2026-10-14 only `~/.config/xsettingsd/xsettingsd.conf` remains; the
+rest (`~/.config/matugen/`, `window_decorations.css` and `assets/` in
+gtk-3.0/4.0, `fuzzel_theme.ini`, `qt5ct`, `qt6ct`, `Kvantum`,
+`MaterialYou*.colors`, `~/.config/kdedefaults/kdeglobals`) is gone.
+`gtk-3.0/gtk.css` and `gtk-4.0/colors.css` stay: `theme set` overwrites them.
 
 ---
 
 ## 6. The first two themes
 
-**spaceduck**: today's screen in the role table (values in 2.1 / 2.2).
+**spaceduck**: today's screen in the role table (values in 2.1 and 2.2).
 
 **macos-dark** (`theme/palettes/macos-dark.json`, label `macOS Dark`, scheme `dark`):
 
@@ -583,13 +569,12 @@ stay: `theme set` overwrites them.
 `ansi`: `#1c1c1e #ff453a #30d158 #ffd60a #0a84ff #bf5af2 #64d2ff #d1d1d6
 #48484a #ff6961 #58e06f #ffe14d #4da3ff #d68cf7 #8fe0ff #f2f2f7`.
 
-- Deliberately unlike spaceduck: graphite ground, near-white text, system blue.
-- `ansi` has no yellow/purple swap (3 = yellow, 5 = purple): tests that one
-  format holds two conventions.
-- `dim` and `tone6` both grey: macOS separates status by brightness, not hue.
-
-A third, light theme is the real test: `scheme: "light"` flips gsettings, `ink`
-and `bg` diverge, and the `fg`-derived faces follow.
+Deliberately unlike spaceduck (graphite ground, near-white text, system
+blue); its `ansi` has no yellow/purple swap (3 = yellow, 5 = purple), which
+tests that one format holds both conventions; `dim` and `tone6` are both grey,
+since macOS separates status by brightness, not hue. A third, light theme is
+the real test: `scheme: "light"` flips gsettings, `ink` and `bg` diverge, and
+the `fg`-derived faces follow.
 
 ---
 
@@ -597,19 +582,19 @@ and `bg` diverge, and the `fg`-derived faces follow.
 
 | Fixed | Why |
 |---|---|
-| Qt widget style (Breeze) | `widgetStyle=Breeze` in `kde/kdeglobals`; shape lives in compiled C++. Kvantum is ignored under `QT_QPA_PLATFORMTHEME=kde` (`hypr/config/env.lua`), and switching that drops kdeglobals colours |
-| GTK theme (Breeze-Dark) | Its 4465-line CSS carries sizes, radii, shadows as rules; only colour names are swapped |
-| Icon theme (`breeze-dark`) | Colour baked into thousands of SVG/PNG files |
+| Qt widget style (Breeze) | `widgetStyle=Breeze` in `kde/kdeglobals`; shape lives in compiled C++. Kvantum is ignored under `QT_QPA_PLATFORMTHEME=kde` (`hypr/config/env.lua`), and switching that drops the kdeglobals colours |
+| GTK theme (Breeze-Dark) | Its 4465-line CSS carries sizes, radii and shadows as rules; only colour names are swapped |
+| Icon theme (`breeze-dark`) | Colour baked into thousands of SVG and PNG files |
 | Breeze GTK asset PNGs | Pre-rendered in Breeze blue `#3daee9` (checkbox marks, arrows) |
-| p10k prompt | 223 of 233 colour assignments in `dotfiles-terminal/zsh/p10k.zsh` are 256-colour indexes; 16-255 are fixed. Only the caps-lock segment is bound, because it shares the bar's `accentRed` |
-| hyprpicker | Draws no colours of its own, no config |
-| Fonts | Tied across `kde/kdeglobals` `font=` lines, `fontconfig/local.conf`, `gsettings-apply.sh`; left hand-written as an extension point |
+| p10k prompt | 223 of the 233 colour assignments in `dotfiles-terminal/zsh/p10k.zsh` are 256-colour indexes (16-255 are fixed), and the vi-mode segment's six are spaceduck hex literals. Only the caps-lock segment (`zsh/config/caps-lock.zsh`) is bound, because it shares the bar's `accentRed` |
+| hyprpicker | Draws no colours of its own; no config |
+| Fonts | Tied across the `kde/kdeglobals` `font=` lines, `fontconfig/local.conf` and `gsettings-apply.sh`; left hand-written as an extension point |
 
 Notifications are not a separate consumer: the bar owns
-`org.freedesktop.Notifications` and its toasts read `Theme` directly.
+`org.freedesktop.Notifications`, and its toasts read `Theme` directly.
 
 Net: the same desktop with every colour changed (backgrounds, text, accents,
-borders, selection, 16 terminal colours, bar, candidate window, capture editor,
-light or dark). Shapes, icons, checkbox marks, animations and fonts stay. A
-macOS palette looks like Breeze wearing macOS colours; more would need a new
-widget style, which conflicts with using only official packages.
+borders, selection, the 16 terminal colours, bar, candidate window, capture
+editor, light or dark); shapes, icons, checkbox marks, animations and fonts
+stay. A macOS palette looks like Breeze wearing macOS colours; more would
+need a new widget style, which conflicts with using official packages only.

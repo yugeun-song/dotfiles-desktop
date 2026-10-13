@@ -9,15 +9,14 @@
 #   capture.sh color         pick a colour, hex on the clipboard
 #
 # Lines 4-10 are the usage text printed by the `*)` case below.
-# Every shot goes to both clipboard and file, under a name no other shot has.
+# Every shot goes to the clipboard and to a file named like no other shot.
 #
-# One overlay at a time: two overlays both grab the pointer and the desktop
-# looks frozen. The overlay modes take a lock (flock, non-blocking) before
-# anything else, so a key pressed again while a capture prepares or waits for
-# the drag does nothing. The lock ends when the overlay closes, and nothing
-# that outlives the script may inherit it: a resident wl-copy that inherited
-# it kept every later press out until another program took the clipboard.
-# Hyprland sends this script's stdout and stderr to /dev/null, so every
+# One overlay at a time: two both grab the pointer and the desktop looks
+# frozen. The overlay modes take a non-blocking flock first, so a repeated
+# press while a capture prepares or waits for the drag does nothing. The lock
+# ends with the overlay, and nothing outliving the script may inherit it: a
+# resident wl-copy that did kept every later press out until another program
+# took the clipboard. Hyprland sends stdout and stderr to /dev/null, so every
 # failure is also a notification.
 # ============================================================================
 
@@ -30,9 +29,9 @@ SLURP_BORDER="${SLURP_BORDER:-#ECF0C1ff}"   # foreground, and the readout
 SLURP_FILL="${SLURP_FILL:-#7AA2F733}"       # accent at low alpha, inside the box
 SLURP_DIM="${SLURP_DIM:-#0F111B99}"         # background at high alpha, outside it
 
-# Every step that runs under the lock has a deadline, so no hang keeps later
-# presses out for good. grim waits for the compositor to draw a frame; an
-# overlay nobody finishes closes after two minutes.
+# Every step under the lock has a deadline, so no hang keeps later presses
+# out for good: grim waits for a frame, an unfinished overlay closes after two
+# minutes.
 GRAB_TIMEOUT=5
 OVERLAY_TIMEOUT=120
 
@@ -108,12 +107,12 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# The bar's screensaver blacks out a display nobody uses (a 1x1 layer that
-# Hyprland draws as black around it), and a frame grabbed from that display is
-# black. Region shots and colour picks take every output before their overlay
-# shows, so the bar lifts the black while they run: its clocks go on, and the
-# black comes back as it was. Asked only when a black is up, since the call
-# starts a process; the bar ends the lift by itself if this script dies.
+# The bar's screensaver blacks out an unused display (a 1x1 layer Hyprland
+# draws black around), and a frame grabbed there is black. Region shots and
+# colour picks take every output before their overlay shows, so the bar lifts
+# the black while they run; its clocks go on and the black returns as it was.
+# Asked only when a black is up, since the call starts a process; the bar ends
+# the lift by itself if this script dies.
 saver_up() {
     timeout 2 hyprctl -j layers 2>/dev/null \
         | jq -e '[.. | objects | select(.namespace? == "quickshell:screensaver")] | length > 0' >/dev/null 2>&1
@@ -185,13 +184,12 @@ finish() {
 
 # Every output at its own density, before the overlay exists: a frame taken
 # after it races the overlay's removal and can contain it. One grim per
-# output, run together, instead of one for the whole layout, which is drawn
-# at the highest scale: that enlarged and blurred the lower-scale outputs and
-# took longer (70 ms against 40 ms on two screens).
-# An output that is off (DPMS, as the bar's screensaver leaves an unused
-# display) draws no frames, so grim waited for one until its deadline and
-# every region shot failed. It is left out: there is nothing on it to see,
-# and a selection reaching onto it gets black there, as where no output lies.
+# output, run together, not one for the whole layout drawn at the highest
+# scale, which blurred the lower-scale outputs and took longer (70 ms against
+# 40 ms on two screens). An output that is off (DPMS, as the screensaver
+# leaves an unused display) draws no frames, so grim waited out its deadline
+# and every region shot failed; it is left out, and a selection reaching onto
+# it gets black there, as where no output lies.
 grab_frames() {
     local i name x y scale lit busy=0 pids=() failed=()
     NAMES=() XS=() YS=() SCALES=() FWS=() FHS=() DARK=()

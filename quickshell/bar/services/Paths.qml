@@ -6,9 +6,9 @@ pragma Singleton
 import QtQuick
 import Quickshell
 
-// Where the Hyprland scripts live, resolved once. Three modules had their own
-// copy of the XDG_CONFIG_HOME-or-HOME/.config rule and treated a missing HOME
-// differently ("undefined/.config" in one of them).
+// Where the Hyprland scripts live, resolved once: separate copies of the
+// XDG_CONFIG_HOME-or-HOME/.config rule once disagreed on a missing HOME
+// ("undefined/.config").
 Singleton {
     id: root
 

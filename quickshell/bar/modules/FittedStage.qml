@@ -1,10 +1,9 @@
 import QtQuick
 
-// Reference pixels, scaled to the window. Sized to the parent divided by the
-// factor and scaled by it, so the result fills the window and everything
-// inside keeps the share of the screen it has on the reference output (see
-// Theme.fit). Overlays lay their card out in here; a fixed-height user (the
-// bar) overrides height.
+// Reference pixels, scaled to the window: sized to the parent over the factor
+// and scaled by it, so it fills the window and its content keeps its share of
+// the screen (Theme.fit). Overlays lay their card out in here; the bar, of
+// fixed height, overrides height.
 Item {
     id: root
 

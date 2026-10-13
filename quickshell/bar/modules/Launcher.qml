@@ -130,11 +130,9 @@ Scope {
             console.warn("[launcher] nothing selected");
             return;
         }
-        // entry.command has field codes stripped but ignores Terminal=true,
-        // so wrap it in a terminal ourselves. Apps.open so it survives
-        // `bar --restart`.
-        // scripts/terminal.sh, not kitty by name: it runs the first terminal
-        // installed, so the launcher works on a machine without kitty.
+        // entry.command strips field codes but ignores Terminal=true, so the
+        // terminal is added here: scripts/terminal.sh, the first one installed,
+        // not kitty by name. Apps.open so it survives `bar --restart`.
         const terminal = [Paths.hyprScripts + "/terminal.sh", "-e"];
         const argv = entry.command;
         if (Array.isArray(argv) && argv.length > 0) {

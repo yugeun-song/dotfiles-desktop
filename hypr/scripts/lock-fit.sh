@@ -4,22 +4,21 @@
 # the time and the field cover the share of each screen they cover on the
 # reference output (see hyprlock.conf).
 #
-# fit is the number Theme.fit and config/monitors.lua use, the square root of
-# the area over the reference's, kept between 1 and 2, but counted in the
-# pixels hyprlock draws rather than in logical ones: hyprlock fills each
-# output's own pixels and ignores the compositor scale. Counted so, the
-# 2880x1800 panel gets 1.19 and the same share as the desk monitor; the bar,
-# floored on the panel's 1920x1200 logical size, is drawn there at 1 times
-# the 1.5 scale, a larger share. A screen with fewer pixels than the
-# reference keeps the reference sizes, as in the bar: below them the
-# smallest labels shrink past reading.
+# fit is Theme.fit's and config/monitors.lua's number, the square root of the
+# area over the reference's, kept between 1 and 2, but counted in the pixels
+# hyprlock draws, since it ignores the compositor scale. The 2880x1800 panel
+# thus gets 1.19 and the desk monitor's share; the bar, floored on the
+# panel's 1920x1200 logical size, draws there at 1 times the 1.5 scale, a
+# larger share. A screen with fewer pixels than the reference keeps the
+# reference sizes, as in the bar: below them the smallest labels shrink past
+# reading.
 #
-# Every output Hyprland knows and every other connector of the GPU gets a copy,
-# so a screen plugged in while locked still shows the time and the field; one
-# with no known mode gets the reference sizes. A block that names its monitor
-# was sized for that screen and is copied as written. Fails, printing no path,
-# when hyprlock.conf declares no $fit_reference or Hyprland does not answer;
-# lock.sh then runs hyprlock on hyprlock.conf as written.
+# Every output Hyprland knows and every other connector of the GPU gets a
+# copy, so a screen plugged in while locked still shows the time and the
+# field; one with no known mode gets the reference sizes. A block that names
+# its monitor was sized for that screen and is copied as written. Fails,
+# printing no path, when hyprlock.conf declares no $fit_reference or Hyprland
+# does not answer; lock.sh then locks on hyprlock.conf as written.
 #
 # Usage: lock-fit.sh [config] [output]
 

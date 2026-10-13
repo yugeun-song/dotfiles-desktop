@@ -13,12 +13,11 @@ Singleton {
     // ---------------------------------------------------------------------
     // Every dimension is px() of one scale, so proportions hold when it changes.
     // ---------------------------------------------------------------------
-    // One scale, for the reference output: the 2560x1440 desk monitor these
-    // sizes were tuned on. Every window then draws itself scaled by fit() for
-    // the screen it is on, so a surface keeps the share of the screen it has
-    // there. Per-screen sizing in whole pixels would need px() out of this
-    // singleton and every token with it; a scaled scene graph keeps text
-    // vector-sharp and costs one transform.
+    // The scale is the reference output's, the 2560x1440 desk monitor these
+    // sizes were tuned on; each window draws itself scaled by fit() for its
+    // screen. Per-screen sizes in whole pixels would take px() and every
+    // token out of this singleton; a scaled scene graph keeps text
+    // vector-sharp for one transform.
     readonly property real baseScale: 1.12
     readonly property int referenceWidth: 2560
     readonly property int referenceHeight: 1440
@@ -26,17 +25,14 @@ Singleton {
     readonly property real scaleOverride: Number(Quickshell.env("BAR_SCALE") ?? 0)
     readonly property real scale: root.scaleOverride > 0 ? root.scaleOverride : root.baseScale
 
-    // The factor a window on `screen` is drawn at: the square root of the
-    // logical area ratio to the reference, so both a surface's aspect ratio
-    // and the fraction of the screen it covers stay what they are on the desk
-    // monitor. Density is not corrected: the panel is read from closer, and
-    // the same share of the screen is what was asked for, not the same
-    // millimetres. Floored at minFit, though: below the reference the share
-    // shrank the bar past reading size (the 1920x1200 panel came out at 0.79,
-    // an 11 px label), so a smaller screen draws at reference pixels and
-    // gives up the share instead. Capped against a huge logical screen.
-    // config/monitors.lua scales Hyprland's gaps, borders and rounding by
-    // the same number; keep the two in step.
+    // A window's factor on `screen`: the square root of its logical area over
+    // the reference's, so a surface keeps its aspect ratio and its share of
+    // the screen. Density is not corrected: the share was asked for, not the
+    // millimetres. Floored at minFit, since below the reference the share
+    // made the bar unreadable (0.79 on the 1920x1200 panel, an 11 px label);
+    // capped against a huge logical screen. config/monitors.lua (gaps,
+    // borders, rounding) and hypr/scripts/lock-fit.sh use the same factor and
+    // bounds; keep the three in step.
     readonly property real minFit: 1
     readonly property real maxFit: 2
 
@@ -690,7 +686,7 @@ Singleton {
         if (!url.startsWith("https://"))
             return "";
         // The authority is everything before the first slash; userinfo is
-        // dropped and the port ignored, so "evil.example@i.scdn.co" and
+        // dropped and the port ignored, so "i.scdn.co@evil.example" and
         // "i.scdn.co.evil.example" both fail the exact match below.
         const authority = url.slice(8).split("/")[0];
         const host = authority.split("@").pop().split(":")[0].toLowerCase();

@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # Stops hyprland-session.target when the compositor's hyprland.lock is deleted
-# (run by hyprland-session-watch.service). Watches delete/move only: hyprctl and
-# bin/unlock open that directory, so open/close events would end a live session.
-# A crash can leave the lock behind; then session-start.sh sees a new signature
-# after relaunch and restarts the target, and this watch with it.
+# (run by hyprland-session-watch.service). Watches delete/move only: hyprctl
+# and bin/unlock open that directory, so open/close events would end a live
+# session. A crash can leave the lock behind; session-start.sh then sees a new
+# signature after the relaunch and restarts the target, this watch with it.
 # Never stop the target while the compositor lives: a failed inotify setup
 # falls back to slow polling, not to stopping.
 

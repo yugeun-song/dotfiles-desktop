@@ -1,14 +1,11 @@
-# Qt and KDE application settings.
-#
-# Palette sources:
+# Qt and KDE application settings. Palette:
 #   Spaceduck    https://github.com/pineapplegiant/spaceduck   (bg, fg, greys, selection)
 #   Tokyo Night  https://github.com/folke/tokyonight.nvim      (blue, cyan, purple, green, orange)
 #
-# Read only through QT_QPA_PLATFORMTHEME=kde (hypr/config/env.lua, needs
-# plasma-integration); otherwise KDE apps draw a light default palette.
-#
-# Applications read these colour blocks, not the .colors file, so they must be
-# here in full and stay identical to kde/SpaceduckDark.colors. No AUR packages.
+# Read only under QT_QPA_PLATFORMTHEME=kde (hypr/config/env.lua, needs
+# plasma-integration); without it KDE apps draw a light default palette.
+# Applications read these colour blocks, not the .colors file, so they stay here
+# in full and identical to kde/SpaceduckDark.colors. Official packages only.
 
 [General]
 ColorScheme=SpaceduckDark

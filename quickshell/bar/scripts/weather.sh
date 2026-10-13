@@ -1,21 +1,18 @@
 #!/usr/bin/env bash
 # Weather from Open-Meteo (no API key) for fixed coordinates; no geolocation.
-# Change the city by editing the location block below or via the environment:
+# Edit the location block below, or set it in the environment:
 #   WEATHER_LAT=35.1796 WEATHER_LON=129.0756 WEATHER_NAME=Busan weather.sh
 #
-# Output modes
 #   (default)  one-line summary
-#   --json     raw JSON, for a shell widget to parse
+#   --json     raw JSON
 #   --full     multi-line detail with a 3-day forecast
-#   --icon     icon glyph only, for a status bar
-#   --bar      one line of compact JSON, for the status bar shell to parse
-#
-# Option
+#   --icon     icon glyph only
+#   --bar      one line of compact JSON, for the bar
 #   --refresh  ask the network even when the cache is fresh (the bar's click);
 #              a failed fetch still falls back to the cache
 #
 # Requires: curl, jq
-#
+
 set -uo pipefail
 
 for dep in curl jq; do
