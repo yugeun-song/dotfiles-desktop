@@ -245,6 +245,16 @@ check "vim2m is not taken for a camera" lacks "$out" vim2m
 check "vim2m stays bound while the cameras are off" is "$(driver /sys/bus/platform/devices/vim2m.0)" vim2m
 switch on >/dev/null
 
+# The bar keeps a reading taken under the lock off the screen; busy is read
+# from /proc/locks, so check its format on a real kernel. flock takes the
+# lock as camera-switch does.
+flock /run/camera-switch/lock sleep 3 &
+holder=$!
+held() { /usr/local/bin/camera-switch status --json | grep -q '"busy": true'; }
+check "status says busy while another holds the lock" wait_until 2 held
+wait "$holder"
+check "status says free once the lock is let go" bash -c "/usr/local/bin/camera-switch status --json | grep -q '\"busy\": false'"
+
 # The fallback for kernels without per-interface authorization relies on
 # this: a deauthorized device loses its interfaces, and authorizing it again
 # binds its drivers with no probe asked for.

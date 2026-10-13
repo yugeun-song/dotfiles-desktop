@@ -222,6 +222,23 @@ class Host:
         os.chmod(tmp, 0o644)
         os.replace(tmp, path)
 
+    def busy(self):
+        """Whether a camera-switch holds the lock now. Read from /proc/locks:
+        the lock file is root's 0600, and a user allowed to lock it could
+        hold every switch back."""
+        try:
+            st = os.stat(self.at(LOCK_FILE))
+        except OSError:
+            return False
+        inode = f"{os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino}"
+        for line in (self.read("/proc/locks") or "").splitlines():
+            fields = line.split()
+            if len(fields) > 1 and fields[1] == "->":
+                del fields[1]
+            if len(fields) > 5 and fields[1] == "FLOCK" and fields[5] == inode:
+                return True
+        return False
+
     def lock(self):
         path = self.at(LOCK_FILE)
         os.makedirs(os.path.dirname(path), mode=0o755, exist_ok=True)
@@ -846,8 +863,11 @@ def status(host, as_json):
                  "state": "off" if host.read(sw.path) == sw.off else "on"}
                 for sw in power_switches(host)]
     gaps = missing_setup(host)
+    # Mid-action readings mix the new switch position with the old devices;
+    # the bar waits for busy to clear before it believes one.
+    busy = host.busy()
     if as_json:
-        print(json.dumps({"switch": "off" if off else "on", "cameras": cams,
+        print(json.dumps({"switch": "off" if off else "on", "busy": busy, "cameras": cams,
                           "power_switches": switches, "missing": gaps}))
         return 0
     if not off:
@@ -856,6 +876,8 @@ def status(host, as_json):
         print("switch   off; a camera that appears is turned off too")
     else:
         print("switch   off")
+    if busy:
+        print("busy     a camera-switch is turning cameras off or on right now")
     for gap in gaps:
         print("setup    " + gap)
     for sw in switches:

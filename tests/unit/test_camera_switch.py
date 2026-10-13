@@ -16,6 +16,7 @@ that look like cameras but are not.
 import contextlib
 import importlib.util
 import io
+import json
 import os
 import pathlib
 import shutil
@@ -635,6 +636,40 @@ class Partial(Case):
             ("0e", "02", None, [], [])])
         names = [c.name for c in cs.discover(k, k.load_record())]
         self.assertEqual(names, ["Logitech BRIO"])
+
+
+class Busy(Case):
+    def locks(self, line):
+        st = os.stat(self.k.at(cs.LOCK_FILE))
+        inode = f"{os.major(st.st_dev):02x}:{os.minor(st.st_dev):02x}:{st.st_ino}"
+        self.k.put("/proc/locks", line.format(inode=inode))
+
+    def test_free_lock(self):
+        self.k.put(cs.LOCK_FILE, "")
+        self.locks("1: POSIX  ADVISORY  WRITE 99 {inode} 0 EOF")
+        self.assertFalse(self.k.busy())
+
+    def test_held_lock(self):
+        self.k.put(cs.LOCK_FILE, "")
+        self.locks("1: FLOCK  ADVISORY  WRITE 1234 {inode} 0 EOF")
+        self.assertTrue(self.k.busy())
+
+    def test_waiter_line(self):
+        self.k.put(cs.LOCK_FILE, "")
+        self.locks("2: -> FLOCK  ADVISORY  WRITE 1235 {inode} 0 EOF")
+        self.assertTrue(self.k.busy())
+
+    def test_no_lock_file_yet(self):
+        self.assertFalse(self.k.busy())
+
+    def test_status_json_says_busy(self):
+        laptop_webcam(self.k)
+        self.k.put(cs.LOCK_FILE, "")
+        self.locks("1: FLOCK  ADVISORY  WRITE 1234 {inode} 0 EOF")
+        with mock.patch.object(cs, "Host", lambda: self.k), \
+                contextlib.redirect_stdout(io.StringIO()) as out:
+            cs.main(["status", "--json"])
+        self.assertIs(json.loads(out.getvalue())["busy"], True)
 
 
 class Fallbacks(Case):
