@@ -31,6 +31,9 @@
 # files and greetd's config, so a test never reads this machine's.
 #
 set -euo pipefail
+# Under a umask of 002 (Fedora's and Ubuntu's, for user private groups) the
+# directories made here would be group-writable; nothing here should be.
+umask 022
 
 SRC="$(cd "$(dirname "$(readlink -f "$0")")" && pwd)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
@@ -109,9 +112,10 @@ tilde() {
 # Each step is a tree: its label once there is something to say, one branch
 # per change, and a last branch with the count. A step with nothing to say is
 # one dim line, so an update that changed little prints little.
-GROUP_LABEL="" GROUP_SHOWN=0 GROUP_WROTE=0 GROUP_SAME=0 GROUP_TODO=0
+GROUP_LABEL="" GROUP_SHOWN=0 GROUP_WROTE=0 GROUP_SAME=0 GROUP_TODO=0 GROUP_OWNER=""
+# $2 names what reloads the group's files: bar, compositor or units.
 group_open() {
-    GROUP_LABEL=$1 GROUP_SHOWN=0 GROUP_WROTE=0 GROUP_SAME=0 GROUP_TODO=0
+    GROUP_LABEL=$1 GROUP_OWNER=${2:-} GROUP_SHOWN=0 GROUP_WROTE=0 GROUP_SAME=0 GROUP_TODO=0
 }
 group_label() {
     (( GROUP_SHOWN )) && return 0
@@ -155,6 +159,17 @@ tree_lines() {
 }
 
 same() { UNCHANGED=$((UNCHANGED + 1)); GROUP_SAME=$((GROUP_SAME + 1)); }
+
+# A group whose files changed but whose owner was not reloaded (the run
+# stopped in between, or the reload failed) leaves a mark before its first
+# write, so a later run reloads it even when it writes nothing.
+PENDING_DIR="$STATE/dotfiles-desktop"
+mark_pending() {
+    if (( CHECK )) || [[ -z "$GROUP_OWNER" || -e "$PENDING_DIR/pending-$GROUP_OWNER" ]]; then return 0; fi
+    { mkdir -p -- "$PENDING_DIR" && : >"$PENDING_DIR/pending-$GROUP_OWNER"; } 2>/dev/null || :
+}
+pending() { [[ -e "$PENDING_DIR/pending-$1" ]]; }
+settled() { rm -f -- "$PENDING_DIR/pending-$1"; }
 todo() { GROUP_TODO=$((GROUP_TODO + 1)); DRIFT=1; branch "$1"; }
 # A write or a removal, said in its group; one that followed a conflict is
 # marked as such.
@@ -175,7 +190,8 @@ wrote() {
 
 os_release_field() {
     local key=$1 file=$2 line value=""
-    while IFS= read -r line; do
+    # A last line without a newline still counts.
+    while IFS= read -r line || [[ -n "$line" ]]; do
         if [[ "$line" == "$key="* ]]; then
             value=${line#*=}
             value=${value#[\"\']}
@@ -233,6 +249,21 @@ version_of() {
 # $1 is $2 or later: the two, smaller first, are already in version order.
 version_at_least() { printf '%s\n%s\n' "$2" "$1" | sort -V -C; }
 
+# One variable of the user manager's environment. show-environment prints a
+# value with spaces or specials as $'...'; read raw, that was taken for a
+# relative path and ignored, and two equal settings were called different.
+session_value() {
+    local v
+    v=$(sed -n "s/^$1=//p" <<<"$2")
+    if [[ "$v" == "\$'"*"'" ]]; then
+        v=${v:2:-1}
+        v=${v//\\\'/\'}
+        printf '%b' "$v"
+    else
+        printf '%s' "$v"
+    fi
+}
+
 # Every unmet premise at once, before any write, each with its fix.
 check_premise() {
     local os=${DOTFILES_OS_RELEASE:-} f id="" like="" help env name want have verify init
@@ -287,9 +318,9 @@ check_premise() {
     if env=$(systemctl --user show-environment 2>/dev/null); then
         for name in XDG_CONFIG_HOME XDG_DATA_HOME XDG_STATE_HOME; do
             case "$name" in
-                XDG_CONFIG_HOME) want=$CONFIG; have=$(xdg "$(sed -n "s/^$name=//p" <<<"$env")" "$HOME/.config") ;;
-                XDG_DATA_HOME) want=$DATA; have=$(xdg "$(sed -n "s/^$name=//p" <<<"$env")" "$HOME/.local/share") ;;
-                *) want=$STATE; have=$(xdg "$(sed -n "s/^$name=//p" <<<"$env")" "$HOME/.local/state") ;;
+                XDG_CONFIG_HOME) want=$CONFIG; have=$(xdg "$(session_value "$name" "$env")" "$HOME/.config") ;;
+                XDG_DATA_HOME) want=$DATA; have=$(xdg "$(session_value "$name" "$env")" "$HOME/.local/share") ;;
+                *) want=$STATE; have=$(xdg "$(session_value "$name" "$env")" "$HOME/.local/state") ;;
             esac
             [[ "$want" == "$have" ]] \
                 || PROBLEMS+=("$name means $(tilde "$want") here but $(tilde "$have") to the session's user manager; set it the same in both")
@@ -299,7 +330,9 @@ check_premise() {
     # the session to emergency mode: a config that does not load stops here.
     if (( ${#PROBLEMS[@]} == 0 )); then
         verify=0
-        "$SRC/hypr/scripts/verify-config.sh" "$SRC/hypr" >/dev/null 2>"$STATE_TMP" || verify=$?
+        # Through bash, as the cursor builders go through python3: an archive
+        # or core.fileMode=false checkout has no executable bits.
+        bash "$SRC/hypr/scripts/verify-config.sh" "$SRC/hypr" >/dev/null 2>"$STATE_TMP" || verify=$?
         case "$verify" in
             0) ;;
             1) PROBLEMS+=("the Hyprland configuration in this checkout does not load (hypr/scripts/verify-config.sh says why)") ;;
@@ -461,8 +494,11 @@ claim() {
 # Hyprland reloads on write and could read a half-copied module.
 put() {
     local from=$1 to=$2 name=$3
+    mark_pending
     mkdir -p -- "$(dirname -- "$to")" || stop "could not create $(tilde "$(dirname -- "$to")")"
-    if ! { cp -a -- "$from" "$to.new-$$" && mv -T -- "$to.new-$$" "$to"; }; then
+    # Never writable by group or others, whatever the checkout's mode: a
+    # clone under umask 002 gives 664, and the shells skip such drop-ins.
+    if ! { cp -a -- "$from" "$to.new-$$" && chmod go-w -- "$to.new-$$" && mv -T -- "$to.new-$$" "$to"; }; then
         rm -f -- "$to.new-$$"
         stop "could not write $(tilde "$to")"
     fi
@@ -507,6 +543,11 @@ mirror_file() {
     [[ -n "$name" ]] || name=$(tilde "$2")
     [[ -f "$from" ]] || stop "missing source: ${from#"$SRC"/}"
     if [[ -f "$to" && ! -L "$to" ]] && cmp -s -- "$from" "$to"; then
+        if [[ -n "$(find "$to" -maxdepth 0 -perm /022 2>/dev/null)" ]]; then
+            if (( CHECK )); then todo "${YELLOW}writable by others: $name$RESET"; return 0; fi
+            chmod go-w -- "$to" || stop "could not change the mode of $(tilde "$to")"
+            branch "$GREEN✓$RESET $name is no longer writable by others"
+        fi
         (( CHECK )) || record "$to"
         same
         return 0
@@ -549,6 +590,11 @@ mirror_dir() {
         known[$rel]=1
     done < <(history_paths "$from")
     if (( CHECK )); then
+        # A link an older install made would compare the checkout with itself.
+        if [[ -L "$to" ]]; then
+            todo "${YELLOW}behind $(tilde "$to") (still a link from an older install)$RESET"
+            return 0
+        fi
         while IFS= read -r -d '' rel; do
             mirror_file "$from/${rel#./}" "$to/${rel#./}" "$prefix${rel#./}"
         done < <(cd -- "$from" && find . -mindepth 1 \( -type f -o -type l \) -print0 | LC_ALL=C sort -z)
@@ -596,6 +642,7 @@ mirror_dir() {
         [[ -e "$from/$rel" || -L "$from/$rel" ]] && continue
         if ours "$target" || [[ -n "${MANIFEST[$target]:-}" || -n "${known[$rel]:-}" ]]; then
             claim "$target"
+            mark_pending
             rm -f -- "$target" || stop "could not remove $(tilde "$target")"
             unset 'MANIFEST[$target]'
             MANIFEST_DIRTY=1
@@ -617,6 +664,7 @@ retire() {
     local target=$1 name=$2
     [[ -e "$target" || -L "$target" ]] || return 0
     if (( CHECK )); then todo "${YELLOW}stale $name (no longer used)$RESET"; return 0; fi
+    mark_pending
     rm -f -- "$target" || stop "could not remove $(tilde "$target")"
     wrote "$name" removed
 }
@@ -717,8 +765,17 @@ acquire_sudo() {
     printf '%ssudo%s %sfor %s%s\n' "$BOLD" "$RESET" "$DIM" "$(printf '%s, ' "${want[@]}" | sed 's/, $//')" "$RESET"
     if sudo -v 2>/dev/null; then
         SUDO_OK=1
-        # Kept alive: a cold run can outlast sudo's timestamp.
-        ( while true; do sudo -n true 2>/dev/null; sleep 50; done ) &
+        # Kept alive: a cold run can outlast sudo's timestamp. Without the
+        # lock's descriptor, and only while this script lives: a sleep that
+        # inherited fd 9 held the lock for 50 s after the run, and a killed
+        # run left the loop renewing the timestamp.
+        ( exec 9>&-
+          trap 'kill "${nap:-}" 2>/dev/null; exit 0' TERM
+          while kill -0 "$$" 2>/dev/null; do
+              sudo -n true 2>/dev/null || exit 0
+              sleep 50 & nap=$!
+              wait "$nap" || :
+          done ) &
         SUDO_KEEPALIVE=$!
     else
         printf '%sno sudo here, so root'\''s files are left for the end%s\n' "$YELLOW" "$RESET"
@@ -731,6 +788,12 @@ acquire_sudo() {
 # as .bak-<time>.
 system_file() {
     local rel=$1 dst=$2 mode=$3
+    # sudo install follows a link: one in the checkout could copy any file
+    # root can read into a root-owned, world-readable one.
+    if [[ -L "$SRC/$rel" || ! -f "$SRC/$rel" ]]; then
+        if (( CHECK )); then todo "$RED✗ $rel is not a regular file in the checkout$RESET"; return 1; fi
+        stop "$rel is not a regular file in the checkout; root's files are installed from regular files only"
+    fi
     if system_current "$rel" "$dst" "$mode"; then
         (( CHECK )) || record "$dst"
         same
@@ -772,9 +835,13 @@ unit_state() { systemctl --user is-enabled "$1" 2>/dev/null || :; }
 
 user_services() {
     local u state
-    if (( UNITS_CHANGED && ! CHECK )); then
+    if (( CHECK )) && pending units; then
+        todo "${YELLOW}the user manager was not reloaded after an earlier run changed its units$RESET"
+    fi
+    if (( ! CHECK )) && { (( UNITS_CHANGED )) || pending units; }; then
         if systemctl --user daemon-reload 2>/dev/null; then
             branch "$GREEN✓$RESET reloaded the user manager"
+            settled units
         else
             LEFT+=("systemctl --user daemon-reload (it failed here; the units apply at the next login)")
             branch "${YELLOW}could not reload the user manager$RESET"
@@ -846,7 +913,7 @@ cursor_inputs() {
 }
 
 cursor_theme() {
-    local want have tint
+    local want have tint complete
     want=$(cursor_inputs)
     have=$(cat -- "$CURSOR_STAMP" 2>/dev/null) || have=""
     if [[ -f "$DATA/icons/$CURSOR_THEME/index.theme" && "$want" == "$have" ]]; then
@@ -862,17 +929,26 @@ cursor_theme() {
         branch "${YELLOW}no FILL in theme/cursor/pointer.py, so $CURSOR_THEME was not built$RESET"
         return 0
     fi
-    if ! "$SRC/theme/cursor/tint-cursors.py" --from Oxygen_White --name "$CURSOR_THEME" --tint "$tint" \
+    if ! python3 "$SRC/theme/cursor/tint-cursors.py" --from Oxygen_White --name "$CURSOR_THEME" --tint "$tint" \
             --comment "Oxygen_White recoloured to the drawn pointer's blue" >/dev/null 2>"$STATE_TMP"; then
         branch "${YELLOW}$CURSOR_THEME could not be built ($(head -n 1 "$STATE_TMP")); the pointer is unchanged$RESET"
         return 0
     fi
-    "$SRC/theme/cursor/pointer.py" --theme "$CURSOR_THEME" >/dev/null 2>&1 \
-        || branch "${YELLOW}the arrow stayed as the tint left it$RESET"
+    complete=1
+    if ! python3 "$SRC/theme/cursor/pointer.py" --theme "$CURSOR_THEME" >/dev/null 2>&1; then
+        complete=0
+        branch "${YELLOW}the arrow stayed as the tint left it; the next run draws it again$RESET"
+    fi
     # Enlarges the drag shapes; reasoning in the script.
-    "$SRC/theme/cursor/emphasise.py" --theme "$CURSOR_THEME" >/dev/null 2>&1 \
-        || branch "${YELLOW}the drag cursors were left at theme size$RESET"
-    mkdir -p -- "${CURSOR_STAMP%/*}" && printf '%s\n' "$want" >"$CURSOR_STAMP" || :
+    if ! python3 "$SRC/theme/cursor/emphasise.py" --theme "$CURSOR_THEME" >/dev/null 2>&1; then
+        complete=0
+        branch "${YELLOW}the drag cursors were left at theme size; the next run tries again$RESET"
+    fi
+    # Only a whole build is stamped, so a step that failed (Pillow or
+    # rsvg-convert missing) runs again next time.
+    if (( complete )); then
+        { mkdir -p -- "${CURSOR_STAMP%/*}" && printf '%s\n' "$want" >"$CURSOR_STAMP"; } || :
+    fi
     wrote "built $CURSOR_THEME in $(tilde "$DATA/icons")"
 }
 
@@ -897,10 +973,14 @@ doctor() {
         "python3:key overlay, input method indicator, camera switch and cursor theme" "pkexec:the camera keys"
         "udevadm:the camera indicator" "cava:visualiser" "notify-send:notifications from scripts"
         "kitty:terminal" "inotifywait:session watch (polls every 5 s without it)"
+        "rsvg-convert:the drawn arrow in the cursor theme"
     )
     for tool in "${tools[@]}"; do
         command -v "${tool%%:*}" >/dev/null 2>&1 || missing+=("${tool%%:*} (${tool#*:})")
     done
+    if command -v python3 >/dev/null 2>&1 && ! python3 -c 'import PIL' 2>/dev/null; then
+        missing+=("Pillow for python3 (the drawn arrow in the cursor theme)")
+    fi
     if (( ${#missing[@]} == 0 )); then
         printf '%s✓%s doctor: every font and tool the desktop uses is present\n' "$GREEN" "$RESET"
         return 0
@@ -976,7 +1056,7 @@ mirror_dir "$SRC/hypr/scripts" "$CONFIG/hypr/scripts"
 ensure_exec "$CONFIG/hypr/scripts"/*.sh
 group_close
 
-group_open "$(tilde "$CONFIG/quickshell/bar")"
+group_open "$(tilde "$CONFIG/quickshell/bar")" bar
 mirror_dir "$SRC/quickshell/bar" "$CONFIG/quickshell/bar"
 ensure_exec "$CONFIG/quickshell/bar/scripts"/*.sh "$CONFIG/quickshell/bar/scripts"/*.py
 # The reloads on write above can miss files: quickshell reads the whole tree
@@ -986,7 +1066,10 @@ ensure_exec "$CONFIG/quickshell/bar/scripts"/*.sh "$CONFIG/quickshell/bar/script
 # still under way builds the shell over several turns of its event loop, its
 # IPC targets appearing one by one, so the "shell" target is looked for a few
 # times before the bar is taken for one from before the call.
-if (( ! CHECK && GROUP_WROTE )); then
+if (( CHECK )) && pending bar; then
+    todo "${YELLOW}the running bar was not reloaded after an earlier run wrote to it$RESET"
+fi
+if (( ! CHECK )) && { (( GROUP_WROTE )) || pending bar; }; then
     _bar_state=none
     for _ in 1 2 3 4 5 6 7 8 9 10; do
         _bar_targets=$(qs -p "$CONFIG/quickshell/bar" ipc show 2>/dev/null) || { _bar_state=none; break; }
@@ -999,11 +1082,18 @@ if (( ! CHECK && GROUP_WROTE )); then
     done
     case "$_bar_state" in
         ready)
-            qs -p "$CONFIG/quickshell/bar" ipc call shell reload >/dev/null 2>&1 \
-                && branch "$GREEN✓$RESET reloaded the running bar" ;;
+            if qs -p "$CONFIG/quickshell/bar" ipc call shell reload >/dev/null 2>&1; then
+                branch "$GREEN✓$RESET reloaded the running bar"
+                settled bar
+            else
+                LEFT+=("bar --restart (the running bar did not take the reload)")
+                branch "${YELLOW}the running bar did not take the reload$RESET"
+            fi ;;
         old)
             LEFT+=("bar --restart (the running bar could not be asked to reload)")
             branch "${YELLOW}the running bar cannot be asked to reload yet$RESET" ;;
+        # Not running: it reads the files when it starts.
+        *) settled bar ;;
     esac
     unset _bar_targets _bar_state
 fi
@@ -1014,7 +1104,7 @@ group_close
 # only, so a hyprland.lua that requires a not-yet-copied module leaves the
 # session in emergency mode. The state dir is where monitors.lua caches
 # output descriptions; the module cannot create it.
-group_open "$(tilde "$CONFIG/hypr")"
+group_open "$(tilde "$CONFIG/hypr")" compositor
 if (( ! CHECK )); then mkdir -p -- "$STATE/hypr" || stop "could not create $(tilde "$STATE/hypr")"; fi
 mirror_dir "$SRC/hypr/config" "$CONFIG/hypr/config" config/
 # The tracked preset, and the untracked per-machine deviations if this
@@ -1044,11 +1134,16 @@ if [[ -f "$SRC/hypr/monitor_settings.local.lua" ]]; then
 fi
 mirror_file "$SRC/hypr/hyprland.lua" "$CONFIG/hypr/hyprland.lua" hyprland.lua
 retire "$CONFIG/hypr/monitors.preset" monitors.preset
-if (( ! CHECK && GROUP_WROTE )); then
+if (( CHECK )) && pending compositor; then
+    todo "${YELLOW}the running compositor was not reloaded after an earlier run wrote to it$RESET"
+fi
+if (( ! CHECK )) && { (( GROUP_WROTE )) || pending compositor; }; then
     if ! hyprctl version >/dev/null 2>&1; then
         branch "${DIM}no compositor reachable from here; the next session reads it$RESET"
+        settled compositor
     elif hyprctl reload >/dev/null 2>&1; then
         branch "$GREEN✓$RESET reloaded the running compositor"
+        settled compositor
     else
         LEFT+=("hyprctl reload (it failed here)")
         branch "${YELLOW}could not reload the running compositor$RESET"
@@ -1075,7 +1170,7 @@ group_close
 # session-start.sh picks them up. The unit directory is shared with other
 # packages, so only units whose first line is the "# dotfiles-desktop" marker
 # and whose source is gone are removed.
-group_open "$(tilde "$CONFIG/systemd/user")"
+group_open "$(tilde "$CONFIG/systemd/user")" units
 for _unit in "$SRC"/systemd/user/*; do
     # A drop-in directory (hypridle.service.d) is mirrored as one.
     if [[ -d "$_unit" ]]; then

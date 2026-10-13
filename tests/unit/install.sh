@@ -69,17 +69,23 @@ setup() {
     T=$(mktemp -d "$WORK/case.XXXXXX")
     mkdir -p "$T/home" "$T/bin" "$T/repo"
     (cd "$REPO" && git ls-files -z --cached --others --exclude-standard | xargs -0 cp -a --parents -t "$T/repo")
-    # The cursor builders read /usr/share/icons and take seconds; stand-ins
-    # log the build and leave the theme's index behind.
+    # The cursor builders read /usr/share/icons and take seconds; stand-ins,
+    # run through python3 as the installer runs the real ones, log the build
+    # and leave the theme's index behind. The arrow fails while
+    # $T/pointer-fails exists.
     cat >"$T/repo/theme/cursor/tint-cursors.py" <<EOF
-#!/bin/sh
-echo "tint-cursors" >>"$T/calls"
-mkdir -p "\$HOME/.local/share/icons/Spaceduck-Sky" && : >"\$HOME/.local/share/icons/Spaceduck-Sky/index.theme"
+import os
+open("$T/calls", "a").write("tint-cursors\\n")
+d = os.path.join(os.environ["HOME"], ".local/share/icons/Spaceduck-Sky")
+os.makedirs(d, exist_ok=True)
+open(os.path.join(d, "index.theme"), "w").close()
 EOF
-    for f in pointer.py emphasise.py; do
-        printf '#!/bin/sh\n# FILL = "#1d89e4"\nexit 0\n' >"$T/repo/theme/cursor/$f"
-    done
-    printf 'FILL = "#1d89e4"\n' >>"$T/repo/theme/cursor/pointer.py"
+    cat >"$T/repo/theme/cursor/pointer.py" <<EOF
+import os, sys
+FILL = "#1d89e4"
+sys.exit(1 if os.path.exists("$T/pointer-fails") else 0)
+EOF
+    printf 'import sys\nsys.exit(0)\n' >"$T/repo/theme/cursor/emphasise.py"
     git -C "$T/repo" init -q
     git -C "$T/repo" add -A
     git -C "$T/repo" -c user.name=test -c user.email=test@test commit -qm initial
@@ -297,6 +303,73 @@ run
 echo '-- uncommitted two' >>"$T/repo/hypr/config/rules.lua"
 run; lacks "an installed uncommitted edit is no conflict" "$out" "conflict"
 same "it is replaced" "$T/home/$C/hypr/config/rules.lua" "$T/repo/hypr/config/rules.lua"
+
+# ---- fixes from the 2026-10-14 review ----
+# A checkout without executable bits (an archive, core.fileMode=false) and
+# with group-writable files (a clone under umask 002) installs, and nothing
+# it writes is writable by group or others.
+setup
+find "$T/repo" -path "$T/repo/.git" -prune -o -type f -exec chmod 664 {} +
+run; is "a 644 checkout gets past its premise" "$(grep -c 'premise is not met' <<<"$out")" 0
+runnable "and its scripts are executable once installed" "$T/home/$C/hypr/scripts/camera.sh"
+is "nothing installed is writable by others" "$(find "$T/home" -type f -perm /022 | wc -l)" 0
+cp -a "$T/repo/hypr/config/env.lua" "$T/env.lua" && chmod 666 "$T/home/$C/hypr/config/env.lua"
+run --check
+has "--check: an installed file writable by others" "$out" "writable by others: config/env.lua"
+run
+is "an update takes the write bits back" "$(stat -c %a "$T/home/$C/hypr/config/env.lua")" 644
+
+# A run that stopped between writing units and reloading the user manager
+# leaves that reload to the next run, though the next writes nothing.
+setup
+mkdir -p "$T/home/$C/systemd/user"
+echo '# not ours' >"$T/home/$C/systemd/user/polkit-agent.service"
+run; is "a conflict among the units stops" "$code" 1
+lacks "before the user manager is reloaded" "$(calls)" "daemon-reload"
+cp "$T/repo/systemd/user/polkit-agent.service" "$T/home/$C/systemd/user/polkit-agent.service"
+run --check
+has "--check names the reload left over" "$out" "the user manager was not reloaded after an earlier run changed its units"
+: >"$T/calls"
+run
+has "the next run reloads it" "$(calls)" "systemctl --user daemon-reload"
+: >"$T/calls"
+run
+lacks "and the one after does not" "$(calls)" "daemon-reload"
+
+# show-environment quotes a value with a space as $'...'.
+setup
+printf "XDG_DATA_HOME=\$'%s'\n" "$T/home/my data" >"$T/session-env"
+out=$(installer XDG_DATA_HOME="$T/home/my data" -- setsid -w bash "$T/repo/install.sh" --check </dev/null 2>&1)
+lacks "a quoted session value equal to this shell's is no mismatch" "$out" "XDG_DATA_HOME means"
+
+# A cursor build whose arrow failed is not stamped, so the next run builds again.
+setup
+: >"$T/pointer-fails"
+run
+has "a failed arrow is said" "$out" "the arrow stayed as the tint left it; the next run draws it again"
+rm -f -- "$T/pointer-fails"
+: >"$T/calls"
+run
+has "and the next run builds the theme again" "$(calls)" "tint-cursors"
+
+# A directory an older install linked into the checkout is behind, not current.
+setup
+mkdir -p "$T/home/$C/quickshell"
+ln -s "$T/repo/quickshell/bar" "$T/home/$C/quickshell/bar"
+run --check
+has "--check: a linked directory" "$out" "behind ~/$C/quickshell/bar (still a link from an older install)"
+
+# A root's file whose source is a link in the checkout is refused.
+setup
+ln -sf /etc/hostname "$T/repo/fontconfig/local.conf"
+run; is "a linked source for a root's file stops" "$code" 1
+has "and says why" "$out" "fontconfig/local.conf is not a regular file in the checkout"
+
+# An os-release whose last line has no newline.
+setup
+printf 'NAME="Arch Linux"\nID=arch' >"$T/os-release"
+run --check
+has "a last line without a newline is read" "$out" "✓ premise: Arch Linux (arch family)"
 
 # ---- seeds ----
 setup
