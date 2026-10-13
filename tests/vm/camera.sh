@@ -29,7 +29,7 @@ if [[ "${1:-}" != --guest ]]; then
         echo "SKIP  camera vm: no access to /dev/kvm"
         exit 0
     fi
-    for mod in dummy_hcd raw_gadget uvcvideo vivid vim2m; do
+    for mod in dummy_hcd raw_gadget uvcvideo vivid vim2m vimc; do
         modinfo -n "$mod" >/dev/null 2>&1 || { echo "SKIP  camera vm: the kernel has no $mod module"; exit 0; }
     done
     log=$(mktemp)
@@ -254,6 +254,26 @@ held() { /usr/local/bin/camera-switch status --json | grep -q '"busy": true'; }
 check "status says busy while another holds the lock" wait_until 2 held
 wait "$holder"
 check "status says free once the lock is let go" bash -c "/usr/local/bin/camera-switch status --json | grep -q '\"busy\": false'"
+
+# A media-controller camera: vimc's capture nodes hang off one platform
+# device with sensor and scaler subdevices. udev's rule runs enforce for its
+# video nodes only, and off and on go through unbind and bind.
+modprobe vimc
+udevadm settle
+sub=$(find /sys/class/video4linux -name 'v4l-subdev*' -print -quit)
+vimc_node=$(capture_nodes "$(readlink -f /sys/bus/platform/devices/vimc.0)" | head -1)
+check "vimc has subdevices and a capture node" test -n "$sub" -a -n "$vimc_node"
+touch /var/lib/camera-switch/off
+check "the rule runs enforce for a capture node" \
+    bash -c "udevadm test --action=add /sys/class/video4linux/$vimc_node 2>&1 | grep -q 'camera-switch enforce'"
+check "the rule leaves a subdevice node alone" \
+    bash -c "! udevadm test --action=add $sub 2>&1 | grep -q 'camera-switch enforce'"
+rm -f /var/lib/camera-switch/off
+out=$(switch off)
+check "vimc off: its driver is unbound" no_driver /sys/bus/platform/devices/vimc.0
+check "vimc off: no capture node is left" is "$(count)" 0
+check "on binds vimc again" is "$(switch on | head -1)" "Cameras on"
+check "on: vimc's capture node is back" bash -c "[[ -n \"\$(find /sys/bus/platform/devices/vimc.0/ -path '*video4linux/video*' -print -quit)\" ]]"
 
 # The fallback for kernels without per-interface authorization relies on
 # this: a deauthorized device loses its interfaces, and authorizing it again

@@ -7,6 +7,8 @@
 # video-class interface finds a UVC camera before its driver loads, so at boot
 # that driver never gets to bind at all.
 #
+# Capture nodes only (videoN): an ISP's dozens of v4l-subdev nodes would each
+# start an enforce at boot, and a camera is found by its video node anyway.
 # After 60-persistent-v4l.rules, whose v4l_id records the capabilities that
 # camera-switch reads instead of opening the device. The switch file must be
 # readable when the boot events are replayed, which holds with /var/lib on the
@@ -14,6 +16,6 @@
 # is pressed.
 ACTION!="add", GOTO="camera_switch_end"
 TEST!="/var/lib/camera-switch/off", GOTO="camera_switch_end"
-SUBSYSTEM=="video4linux", RUN+="/usr/local/bin/camera-switch enforce"
+SUBSYSTEM=="video4linux", KERNEL=="video[0-9]*", RUN+="/usr/local/bin/camera-switch enforce"
 SUBSYSTEM=="usb", ENV{DEVTYPE}=="usb_interface", ATTR{bInterfaceClass}=="0e", RUN+="/usr/local/bin/camera-switch enforce"
 LABEL="camera_switch_end"
