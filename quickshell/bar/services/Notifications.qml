@@ -100,9 +100,16 @@ Singleton {
 
     // Bodies render as StyledText, which fetches any <img src=...>: any bus
     // client could make this process request an arbitrary URL. Icons travel in
-    // app_icon, so <img> is stripped once here and other markup keeps working.
+    // app_icon, so <img> is stripped here and other markup keeps working.
+    // Until nothing changes: one pass made <im<img>g src=...> a whole <img>.
     function withoutImages(text: string): string {
-        return text.replace(/<\s*img\b[^>]*>?/gi, "");
+        let out = text;
+        for (;;) {
+            const next = out.replace(/<\s*img\b[^>]*>?/gi, "");
+            if (next === out)
+                return out;
+            out = next;
+        }
     }
 
     function snapshot(n) {
@@ -121,8 +128,12 @@ Singleton {
                 continue;
             actions.push({ text: a.text, identifier: a.identifier });
         }
+        root.serial += 1;
         return {
             id: n.id,
+            // This snapshot's own, for the toasts' model: a replaced
+            // notification gets a new card, not the old one with old text.
+            key: root.serial,
             appName: root.senderName(n.appName),
             appIcon: n.appIcon || "",
             summary: n.summary || "",
@@ -166,6 +177,46 @@ Singleton {
         root.toast(entry);
     }
 
+    property int serial: 0
+
+    // A sender that replaces its notification (replaces_id: notify-send -r, a
+    // reused libnotify object) changes this object in place, and the server
+    // emits no new notification: the entry is refreshed and toasted again
+    // here. Queued, so a summary and body changed together make one toast.
+    property var refreshing: ({})
+
+    function follow(n) {
+        const queue = () => {
+            root.refreshing[n.id] = n;
+            Qt.callLater(root.refreshQueued);
+        };
+        n.summaryChanged.connect(queue);
+        n.bodyChanged.connect(queue);
+        n.actionsChanged.connect(queue);
+        n.urgencyChanged.connect(queue);
+    }
+
+    function refreshQueued() {
+        const queued = root.refreshing;
+        root.refreshing = ({});
+        for (const id in queued)
+            root.refresh(queued[id]);
+    }
+
+    function refresh(n) {
+        const i = root.history.findIndex(e => e.id === n.id);
+        if (i < 0)
+            return;
+        const entry = root.snapshot(n);
+        entry.at = root.history[i].at;
+        entry.read = root.centreOpen;
+        const next = root.history.slice();
+        next[i] = entry;
+        root.history = next;
+        root.prune();
+        root.toast(entry);
+    }
+
     function dismiss(id) {
         const next = [];
         for (let i = 0; i < root.history.length; i++) {
@@ -199,20 +250,23 @@ Singleton {
     }
 
     // An action only works while the sender is running; warn instead of
-    // failing silently.
+    // failing silently. A destroyed Notification is still a truthy reference
+    // whose properties read undefined, so tracked is what tells it apart.
     function invoke(entry, identifier) {
-        if (!entry.live) {
+        const acts = entry.live?.tracked === true ? entry.live.actions : undefined;
+        if (!acts) {
             console.warn("[notifications] the sender is gone; cannot run", identifier);
             return false;
         }
-        const acts = entry.live.actions;
         for (let i = 0; i < acts.length; i++) {
             if (acts[i].identifier === identifier) {
                 acts[i].invoke();
                 return true;
             }
         }
-        console.warn("[notifications] no action", identifier, "on", entry.summary);
+        // The id, not the summary: a summary can be a message's text, and the
+        // journal keeps what is logged.
+        console.warn("[notifications] no action", identifier, "on notification", entry.id);
         return false;
     }
 
@@ -232,6 +286,7 @@ Singleton {
         onNotification: notification => {
             notification.tracked = true;
             root.add(notification);
+            root.follow(notification);
         }
     }
 }

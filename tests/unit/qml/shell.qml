@@ -59,6 +59,19 @@ ShellRoot {
         check("img: spaces", Notifications.withoutImages("< img src=x >text"), "text");
         check("img: unclosed", Notifications.withoutImages("text<img src=https://x"), "text");
         check("img: other markup kept", Notifications.withoutImages("<b>bold</b>"), "<b>bold</b>");
+        check("img: nested to survive one pass", Notifications.withoutImages("a<im<img>g src=\"http://x/y\">b"), "ab");
+        const fake = { id: 9901, appName: "t", appIcon: "", summary: "old", body: "b", urgency: 0, actions: [], tracked: true };
+        Notifications.history = [Object.assign(Notifications.snapshot(fake), { at: 5, read: true })].concat(Notifications.history);
+        const firstKey = Notifications.history[0].key;
+        fake.summary = "new";
+        Notifications.refresh(fake);
+        const replaced = Notifications.history.find(e => e.id === 9901);
+        check("replace: the entry is refreshed in place", replaced.summary, "new");
+        check("replace: it keeps its arrival", replaced.at, 5);
+        check("replace: it is unread again", replaced.read, false);
+        check("replace: its toast is a new card", replaced.key !== firstKey, true);
+        check("invoke: a gone sender is refused", Notifications.invoke({ id: 1, live: { tracked: false } }, "x"), false);
+        Notifications.dismiss(9901);
         check("sender: notify-send", Notifications.senderName("notify-send"), "");
         check("sender: named", Notifications.senderName("Firefox"), "Firefox");
     }

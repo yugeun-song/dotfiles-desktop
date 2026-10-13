@@ -25,19 +25,18 @@ Scope {
 
     property var live: []
 
+    // One card per notification: a replaced one's earlier card goes.
     function push(entry) {
-        const next = root.live.concat([entry]);
+        const next = root.live.filter(e => e.id !== entry.id).concat([entry]);
         while (next.length > root.maxVisible)
             next.shift();
         root.live = next;
     }
 
-    function drop(id) {
-        const next = [];
-        for (let i = 0; i < root.live.length; i++)
-            if (root.live[i].id !== id)
-                next.push(root.live[i]);
-        root.live = next;
+    // By key, not id: the card of a replaced notification finishing its exit
+    // must not take the newer card with it.
+    function drop(key) {
+        root.live = root.live.filter(e => e.key !== key);
     }
 
     Connections {
@@ -45,6 +44,14 @@ Scope {
 
         function onToast(entry) {
             root.push(entry);
+        }
+
+        // The history panel shows the same entries. Left in place, the cards
+        // were rebuilt when it closed and dwelt from the start again, those
+        // dismissed in the panel included.
+        function onCentreOpenChanged() {
+            if (Notifications.centreOpen)
+                root.live = [];
         }
     }
 
@@ -122,10 +129,10 @@ Scope {
                 Repeater {
                     // ScriptModel, not the bare array: a Repeater rebuilds every
                     // delegate when a plain array is reassigned, replaying each
-                    // toast's entrance and dwell. ScriptModel diffs by `id`.
+                    // toast's entrance and dwell. ScriptModel diffs by `key`.
                     model: ScriptModel {
                         values: root.live
-                        objectProp: "id"
+                        objectProp: "key"
                     }
 
                     // The slot holds the column space and collapses; the card
@@ -165,7 +172,7 @@ Scope {
                                 easing.type: Easing.OutCubic
                             }
                             ScriptAction {
-                                script: root.drop(slot.modelData.id)
+                                script: root.drop(slot.modelData.key)
                             }
                         }
 
