@@ -90,6 +90,10 @@ wss()  { n workspaces -j | jq -r '[.[] | select(.id > 0)] | sort_by(.id) | map("
 focus() { n dispatch "hl.dsp.focus({ workspace = $1 })" >/dev/null; }
 mark() { wc -l < "$LOG"; }
 since() { tail -n +"$(( $1 + 1 ))" "$LOG"; }
+# Captured first: a grep -q that stops early sends SIGPIPE up the pipe, and
+# pipefail made a match a FAIL once the log since the mark passed 64 KiB.
+seen() { grep -q -- "$2" <<<"$(since "$1")"; }
+seen_in() { local hits; hits=$(grep -- "$2" <<<"$(since "$1")"); grep -q -- "$3" <<<"$hits"; }
 
 FAILED=0
 expect() {
@@ -241,7 +245,7 @@ else
     since "$m" | grep 'monitors:' | sed 's/^.*\[Lua\] /      /'
     FAILED=1
 fi
-if since "$m" | grep -q 'monitors: lid shut -> .*WAYLAND-1:off'; then
+if seen "$m" 'monitors: lid shut -> .*WAYLAND-1:off'; then
     echo "FAIL  lid shut: the panel was darkened in the same emission that lit the external"
     FAILED=1
 else
@@ -266,7 +270,7 @@ expect_panel_holds_none "session end: no workspace left on the panel"
 # The off emission itself may not be logged: apply() prints a stage only when
 # its summary changes, and the lid case left "WAYLAND-1:off" there. The panel
 # off with no disabled rule in the lighting emission shows the split.
-if since "$m" | grep -q 'monitors: session end -> .*WAYLAND-1:off'; then
+if seen "$m" 'monitors: session end -> .*WAYLAND-1:off'; then
     echo "FAIL  session end: the panel was darkened in the same emission that lit the external"
     FAILED=1
 else
@@ -372,12 +376,12 @@ sleep 1.5
 expect "laptop only: external off" "HEADLESS-1 disabled=true"
 expect_re "laptop only: panel on at 0x0" 'WAYLAND-1 disabled=false [0-9x@]+ pos=0x0'
 expect_ws "laptop only: workspace 1 on the panel" "1@WAYLAND-1"
-if since "$m" | grep 'monitors: override -> ' | grep -q ':off'; then
+if seen_in "$m" 'monitors: override -> ' ':off'; then
     echo "FAIL  laptop only: the lighting emission carried a disabled rule"; FAILED=1
 else
     echo "PASS  laptop only: the lighting emission carried no disabled rule"
 fi
-if since "$m" | grep -q 'monitors: override (off) -> HEADLESS-1:off'; then
+if seen "$m" 'monitors: override (off) -> HEADLESS-1:off'; then
     echo "PASS  laptop only: the external went off in the off emission"
 else
     echo "FAIL  laptop only: no off emission for HEADLESS-1"; FAILED=1
@@ -402,14 +406,14 @@ sleep 1.5
 expect "external only: external on at 0x0" "HEADLESS-1 disabled=false 1920x1080@60 pos=0x0"
 expect "external only: panel off" "WAYLAND-1 disabled=true"
 expect_panel_holds_none "external only: no workspace left on the panel"
-if since "$m" | grep 'monitors: override -> ' | grep -q ':off'; then
+if seen_in "$m" 'monitors: override -> ' ':off'; then
     echo "FAIL  external only: the lighting emission carried a disabled rule"; FAILED=1
 else
     echo "PASS  external only: the lighting emission carried no disabled rule"
 fi
 # The panel goes off only once the external is lit, so the off emission
 # belongs to the evaluation the external's arrival schedules.
-if since "$m" | grep -q 'monitors: .* (off) -> WAYLAND-1:off'; then
+if seen "$m" 'monitors: .* (off) -> WAYLAND-1:off'; then
     echo "PASS  external only: the panel went off in an off emission"
 else
     echo "FAIL  external only: no off emission for WAYLAND-1"; FAILED=1
@@ -422,7 +426,7 @@ printf 'name:WAYLAND-1\tenabled\tfalse\nname:HEADLESS-1\tenabled\tfalse\n' | ov 
 sleep 2
 expect "both off: panel on" "WAYLAND-1 disabled=false"
 expect "both off: external off" "HEADLESS-1 disabled=true"
-if since "$m" | grep -q 'monitors: .*panel stays on'; then
+if seen "$m" 'monitors: .*panel stays on'; then
     echo "PASS  both off: warned that the panel stays on"
 else
     echo "FAIL  both off: no warning that the panel stays on"; FAILED=1
@@ -452,7 +456,7 @@ printf 'name:HEADLESS-1\tscale\t0.5\n' | ov set || { echo "FAIL  set: scale 0.5 
 sleep 1.2
 expect "scale 0.5: external at scale 0.5" "HEADLESS-1 disabled=false 1920x1080@60 pos=0x0 scale=0.5"
 expect_fit "scale 0.5: gaps and border scaled up for the headless output" "[6,12,5]"
-if since "$m" | grep -q 'monitors: fit HEADLESS-1 x1.50 -> gaps 6/12/5/20'; then
+if seen "$m" 'monitors: fit HEADLESS-1 x1.50 -> gaps 6/12/5/20'; then
     echo "PASS  scale 0.5: rounding capped at what the rule accepts"
 else
     echo "FAIL  scale 0.5: no fit line with rounding 20 for HEADLESS-1"; FAILED=1
@@ -464,7 +468,7 @@ m=$(mark)
 printf 'name:HEADLESS-1\tmode\t1280x720@60.00\n' | ov set || { echo "FAIL  set: bad mode exited $?"; FAILED=1; }
 sleep 1.2
 expect "unlisted mode: external still on at its own mode" "HEADLESS-1 disabled=false 1920x1080@60 pos=0x0 scale=1"
-if since "$m" | grep -q 'monitors: HEADLESS-1 does not offer 1280x720@60.00'; then
+if seen "$m" 'monitors: HEADLESS-1 does not offer 1280x720@60.00'; then
     echo "PASS  unlisted mode: warned and fell back"
 else
     echo "FAIL  unlisted mode: no warning"; FAILED=1
@@ -473,7 +477,7 @@ m=$(mark)
 printf 'name:HEADLESS-1\tmode\t1920x1080@60.00\n' | ov set || { echo "FAIL  set: listed mode exited $?"; FAILED=1; }
 sleep 1.2
 expect "listed mode: external on" "HEADLESS-1 disabled=false 1920x1080@60"
-if since "$m" | grep -q 'HEADLESS-1:1920x1080@60.00/0x0/x1'; then
+if seen "$m" 'HEADLESS-1:1920x1080@60.00/0x0/x1'; then
     echo "PASS  listed mode: the rule carried the mode"
 else
     echo "FAIL  listed mode: the rule did not carry the mode"; FAILED=1
@@ -499,7 +503,7 @@ else
     echo "FAIL  mirror: mirrorOf is [$mirror], HEADLESS-1 is id [$hid]"; FAILED=1
 fi
 expect_panel_holds_none "mirror: no workspace on the panel"
-if since "$m" | grep -q 'WAYLAND-1:highrr/[^ ]*/x1/mirror=HEADLESS-1'; then
+if seen "$m" 'WAYLAND-1:highrr/[^ ]*/x1/mirror=HEADLESS-1'; then
     echo "PASS  mirror: the rule named the external"
 else
     echo "FAIL  mirror: the rule did not name the external"; FAILED=1

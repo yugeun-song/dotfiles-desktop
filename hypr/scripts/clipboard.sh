@@ -8,7 +8,10 @@ if ! command -v cliphist >/dev/null 2>&1; then
     exit 1
 fi
 
-if ! cliphist list 2>/dev/null | grep -q .; then
+# Captured, not piped into grep -q: grep stops at the first line, cliphist
+# dies of SIGPIPE on its next write, and pipefail read a long history as
+# empty (35 times in 50 with 100 entries).
+if ! grep -q . <<<"$(cliphist list 2>/dev/null)"; then
     command -v notify-send >/dev/null 2>&1 && \
         ( timeout 2 notify-send "Clipboard history" "nothing stored yet" >/dev/null 2>&1 & )
     exit 0

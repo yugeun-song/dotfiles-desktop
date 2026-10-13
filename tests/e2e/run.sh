@@ -142,7 +142,9 @@ logged() { grep -q -- "$2" "$1" 2>/dev/null; }
 # from 93% of its size (layersIn), and a capture in those frames once put the
 # badge 17 px right of where its click lands.
 steady() { local last=$x; "$@" || return 1; [[ $x == "$last" ]]; }
-no_qml_warnings() { ! grep -E "WARN scene|ERROR" "$WORK/qs.out" | grep -v -E "portal|Could not register" | grep -q .; }
+# Captured, not ended in grep -q: an early exit under pipefail failed the
+# pipe, and the ! turned many warnings into none.
+no_qml_warnings() { local w; w=$(grep -E "WARN scene|ERROR" "$WORK/qs.out" | grep -v -E "portal|Could not register"); [[ -z "$w" ]]; }
 session_dialog_open() { has_layer quickshell:powermenu && [[ "$(ipc e2e session)" == true ]]; }
 overlay_on() { has_layer quickshell:keys && key_state_is .enabled true; }
 no_writes() { ! grep -q -E '^(lock|suspend|session-power|ddc-set|backlight-set)' "$WORK/apps.log" 2>/dev/null; }

@@ -49,7 +49,7 @@ alive() {
 }
 is_nested() {
     local pid; pid=$(lock_pid "$1") || return 1
-    [[ -n "$pid" ]] && tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null | grep -q '^WAYLAND_DISPLAY='
+    [[ -n "$pid" ]] && grep -q '^WAYLAND_DISPLAY=' <<<"$(tr '\0' '\n' < "/proc/$pid/environ" 2>/dev/null)"
 }
 if [[ -n "$current" ]]; then
     lock="$RT/hypr/$current/hyprland.lock"
