@@ -175,8 +175,9 @@ square root of the screen's logical area over that reference's, floored at
 1; `monitors.lua` and `scripts/lock-fit.sh` apply the same factor to gaps,
 borders and the lock screen.
 
-The bar is the notification server (history `Super+N`, a toast dwells 5 s,
-critical 20 s). `Super+/` lists every binding. Cover art loads only from
+The bar is the notification server (history `Super+N` for a day, a toast
+dwells 5 s, critical 20 s; images are declined, nothing draws them).
+`Super+/` lists every binding. Cover art loads only from
 local files and `Theme.artHosts`. Weather refetches when a link comes up and
 again when NetworkManager's check sees the internet answer, so a boot without
 network shows it within seconds of connecting; a click fetches at once.

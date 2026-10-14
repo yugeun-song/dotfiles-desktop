@@ -12,6 +12,12 @@ Singleton {
 
     readonly property int historyLimit: 100
 
+    // How long an entry stays in the history. Notifications carry message
+    // text, codes and links, and the history is the one place in the bar
+    // that keeps them past their toast; a day still covers "since
+    // yesterday". Checked every ten minutes.
+    readonly property int keepHours: 24
+
     property var history: []
 
     // Derived from history, never counted separately, so it cannot drift.
@@ -237,10 +243,45 @@ Singleton {
     }
 
     // tracked keeps a Notification alive past its close; clear it on every path
-    // that drops an entry, or the server holds them all session.
+    // that drops an entry, or the server holds them all session. The entry
+    // gives its text up as well: its object can outlive the list (a toast
+    // still up, a model's older copy), and nothing should lead back to the
+    // message through it. That drops references, not the bytes, which the
+    // engine frees without clearing; the bar never writes a core (bin/bar).
     function release(entry) {
-        if (entry && entry.live)
+        if (!entry)
+            return;
+        if (entry.live)
             entry.live.tracked = false;
+        entry.live = null;
+        entry.summary = "";
+        entry.body = "";
+        entry.actions = [];
+    }
+
+    function expire() {
+        const cutoff = Date.now() - root.keepHours * 3600000;
+        if (!root.history.some(e => e.at < cutoff))
+            return;
+        const next = [];
+        for (let i = 0; i < root.history.length; i++) {
+            if (root.history[i].at < cutoff)
+                root.release(root.history[i]);
+            else
+                next.push(root.history[i]);
+        }
+        root.history = next;
+        root.prune();
+    }
+
+    // Not at start: after a reload the history comes back one replay at a
+    // time, and a prune then would drop the marks of those still to come.
+    Timer {
+        interval: 600000
+        repeat: true
+        running: true
+
+        onTriggered: root.expire()
     }
 
     // Rebuilt, not mutated: a var property notifies only on reassignment.
@@ -274,10 +315,12 @@ Singleton {
         id: server
 
         // Advertise only what is rendered; senders format for these claims.
+        // No images: nothing draws them, and a sender that is told so keeps
+        // its picture (a chat's avatar, a photo) out of the history.
         actionsSupported: true
         bodySupported: true
         bodyMarkupSupported: true
-        imageSupported: true
+        imageSupported: false
 
         // Retained notifications are handed back after a reload (see arrivals).
         // tracked = true below is what keeps each one alive past its close.

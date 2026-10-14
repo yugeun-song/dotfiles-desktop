@@ -63,6 +63,18 @@ ShellRoot {
         check("img: unclosed", Notifications.withoutImages("text<img src=https://x"), "text");
         check("img: other markup kept", Notifications.withoutImages("<b>bold</b>"), "<b>bold</b>");
         check("img: nested to survive one pass", Notifications.withoutImages("a<im<img>g src=\"http://x/y\">b"), "ab");
+        const saved = Notifications.history;
+        const now = Date.now();
+        const stale = { id: 901, key: 901, summary: "old", body: "code 1234", actions: [{ text: "Open", identifier: "o" }],
+                        at: now - 25 * 3600000, read: true, live: null };
+        const recent = { id: 902, key: 902, summary: "new", body: "b", actions: [], at: now - 3600000, read: false, live: null };
+        Notifications.history = [recent, stale];
+        Notifications.expire();
+        check("history: an entry a day old expires", Notifications.history.map(e => e.id), [902]);
+        check("history: and gives its text up", [stale.summary, stale.body, stale.actions], ["", "", []]);
+        Notifications.dismiss(902);
+        check("history: so does a dismissed one", recent.summary, "");
+        Notifications.history = saved;
         const fake = { id: 9901, appName: "t", appIcon: "", summary: "old", body: "b", urgency: 0, actions: [], tracked: true };
         Notifications.history = [Object.assign(Notifications.snapshot(fake), { at: 5, read: true })].concat(Notifications.history);
         const firstKey = Notifications.history[0].key;
