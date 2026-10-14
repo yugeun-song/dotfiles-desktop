@@ -155,7 +155,9 @@ wmo_icon() {
 json=""
 FETCHED=0
 LIVE=0
-get_json || { echo "weather.sh: fetch failed and no usable cache at $CACHE_FILE" >&2; exit 1; }
+# Not the cache's path, which carries the coordinates: the bar logs this
+# line, and the journal keeps it.
+get_json || { echo "weather.sh: fetch failed and no usable cache" >&2; exit 1; }
 
 code=$(printf '%s' "$json" | jq -r '.current.weather_code')
 isday=$(printf '%s' "$json" | jq -r '.current.is_day')

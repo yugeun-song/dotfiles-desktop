@@ -158,7 +158,9 @@ Singleton {
                     root.data = parsed;
                     root.received = parsed;
                 } catch (error) {
-                    console.warn("[weather] could not parse:", trimmed);
+                    // Its length only: the line is the script's, and the
+                    // journal keeps what is logged.
+                    console.warn("[weather] could not parse a line of", trimmed.length, "characters");
                 }
             }
         }
