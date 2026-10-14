@@ -486,11 +486,15 @@ hl.bind("XF86AudioPrev", hl.dsp.exec_cmd(player .. " previous'"), { locked = tru
 --##! Session
 -- Not SUPER+L, which is focus right.
 hl.bind("CTRL + ALT + L", hl.dsp.exec_cmd("loginctl lock-session"), { description = "Lock" })
--- Escape from a crashed locker (the session stays locked by design). Safe:
--- Hyprland refuses while a lock client is alive. locked = true, since
--- ordinary binds are not delivered then.
-hl.bind("CTRL + ALT + SHIFT + U", hl.dsp.exec_cmd("hyprctl eval 'hl.clear_crashed_lockscreen()'"),
-    { locked = true, description = "Clear a crashed lock screen" })
+-- A crashed locker leaves the session locked (ext-session-lock) with no
+-- password field. This starts a new one, which may attach
+-- (allow_session_lock_restore, general.lua), so the way back is the
+-- password, as from any lock. Not hl.clear_crashed_lockscreen(): that
+-- unlocks outright, so anyone at the keyboard had the session once hyprlock
+-- had crashed. The escape that needs no locker is a text console's login
+-- and bin/unlock. locked = true, since ordinary binds are not delivered then.
+hl.bind("CTRL + ALT + SHIFT + U", hl.dsp.exec_cmd("pidof hyprlock || " .. scripts .. "/lock.sh"),
+    { locked = true, description = "Restart a crashed lock screen" })
 -- Through scripts/session-power.sh, which ends the compositor before the
 -- shutdown transaction starts (a direct poweroff with an external lit hung
 -- this machine after userspace had finished; a sign-out first did not). The

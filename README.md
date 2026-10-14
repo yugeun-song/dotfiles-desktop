@@ -153,7 +153,9 @@ through `scripts/session-power.sh`, which ends the compositor before the
 transaction: a direct `systemctl poweroff` with an external lit hung this
 machine. From a text console, `~/recover-desktop` repairs a desktop that runs
 but cannot be seen (`--status` only diagnoses), and `unlock` clears a stuck
-lock screen.
+lock screen. On the lock screen itself, `Ctrl+Alt+Shift+U` starts a new
+locker when hyprlock has crashed: the way out is the password, never an
+unlock without one.
 
 The clipboard history (`Super+V`, cliphist) lives in `$XDG_RUNTIME_DIR`, a
 tmpfs gone at logout, and `cliphist-expire.timer` drops entries after half
