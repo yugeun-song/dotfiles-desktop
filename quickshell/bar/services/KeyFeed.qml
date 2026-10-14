@@ -85,10 +85,79 @@ Singleton {
         }
     }
 
+    // A password being typed: its keys must not reach the overlay, or any
+    // buffer on the way. Told apart without reading a key: a password
+    // window has the focus (polkit agents, among them the one that asks
+    // for this reader's password, pinentry, ssh and sudo askpass helpers,
+    // the GNOME keyring's and KDE wallet's prompts), or the focused window's
+    // terminal reads with its echo off (echowatch.py: sudo, su, ssh,
+    // passwd, read -s). The reader is paused for it, which closes the
+    // keyboards (keyfeed.py).
+    readonly property var secretWindows: /polkit|policykit|pinentry|askpass|gcr-prompter|kwalletd/i
+
+    readonly property var focusedWindow: Screens.focusedWindow
+
+    readonly property bool secretFocused:
+        root.secretWindows.test(root.focusedWindow?.wayland?.appId ?? root.focusedWindow?.lastIpcObject?.class ?? "")
+
+    property bool promptSecret: false
+
+    readonly property bool secretInput: root.secretFocused || root.promptSecret
+
+    // Set the moment either says so, with whatever was drawn just before
+    // cleared (a first key can beat the word to the bar), and held a moment
+    // after: the last keys of the password can come after the word that it
+    // is over.
+    property bool guarded: false
+
+    onSecretInputChanged: {
+        if (root.secretInput) {
+            guardRelease.stop();
+            root.guarded = true;
+            root.clear();
+        } else {
+            guardRelease.restart();
+        }
+    }
+
+    Timer {
+        id: guardRelease
+
+        interval: 400
+        onTriggered: root.guarded = root.secretInput
+    }
+
+    // The focused window's process, for echowatch.py to find its terminals.
+    readonly property int focusedPid: root.focusedWindow?.lastIpcObject?.pid ?? 0
+
+    onFocusedPidChanged: root.tellFocus()
+
+    function tellFocus() {
+        if (echoWatch.running)
+            echoWatch.write(`pid ${root.focusedPid}\n`);
+    }
+
+    // Only while the overlay is on: nothing else wants to know.
+    Process {
+        id: echoWatch
+
+        running: root.enabled
+        command: ["python3", "-I", Quickshell.shellPath("scripts/echowatch.py")]
+        stdinEnabled: true
+
+        onStarted: root.tellFocus()
+
+        stdout: SplitParser {
+            onRead: line => root.promptSecret = line.trim() === "secret"
+        }
+
+        onExited: root.promptSecret = false
+    }
+
     // {mods: [...], key: "C", id: n}. The only place keys are kept: at most
     // maxVisible, each dropped by its cap's exit (dwell plus the fall, under
-    // a second), all of them on Super+Y off and on a lock or unlock. Nothing
-    // reads them but the overlay.
+    // a second), all of them on Super+Y off, on a lock or unlock and when a
+    // password is being typed. Nothing reads them but the overlay.
     property var chords: []
 
     readonly property int dwellMs: 500
@@ -153,7 +222,7 @@ Singleton {
     }
 
     function push(mods, key) {
-        if (root.locked)
+        if (root.locked || root.guarded)
             return;
         const next = root.chords.concat([{ mods: mods, key: key, id: root.nextId }]);
         root.nextId = root.nextId + 1;
@@ -214,13 +283,12 @@ Singleton {
         onSaveFailed: error => console.warn("[keyfeed] could not keep the switch in", store.path, "-", error)
     }
 
-    // Whether the reader may send keys at all: not while the session is
-    // locked. Said to the reader on every change and as it starts, which
-    // keeps those keys inside it (keyfeed.py); push() drops any that cross on
-    // the way. Password dialogs are not told apart: the user turns the overlay
-    // off by hand for a secret (a script that knew those moments could be
-    // misused, and one reading the keys would be a keylogger of its own).
-    readonly property bool readerOpen: !root.locked
+    // Whether the reader may read keys at all: not while the session is
+    // locked or a password is being typed. Said to the reader on every
+    // change and as it starts; paused, it holds no keyboard open, so those
+    // keys are read by nothing (keyfeed.py). push() drops any that cross on
+    // the way.
+    readonly property bool readerOpen: !root.locked && !root.guarded
 
     onReaderOpenChanged: root.steer()
 

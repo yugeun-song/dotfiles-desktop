@@ -140,6 +140,15 @@ ShellRoot {
         check("scrub: nor one cut by the cap", oldest.key, null);
         KeyFeed.clear();
         check("mods: a scrubbed chord prints none", KeyFeed.symbolsFor(null), "");
+        const dialogs = ["org.kde.polkit-kde-authentication-agent-1", "hyprpolkitagent", "lxqt-policykit-agent",
+                         "org.gnupg.pinentry-qt", "org.kde.ksshaskpass", "gcr-prompter", "org.kde.kwalletd6"];
+        check("secret: password windows are known", dialogs.filter(c => !KeyFeed.secretWindows.test(c)), []);
+        check("secret: other windows are not", ["kitty", "firefox", "org.kde.dolphin", "code-oss"]
+              .filter(c => KeyFeed.secretWindows.test(c)), []);
+        KeyFeed.guarded = true;
+        KeyFeed.push([], "p");
+        check("chords: none while a password is typed", KeyFeed.chords.length, 0);
+        KeyFeed.guarded = false;
         // As at the start, until the probe answers.
         KeyFeed.locked = true;
     }
@@ -188,6 +197,16 @@ ShellRoot {
         printErrors: false
     }
 
+    readonly property string echoFlag: Quickshell.env("ECHOWATCH_TEST_FLAG") ?? ""
+
+    FileView {
+        id: echoLog
+
+        path: Quickshell.env("ECHOWATCH_TEST_LOG") ?? ""
+        blockLoading: true
+        printErrors: false
+    }
+
     function keyMode(mode) {
         Quickshell.execDetached(["sh", "-c", `printf %s "$2" > "$1/mode"`, "sh", root.keyDir, mode]);
     }
@@ -215,10 +234,26 @@ ShellRoot {
             { wait: 300, run: () => {
                 check("reader: the unlock resumes it", root.keyControl, "resume\npause\nresume\n");
                 check("reader: and its keys come again", KeyFeed.chords.map(c => c.key), ["K"]);
+                echoLog.reload();
+                check("prompt: the watcher is told the focused window", echoLog.text(), "pid 0\n");
+                Quickshell.execDetached(["touch", root.echoFlag]);
+            } },
+            { wait: 400, run: () => {
+                check("prompt: a terminal asking for a password pauses the reader",
+                      [KeyFeed.guarded, root.keyControl], [true, "resume\npause\nresume\npause\n"]);
+                check("prompt: and what was drawn goes", KeyFeed.chords.length, 0);
+                KeyFeed.push([], "p");
+                check("prompt: nothing is drawn meanwhile", KeyFeed.chords.length, 0);
+                Quickshell.execDetached(["rm", "-f", root.echoFlag]);
+            } },
+            { wait: 250, run: () => check("prompt: held a moment after", KeyFeed.guarded, true) },
+            { wait: 500, run: () => {
+                check("prompt: then the reader resumes", root.keyControl, "resume\npause\nresume\npause\nresume\n");
                 KeyFeed.toggle();
             } },
             { wait: 700, run: () => {
-                check("reader: Super+Y off tells it to stop", root.keyControl, "resume\npause\nresume\nstop\n");
+                check("reader: Super+Y off tells it to stop", root.keyControl,
+                      "resume\npause\nresume\npause\nresume\nstop\n");
                 check("reader: and it stops, though the bar cannot signal it", root.keyLog, "started\nstopped\n");
                 root.keyMode("dismiss");
             } },

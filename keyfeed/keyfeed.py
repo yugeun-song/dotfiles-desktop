@@ -15,15 +15,16 @@ which keeps at most five chords, each for under a second. It opens no socket
 and no file but the devices, the kernel's key header and sysfs, writes no
 file and logs no key.
 
-The bar steers it with lines on stdin. It starts paused and sends nothing
-until `resume`; `pause` holds the keys back again (the bar pauses it while
-the session is locked), so a password typed into the lock screen never
-leaves this process, whose buffer is zeroed and whose memory nobody but
-root can read. `stop`, or the end of stdin, ends
-it: the bar cannot signal a process of root's, so that is the off switch.
-With --vt N it also sends nothing while another console is in front: the
-evdev devices carry the keys typed into a text console's login or another
-session's greeter too.
+The bar steers it with lines on stdin. It starts paused, and while paused
+it holds no keyboard open at all, so nothing typed then is read or queued
+for it anywhere, the kernel's per-reader queue included: the bar pauses it
+while the session is locked and while a password is being typed (a polkit
+or pinentry window, a terminal asking with its echo off). `resume` opens
+the keyboards again, `stop` or the end of stdin ends it: the bar cannot
+signal a process of root's, so that is the off switch. With --vt N it also
+holds them closed while another console is in front, a text console's
+login or another session's greeter. What it does read sits in one buffer,
+zeroed once decoded, in a process nobody but root can read.
 
 A line protocol on purpose: anything that prints the same lines (a Rust
 binary, later) can replace this without the overlay changing. Physical keys,
@@ -33,6 +34,7 @@ symbols: how Escape is drawn is the overlay's question, so a replacement
 reader carries no glyph table.
 """
 
+import fcntl
 import grp
 import json
 import os
@@ -161,6 +163,34 @@ def open_keyboards(skip=frozenset()):
     return found
 
 
+def close_keyboards(devices):
+    for fd in devices:
+        try:
+            os.close(fd)
+        except OSError:
+            pass
+    devices.clear()
+
+
+# EVIOCGKEY: the bitmap of the keys a device has down right now.
+KEY_BYTES = 0x2FF // 8 + 1
+EVIOCGKEY = (2 << 30) | (KEY_BYTES << 16) | (ord("E") << 8) | 0x18
+
+
+def held_modifiers(devices):
+    """The modifiers down right now: keyboards opened again after a pause
+    missed their presses, and a chord would show without them."""
+    held = set()
+    for fd in devices:
+        bits = bytearray(KEY_BYTES)
+        try:
+            fcntl.ioctl(fd, EVIOCGKEY, bits, True)
+        except OSError:
+            continue
+        held.update(code for code in MODIFIERS if bits[code // 8] >> (code % 8) & 1)
+    return held
+
+
 def decode(buf, n, held):
     """The key presses among the first n bytes of buf, as payloads. held is
     the set of modifier codes down, kept across calls. The bytes are zeroed
@@ -218,11 +248,11 @@ def undumpable():
 
 
 def drop_privileges():
-    """From root to nobody with the input group alone, once the keyboards
-    are open. The group, not root, is what a keyboard plugged in later
-    takes; nothing else here needs privilege. Without an input group the
-    keyboards already open are all there will be. A no-op when not root
-    (a test, or a hand run by a user in the input group)."""
+    """From root to nobody with the input group alone, before any keyboard
+    is opened: the group is what opens one (again after every pause), and
+    nothing else here needs privilege. Without an input group no keyboard
+    opens, and the error line says so. A no-op when not root (a test, or a
+    hand run by a user in the input group)."""
     if os.geteuid() != 0:
         return
     try:
@@ -242,13 +272,30 @@ def drop_privileges():
     undumpable()
 
 
-def foreground_vt():
-    """The console in front, as "tty3", or None where sysfs cannot say."""
-    try:
-        with open("/sys/class/tty/tty0/active") as fh:
-            return fh.read().strip() or None
-    except OSError:
-        return None
+class Console:
+    """Whether the session's console is the one in front. sysfs wakes a poll
+    on this file when the console changes (logind watches it the same way),
+    once the file has been read since the last wake."""
+
+    PATH = "/sys/class/tty/tty0/active"
+
+    def __init__(self, session_vt, path=None):
+        self.session_vt = session_vt
+        self.fd = None
+        if session_vt:
+            try:
+                self.fd = os.open(path or self.PATH, os.O_RDONLY | os.O_CLOEXEC)
+            except OSError:
+                self.fd = None
+
+    def ours(self):
+        if self.fd is None:
+            return True
+        try:
+            os.lseek(self.fd, 0, os.SEEK_SET)
+            return os.read(self.fd, 64).decode().strip() == self.session_vt
+        except OSError:
+            return True
 
 
 class Control:
@@ -298,54 +345,68 @@ def main(argv=()):
     # A bar that went away mid-line: the next write fails, and that ends it.
     signal.signal(signal.SIGPIPE, signal.SIG_DFL)
     undumpable()
-
-    devices = open_keyboards()
+    # At once: the input group is all it needs, keyboards included.
     drop_privileges()
+
     control = Control(sys.stdin.fileno())
+    console = Console(session_vt)
+    console.ours()
+    emit({"type": "ready"})
+
+    devices = {}
+    held = set()
+    reading = False
     # Kept running without a keyboard rather than exiting: each start costs
     # the user a password, and one can still come (Bluetooth, a dock).
-    missing = not devices
-    if missing:
-        emit({"type": "error", "reason": "no keyboard to read yet"})
-    else:
-        emit({"type": "ready", "devices": len(devices)})
-
-    held = set()
-    # Periodic rescan picks up reconnected (e.g. Bluetooth) keyboards.
-    next_scan = time.monotonic() + 5
+    missing = False
+    next_scan = 0.0
     # Raw events are read into this one buffer, which decode() zeroes: a
     # fresh bytes object per read would leave each batch in freed memory,
     # which Python does not clear.
     buf = bytearray(EVENT_SIZE * 64)
 
     while True:
-        readable, _, _ = select.select([control.fd] + list(devices), [], [], 1.0)
+        want = control.open and console.ours()
+        if want and not reading:
+            devices = open_keyboards()
+            held = held_modifiers(devices)
+            reading = True
+            missing = not devices
+            emit({"type": "error", "reason": "no keyboard to read yet"} if missing
+                 else {"type": "ready", "devices": len(devices)})
+            next_scan = time.monotonic() + 5
+        elif reading and not want:
+            close_keyboards(devices)
+            held = set()
+            reading = False
 
-        for fd in readable:
+        poller = select.poll()
+        poller.register(control.fd, select.POLLIN)
+        if console.fd is not None:
+            poller.register(console.fd, select.POLLPRI | select.POLLERR)
+        for fd in devices:
+            poller.register(fd, select.POLLIN)
+
+        for fd, _ in poller.poll(1000):
             if fd == control.fd:
                 if not control.read():
                     return 0
-                continue
-            try:
-                n = os.readv(fd, [buf])
-            except BlockingIOError:
-                continue
-            except OSError:
-                os.close(fd)
-                devices.pop(fd, None)
-                next_scan = 0
-                continue
-
-            # Decoded even when nothing is sent, so the modifiers held stay
-            # right and the buffer is zeroed all the same.
-            presses = decode(buf, n, held)
-            if control.open and (session_vt is None or foreground_vt() in (None, session_vt)):
-                for payload in presses:
+            elif fd in devices:
+                try:
+                    n = os.readv(fd, [buf])
+                except BlockingIOError:
+                    continue
+                except OSError:
+                    os.close(fd)
+                    devices.pop(fd, None)
+                    next_scan = 0
+                    continue
+                for payload in decode(buf, n, held):
                     emit(payload)
+            # The console's wake needs nothing here: the next turn reads it.
 
-        now = time.monotonic()
-        if now >= next_scan:
-            next_scan = now + 5
+        if reading and time.monotonic() >= next_scan:
+            next_scan = time.monotonic() + 5
             devices.update(open_keyboards(frozenset(devices.values())))
             if devices and missing:
                 missing = False

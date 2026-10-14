@@ -203,12 +203,15 @@ administrator's password every time the bar starts it (`Super+Y`, a login
 with the overlay on, a bar restart); it opens the keyboards as root, then
 runs as nobody with the `input` group alone, so the user needs no group
 that would let every program read the keyboards. The switch persists in
-`~/.local/state/quickshell/bar/keyoverlay`. The reader sends nothing while
-the session is locked or another console is in front: those keys never
-leave it, and it zeroes what it read. Keys go nowhere but the overlay (no
-socket, no file, no log line, at most five chords for under a second, each
-scrubbed as it leaves). Password prompts are not told apart; turn the
-overlay off by hand to type a secret.
+`~/.local/state/quickshell/bar/keyoverlay`. The reader holds no keyboard
+open, so nothing typed is read or queued anywhere, while the session is
+locked, while another console is in front, and while a password is being
+typed: a polkit, pinentry, askpass, keyring or wallet window has the focus,
+or the focused window's terminal reads with its echo off (sudo, su, ssh,
+passwd, `read -s`; `scripts/echowatch.py` reads two terminal flags, never a
+key). What it does read it zeroes once decoded. Keys go nowhere but the
+overlay (no socket, no file, no log line, at most five chords for under a
+second, each scrubbed as it leaves).
 
 **Screensaver**: off unless a display gets a time in the Displays panel.
 After that long with nothing done on the display it goes exact black

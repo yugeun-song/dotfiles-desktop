@@ -69,6 +69,26 @@ done
 echo stopped >> "$KEYFEED_TEST_DIR/log"
 EOF
 chmod +x "$WORK/bin/pkexec" "$WORK/keyfeed/reader"
+# echowatch.py in the copy: "secret" while $WORK/echo/secret exists, else
+# "clear", on every change; each "pid" line the bar sends is logged.
+mkdir -p "$WORK/echo"
+cat > "$WORK/bar/scripts/echowatch.py" <<'EOF'
+import os, select, sys
+flag, log = os.environ["ECHOWATCH_TEST_FLAG"], os.environ["ECHOWATCH_TEST_LOG"]
+said = None
+while True:
+    if select.select([sys.stdin], [], [], 0.05)[0]:
+        line = sys.stdin.readline()
+        if not line:
+            break
+        with open(log, "a") as fh:
+            fh.write(line)
+        said = None
+    word = "secret" if os.path.exists(flag) else "clear"
+    if word != said:
+        print(word, flush=True)
+        said = word
+EOF
 # hyprctl: `hyprctl locked`, which only the key overlay asks, holds its
 # answer until $WORK/lock-go exists, then says false unless
 # $WORK/session-locked does; anything else is a no-op.
@@ -145,6 +165,8 @@ out="$WORK/out"
     QML_TEST_LOCK_GO="$WORK/lock-go" \
     KEYFEED_SYSTEM="$WORK/keyfeed/reader" \
     KEYFEED_TEST_DIR="$WORK/keyfeed" \
+    ECHOWATCH_TEST_FLAG="$WORK/echo/secret" \
+    ECHOWATCH_TEST_LOG="$WORK/echo/log" \
     XDG_VTNR=7 \
     timeout 60 qs -n -p "$WORK/bar" >"$out" 2>&1; true ) 2>/dev/null
 

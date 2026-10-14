@@ -12,6 +12,7 @@ import struct
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from unittest import mock
 
@@ -192,61 +193,131 @@ class Lines(unittest.TestCase):
             keyfeed.parse_args(["--vt", "two"])
 
 
-class Control(unittest.TestCase):
-    def run_main(self, feed, events=b"", args=(), console="tty1", end=True):
-        """main() on a stdin that carries feed, then ends after a moment
-        (or at once, with nothing fed), with one keyboard that has events
-        waiting. The output, as written to the bar."""
+class FakeConsole:
+    """The console in front, as the test says; no file to poll."""
+    front = {"ours": True}
+
+    def __init__(self, session_vt, path=None):
+        self.fd = None
+
+    def ours(self):
+        return FakeConsole.front["ours"]
+
+
+class Loop(unittest.TestCase):
+    def run_main(self, steps, events=b"", later_events=b"", args=(), ours=True):
+        """main() with stdin fed by steps, (seconds, bytes) pairs, then
+        ended; one keyboard with events waiting, and later_events written to
+        it 0.3 s in. Returns the exit status, what the bar got, and the
+        keyboards each open and close saw."""
+        FakeConsole.front["ours"] = ours
         r, w = os.pipe()
         kr, kw = os.pipe()
         os.write(kw, events)
-        if feed:
-            os.write(w, feed)
-            closer = threading.Timer(0.4, os.close, (w,))
-            closer.start()
-        else:
+        opens, closes = [], []
+
+        def feed():
+            begun = time.monotonic()
+            for at, data in steps:
+                time.sleep(max(0, at - (time.monotonic() - begun)))
+                if callable(data):
+                    data()
+                else:
+                    os.write(w, data)
+            time.sleep(0.1)
             os.close(w)
+
+        def open_keyboards(skip=frozenset()):
+            if skip:
+                return {}
+            opens.append(True)
+            return {kr: "/dev/input/event9"}
+
+        def close_keyboards(devices):
+            closes.append(sorted(devices))
+            devices.clear()
+
+        writer = threading.Thread(target=feed)
+        later = threading.Timer(0.3, os.write, (kw, later_events)) if later_events else None
         try:
             with stdio(r) as out, \
-                 mock.patch.object(keyfeed, "open_keyboards", side_effect=[{kr: "/dev/input/event9"}, {}]), \
+                 mock.patch.object(keyfeed, "open_keyboards", side_effect=open_keyboards), \
+                 mock.patch.object(keyfeed, "close_keyboards", side_effect=close_keyboards), \
                  mock.patch.object(keyfeed, "drop_privileges"), \
-                 mock.patch.object(keyfeed, "foreground_vt", return_value=console), \
+                 mock.patch.object(keyfeed, "Console", FakeConsole), \
                  mock.patch.object(keyfeed.signal, "signal"):
+                writer.start()
+                if later:
+                    later.start()
                 code = keyfeed.main(args)
                 out.seek(0)
-                return code, out.read().decode()
+                return code, out.read().decode(), opens, closes
         finally:
-            if feed:
-                closer.join()
+            writer.join()
+            if later:
+                later.join()
             os.close(r)
             os.close(kr)
             os.close(kw)
 
     def test_end_of_stdin_stops_it(self):
-        code, out = self.run_main(b"")
+        code, out, opens, _ = self.run_main([])
         self.assertEqual(code, 0)
-        self.assertEqual(out, '{"type": "ready", "devices": 1}\n')
+        self.assertEqual(out, '{"type": "ready"}\n')
+        self.assertEqual(opens, [], "no keyboard is opened before a resume")
 
-    def test_a_line_on_stdin_stops_it(self):
-        code, _ = self.run_main(b"stop\n")
+    def test_a_stop_line_stops_it(self):
+        code, _, _, _ = self.run_main([(0, b"stop\n")])
         self.assertEqual(code, 0)
 
     @unittest.skipUnless(os.path.exists(HEADER), "the kernel's input header is not installed")
-    def test_paused_until_resumed(self):
-        _, out = self.run_main(b"pause\n", event(1, 30, 1))
+    def test_paused_it_holds_no_keyboard(self):
+        _, out, opens, _ = self.run_main([(0, b"pause\n")], event(1, 30, 1))
+        self.assertEqual(opens, [])
         self.assertNotIn('"key"', out)
 
     @unittest.skipUnless(os.path.exists(HEADER), "the kernel's input header is not installed")
-    def test_resumed_sends_keys(self):
-        _, out = self.run_main(b"resume\n", event(1, 30, 1))
+    def test_resumed_it_reads(self):
+        _, out, opens, _ = self.run_main([(0, b"resume\n")], event(1, 30, 1))
+        self.assertEqual(len(opens), 1)
         self.assertIn('{"type": "key", "mods": [], "key": "A"}', out)
 
     @unittest.skipUnless(os.path.exists(HEADER), "the kernel's input header is not installed")
-    def test_nothing_while_another_console_is_in_front(self):
-        _, out = self.run_main(b"resume\n", event(1, 30, 1), args=["--vt", "1"], console="tty3")
-        self.assertNotIn('"key"', out)
-        _, out = self.run_main(b"resume\n", event(1, 30, 1), args=["--vt", "1"], console="tty1")
-        self.assertIn('"key"', out)
+    def test_a_pause_closes_the_keyboards(self):
+        _, out, _, closes = self.run_main([(0, b"resume\n"), (0.2, b"pause\n")],
+                                          event(1, 30, 1), later_events=event(1, 48, 1))
+        self.assertEqual(len(closes), 1)
+        self.assertIn('"key": "A"', out)
+        self.assertNotIn('"key": "B"', out, "a key pressed while paused was read")
+
+    @unittest.skipUnless(os.path.exists(HEADER), "the kernel's input header is not installed")
+    def test_another_console_in_front(self):
+        def back():
+            FakeConsole.front["ours"] = True
+
+        _, out, opens, _ = self.run_main([(0, b"resume\n"), (0.2, back), (0.2, b"wake\n")],
+                                         event(1, 30, 1), args=["--vt", "1"], ours=False)
+        self.assertEqual(len(opens), 1, "opened once the session's console was back")
+        self.assertIn('"key": "A"', out)
+
+    def test_modifiers_held_across_a_pause(self):
+        def ioctl(fd, request, bits, mutate):
+            bits[29 // 8] |= 1 << (29 % 8)
+            bits[125 // 8] |= 1 << (125 % 8)
+            return 0
+
+        with mock.patch.object(keyfeed.fcntl, "ioctl", side_effect=ioctl):
+            self.assertEqual(keyfeed.held_modifiers({7: "/dev/input/event7"}), {29, 125})
+
+
+class Consoles(unittest.TestCase):
+    def test_the_active_file(self):
+        with tempfile.NamedTemporaryFile("w") as fh:
+            fh.write("tty2\n")
+            fh.flush()
+            self.assertTrue(keyfeed.Console("tty2", fh.name).ours())
+            self.assertFalse(keyfeed.Console("tty1", fh.name).ours())
+        self.assertTrue(keyfeed.Console(None).ours(), "no console given: always ours")
 
 
 if __name__ == "__main__":
