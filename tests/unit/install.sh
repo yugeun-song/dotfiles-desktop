@@ -536,6 +536,17 @@ answer_root y ""
 has "a copy written by hand is called out" "$out" "replaces a copy this repository did not write"
 has "and its diff is shown" "$out" "-<!-- by hand -->"
 has "the old copy is kept" "$out" "the previous $T/root/etc/fonts/local.conf is kept at"
+# A new file whose content is not on the upstream branch shows all of it.
+rm -f -- "$T/root/usr/local/libexec/keyfeed"
+echo '# an uncommitted line' >>"$T/repo/keyfeed/keyfeed.py"
+answer_root n ""
+has "a new file not on the upstream branch is shown whole" "$out" "+# an uncommitted line"
+has "and called not installed yet" "$out" "$T/root/usr/local/libexec/keyfeed (not installed yet)"
+git -C "$T/repo" checkout -q -- keyfeed/keyfeed.py
+answer_root n ""
+lacks "one as on the upstream branch waits for d" "$out" "(not installed yet)"
+answer_root dn ""
+has "d shows it" "$out" "$T/root/usr/local/libexec/keyfeed (not installed yet)"
 # Without a terminal they wait, unless --force.
 echo '<!-- another line -->' >>"$T/repo/fontconfig/local.conf"
 run

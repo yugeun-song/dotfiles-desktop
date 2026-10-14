@@ -776,6 +776,18 @@ provenance() {
     fi
 }
 
+# One file's diff in the plan: against the installed copy, or for a file
+# not installed yet, its whole content.
+plan_diff() {
+    local src=$1 dst=$2 from
+    from=$(provenance "$src")
+    if [[ -e "$dst" ]]; then
+        show_diff "$dst" "$SRC/$src" "$dst (installed)" "$src (this checkout, $from)"
+    else
+        show_diff /dev/null "$SRC/$src" "$dst (not installed yet)" "$src (this checkout, $from)"
+    fi
+}
+
 # +added -removed between the installed copy and the source.
 diffstat() {
     { diff -u -- "$1" "$2" 2>/dev/null || :; } \
@@ -809,7 +821,8 @@ root_plan() {
         else
             what=$(diffstat "$dst" "$SRC/$src")
         fi
-        if [[ -e "$dst" ]] && ! cmp -s -- "$SRC/$src" "$dst"; then
+        # A new file counts as all changed: its whole content goes to root.
+        if [[ ! -e "$dst" ]] || ! cmp -s -- "$SRC/$src" "$dst"; then
             if (( foreign )) || [[ "$from" != "as on "* ]]; then shown+=("$entry"); else later+=("$entry"); fi
         fi
         if (( i < n )); then glyph="├──"; else glyph="└──"; fi
@@ -817,7 +830,7 @@ root_plan() {
     done
     for entry in "${shown[@]}"; do
         IFS=: read -r src dst mode <<<"$entry"
-        show_diff "$dst" "$SRC/$src" "$dst (installed)" "$src (this checkout, $(provenance "$src"))"
+        plan_diff "$src" "$dst"
     done
     (( FORCE_ALL )) && return 0
     if ! { exec 3</dev/tty; } 2>/dev/null; then
@@ -833,7 +846,7 @@ root_plan() {
             d)
                 for entry in "${later[@]}"; do
                     IFS=: read -r src dst mode <<<"$entry"
-                    show_diff "$dst" "$SRC/$src" "$dst (installed)" "$src (this checkout, $(provenance "$src"))"
+                    plan_diff "$src" "$dst"
                 done
                 (( ${#later[@]} )) || echo "(no other diffs)"
                 ;;
