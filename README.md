@@ -181,6 +181,11 @@ local files and `Theme.artHosts`. Weather refetches when a link comes up and
 again when NetworkManager's check sees the internet answer, so a boot without
 network shows it within seconds of connecting; a click fetches at once.
 
+The bar writes no core file when it crashes and keeps no detailed log
+(window titles, track titles); `systemctl --user set-environment
+BAR_DETAILED_LOGS=1` and `bar --restart` bring the log back for chasing a
+bug.
+
 **Key overlay** (`Super+Y`): `keyfeed/keyfeed.py`, installed as root's
 `/usr/local/libexec/keyfeed`, reads the keyboards. pkexec asks for an
 administrator's password every time the bar starts it (`Super+Y`, a login

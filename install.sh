@@ -1247,6 +1247,10 @@ group_close
 # ~/.local/bin, not an XDG directory: the units and keybinds name these by
 # that path, and the terminal configuration puts it on PATH.
 group_open programs
+# bin/bar --once sets what the bar's process starts with (no core file, no
+# detailed log), which a reload of the QML above does not touch.
+_bar_launcher=0
+cmp -s -- "$SRC/bin/bar" "$HOME/.local/bin/bar" 2>/dev/null || _bar_launcher=1
 mirror_file "$SRC/bin/bar" "$HOME/.local/bin/bar"
 mirror_file "$SRC/bin/unlock" "$HOME/.local/bin/unlock"
 # In ~ on purpose: typed from a text console where PATH may not be set up.
@@ -1256,6 +1260,14 @@ mirror_file "$SRC/bin/recover-desktop" "$HOME/recover-desktop"
 # root-owned one; it works, but asks for an administrator password each time.
 mirror_file "$SRC/camera/camera-switch.py" "$HOME/.local/bin/camera-switch"
 ensure_exec "$HOME/.local/bin/bar" "$HOME/.local/bin/unlock" "$HOME/.local/bin/camera-switch" "$HOME/recover-desktop"
+if (( ! CHECK && _bar_launcher )) && systemctl --user is-active --quiet bar.service 2>/dev/null; then
+    if systemctl --user try-restart bar.service 2>/dev/null; then
+        branch "$GREEN✓$RESET restarted the bar, whose launcher changed"
+    else
+        LEFT+=("bar --restart (its launcher changed, and the restart failed here)")
+    fi
+fi
+unset _bar_launcher
 group_close
 
 # Units are mirrored, then daemon-reload. Running units are not restarted

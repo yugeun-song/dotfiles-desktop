@@ -38,7 +38,27 @@ case "${1:-}" in
         # The bar's own state (screensaver times, the key overlay switch)
         # lives here; quickshell writes files but cannot make the directory.
         mkdir -p -- "${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/bar" 2>/dev/null || true
-        exec "$(runner)" -n --log-rules "$LOG_RULES" -p "$CONFIG_DIR"
+        # No core file. The bar's memory holds what passed through it
+        # (notification text, the key overlay's chords), and dropping a value
+        # does not clear the bytes it took: a crash would have
+        # systemd-coredump keep all of it on disk for two weeks. A soft limit
+        # of 0 makes it store none. Only the soft limit, and the old value is
+        # passed on, so app-scope.sh gives the programs the bar starts theirs
+        # back: a crash there is the user's to debug.
+        BAR_APP_CORE_LIMIT=$(ulimit -S -c)
+        export BAR_APP_CORE_LIMIT
+        ulimit -S -c 0
+        # No detailed log either: quickshell writes every debug message to
+        # one (log.qslog, for `qs log`), whatever the log rules show, and
+        # those carry each Hyprland event with its window title (a kitty's
+        # title is the command line being run) and every D-Bus property
+        # change (track titles), for as long as the bar runs, and copies it
+        # to ~/.cache/quickshell/crashes on a crash. BAR_DETAILED_LOGS=1 in
+        # the user manager's environment keeps it, for chasing a bar bug:
+        #   systemctl --user set-environment BAR_DETAILED_LOGS=1; bar --restart
+        local_log=(--no-detailed-logs)
+        [[ "${BAR_DETAILED_LOGS:-}" == 1 ]] && local_log=()
+        exec "$(runner)" -n "${local_log[@]}" --log-rules "$LOG_RULES" -p "$CONFIG_DIR"
         ;;
     *)
         echo "usage: bar [--restart|--stop|--status|--log|--once]" >&2

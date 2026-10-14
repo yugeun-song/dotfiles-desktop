@@ -25,7 +25,9 @@ WorkingDirectory=%h
 # quickshell never removes its per-instance log dirs (they pile up in tmpfs,
 # full of window titles). Swept only when no quickshell is running.
 ExecStartPre=-/bin/sh -c 'pgrep -x qs >/dev/null || pgrep -x quickshell >/dev/null || rm -rf -- "${XDG_RUNTIME_DIR}/quickshell/by-id"/*'
-# bin/bar --once resolves qs vs quickshell and carries the log rules.
+# bin/bar --once resolves qs vs quickshell, carries the log rules and turns
+# off core files (not LimitCORE=: the programs the bar starts inherit it, and
+# a hard limit of 0 could not be raised back for them).
 ExecStart=%h/.local/bin/bar --once
 # The bar is what wakes a display its screensaver turned off; with the bar
 # gone (a crash, a restart, a give-up) such an output would stay off whatever

@@ -85,6 +85,7 @@ else
 fi
 
 tests/unit/qml.sh || failed=1
+tests/unit/bar.sh || failed=1
 tests/unit/monitor-override.sh || failed=1
 tests/unit/alarm.sh || failed=1
 tests/unit/camera.sh || failed=1

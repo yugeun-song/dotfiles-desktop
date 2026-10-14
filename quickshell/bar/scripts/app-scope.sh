@@ -28,6 +28,13 @@ give_up() {
 # type -P matches executable files only (no builtins or directories).
 type -P -- "$1" >/dev/null 2>&1 || give_up "not installed: $1"
 
+# The bar runs without core files (bin/bar --once); a program it starts is
+# the user's, and dumps core as one started anywhere else would.
+if [[ -n "${BAR_APP_CORE_LIMIT:-}" ]]; then
+    ulimit -S -c "$BAR_APP_CORE_LIMIT" 2>/dev/null || :
+fi
+unset BAR_APP_CORE_LIMIT
+
 # Checked up front: after exec, a failed scope and a failing program share one
 # exit status.
 scoped=1

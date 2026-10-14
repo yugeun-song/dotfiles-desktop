@@ -239,6 +239,7 @@ has "root's files are listed with their command" "$out" "sudo install -D -o root
 has "the summary says what is left" "$out" "left undone"
 has "root's files are left in their group" "$out" "left for sudo: $T/root/etc/fonts/local.conf"
 lacks "no compositor is reloaded from a test" "$(calls)" "hyprctl reload"
+has "a new bar launcher restarts the bar" "$(calls)" "systemctl --user try-restart bar.service"
 : >"$T/calls"
 run; has "a second run writes nothing" "$out" "(0 written)"
 lacks "a second run finds no conflict" "$out" "conflict"
