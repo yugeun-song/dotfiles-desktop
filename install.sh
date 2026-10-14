@@ -760,17 +760,101 @@ system_current() {
     cmp -s -- "$SRC/$1" "$2" && [[ "$(stat -c '%a %U' -- "$2" 2>/dev/null)" == "$3 root" ]]
 }
 
+# Where the content for a root's file comes from, as git sees it: the
+# upstream branch as last fetched, a commit made here, or the work tree.
+provenance() {
+    local rel=$1 id up=""
+    if (( ! GIT )); then echo "no git history to compare with"; return 0; fi
+    id=$(git -C "$SRC" hash-object -- "$rel" 2>/dev/null) || { echo "unreadable"; return 0; }
+    up=$(git -C "$SRC" rev-parse --abbrev-ref --symbolic-full-name '@{upstream}' 2>/dev/null) || up=""
+    if [[ -n "$up" && "$(git -C "$SRC" rev-parse -q --verify "$up:$rel" 2>/dev/null)" == "$id" ]]; then
+        echo "as on $up"
+    elif [[ "$(git -C "$SRC" rev-parse -q --verify "HEAD:$rel" 2>/dev/null)" == "$id" ]]; then
+        echo "committed${up:+, not on $up}"
+    else
+        echo "not committed"
+    fi
+}
+
+# +added -removed between the installed copy and the source.
+diffstat() {
+    { diff -u -- "$1" "$2" 2>/dev/null || :; } \
+        | awk 'NR > 2 && /^\+/ { a++ } NR > 2 && /^-/ { d++ } END { printf "+%d -%d", a, d }'
+}
+
+# Root's files are written only after the user has seen what goes into them.
+# The content is this checkout's as it is now, which any program of the user's
+# could have changed, and sudo would make it root's: so each file says where
+# its content comes from, and one not as on the upstream branch (or replacing
+# a copy this repository did not write) shows its diff at once; the rest show
+# theirs on request. One question for all of them, before sudo asks for the
+# password; without a terminal to ask on they wait, unless --force.
+# $@: source:destination:mode of each file that differs. 0 to go ahead.
+root_plan() {
+    local entry src dst mode what from answer n=$# i=0 glyph foreign
+    local -a shown=() later=()
+    printf '%sroot'\''s files%s %s(written with sudo)%s\n' "$BOLD" "$RESET" "$DIM" "$RESET"
+    for entry in "$@"; do
+        IFS=: read -r src dst mode <<<"$entry"
+        i=$((i + 1))
+        from=$(provenance "$src")
+        foreign=0
+        if [[ ! -e "$dst" ]]; then
+            what="new"
+        elif cmp -s -- "$SRC/$src" "$dst"; then
+            what="mode $mode, owner root"
+        elif ! ours "$dst" "$SRC/$src"; then
+            what="${RED}replaces a copy this repository did not write$RESET"
+            foreign=1
+        else
+            what=$(diffstat "$dst" "$SRC/$src")
+        fi
+        if [[ -e "$dst" ]] && ! cmp -s -- "$SRC/$src" "$dst"; then
+            if (( foreign )) || [[ "$from" != "as on "* ]]; then shown+=("$entry"); else later+=("$entry"); fi
+        fi
+        if (( i < n )); then glyph="├──"; else glyph="└──"; fi
+        printf '%s%s%s %s  %s %s(%s, %s)%s\n' "$DIM" "$glyph" "$RESET" "$dst" "$what" "$DIM" "$src" "$from" "$RESET"
+    done
+    for entry in "${shown[@]}"; do
+        IFS=: read -r src dst mode <<<"$entry"
+        show_diff "$dst" "$SRC/$src" "$dst (installed)" "$src (this checkout, $(provenance "$src"))"
+    done
+    (( FORCE_ALL )) && return 0
+    if ! { exec 3</dev/tty; } 2>/dev/null; then
+        printf '%sroot'\''s files wait for a terminal to confirm them (or --force)%s\n' "$YELLOW" "$RESET"
+        return 1
+    fi
+    while true; do
+        printf 'Write them as root? [y] yes  [n] no, leave them  [d] every diff: ' >/dev/tty
+        IFS= read -r answer <&3 || answer=n
+        case "${answer,,}" in
+            y|yes) exec 3<&-; return 0 ;;
+            n|no)  exec 3<&-; return 1 ;;
+            d)
+                for entry in "${later[@]}"; do
+                    IFS=: read -r src dst mode <<<"$entry"
+                    show_diff "$dst" "$SRC/$src" "$dst (installed)" "$src (this checkout, $(provenance "$src"))"
+                done
+                (( ${#later[@]} )) || echo "(no other diffs)"
+                ;;
+        esac
+    done
+}
+
 # Asked for before the first write, and only when a root's file differs: an
 # update that leaves them alone never prompts.
 acquire_sudo() {
     local src dst mode
     local -a want=()
     while IFS=: read -r src dst mode; do
-        system_current "$src" "$dst" "$mode" || want+=("$dst")
+        system_current "$src" "$dst" "$mode" || want+=("$src:$dst:$mode")
     done < <(system_files)
     (( ${#want[@]} )) || return 0
     command -v sudo >/dev/null 2>&1 || return 0
-    printf '%ssudo%s %sfor %s%s\n' "$BOLD" "$RESET" "$DIM" "$(printf '%s, ' "${want[@]}" | sed 's/, $//')" "$RESET"
+    if ! root_plan "${want[@]}"; then
+        echo
+        return 0
+    fi
     if sudo -v 2>/dev/null; then
         SUDO_OK=1
         # Kept alive: a cold run can outlast sudo's timestamp. Without the
@@ -824,7 +908,8 @@ system_file() {
     fi
     if [[ -e "$dst" ]] && ! cmp -s -- "$SRC/$rel" "$dst"; then
         if ! ours "$dst" "$SRC/$rel"; then
-            claim "$dst" "$SRC/$rel" "$rel"
+            # Its diff was shown and confirmed with the others (root_plan).
+            CONFLICTED=1
             sudo cp -a -- "$dst" "$dst.bak-$STAMP" && NOTES+=("the previous $dst is kept at $dst.bak-$STAMP")
         fi
     fi

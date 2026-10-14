@@ -92,11 +92,17 @@ repository dropped are removed only if it put them there; anything else in a
 mirrored directory is left and pointed out.
 
 Root's files (`/etc/fonts/local.conf`, `/etc/tuigreet/config.toml` under
-tuigreet, the camera switch's three) take sudo, asked for once up front; a
-foreign one keeps a `.bak-<time>` copy. Without sudo they are listed as left
-undone. Where they are not so already, the installer disables `kde-baloo`,
-masks the drkonqi coredump units (they crash-loop without a display) and
-enables `hypridle`.
+tuigreet, the camera switch's three, the key reader's two) are shown before
+sudo is asked for, since this checkout's content, which any program of the
+user's could have changed, becomes root's: each file with what changes and
+where its content comes from (`as on origin/main`, `committed, not on
+origin/main`, `not committed`). Diffs show at once for content not as on the
+upstream branch and for a copy this repository did not write (kept beside it
+as `.bak-<time>`); `d` shows the rest. One answer covers them all: `y` asks
+sudo and writes, `n` leaves them listed as undone. Without a terminal they
+wait, unless `--force`. Where they are not so already, the installer
+disables `kde-baloo`, masks the drkonqi coredump units (they crash-loop
+without a display) and enables `hypridle`.
 
 The shell, terminal, prompt and REPL helpers live in dotfiles-terminal. No
 file is installed by both repositories.

@@ -37,14 +37,18 @@ for f in /usr/bin/*; do
 done
 
 # Answers prompts on a pty: each answer is sent when the next prompt appears.
+# Root's files have a prompt of their own, answered from ROOT_ANSWERS (n once
+# those run out).
 cat >"$WORK/answer.py" <<'EOF'
 import os, pty, select, sys, time
 answers, cmd = sys.argv[1], sys.argv[2:]
+root_answers = os.environ.get("ROOT_ANSWERS", "")
 pid, fd = pty.fork()
 if pid == 0:
     os.execvp(cmd[0], cmd)
-out, sent, deadline = b"", 0, time.time() + 120
+out, sent, root_sent, deadline = b"", 0, 0, time.time() + 120
 prompt = b"[a] all, this and every later conflict: "
+root_prompt = b"[d] every diff: "
 while time.time() < deadline:
     if select.select([fd], [], [], 0.2)[0]:
         try:
@@ -57,6 +61,10 @@ while time.time() < deadline:
         while sent < min(out.count(prompt), len(answers)):
             os.write(fd, answers[sent].encode() + b"\n")
             sent += 1
+        while root_sent < out.count(root_prompt):
+            reply = root_answers[root_sent] if root_sent < len(root_answers) else "n"
+            os.write(fd, reply.encode() + b"\n")
+            root_sent += 1
 else:
     os.kill(pid, 9)
 _, status = os.waitpid(pid, 0)
@@ -133,6 +141,23 @@ coloured() { out=$(env -i HOME="$T/home" PATH="$TPATH" LANG=C.UTF-8 TMPDIR="$T" 
     DOTFILES_OS_RELEASE="$T/os-release" DOTFILES_ROOT="$T/root" python3 -I "$WORK/answer.py" "" bash "$T/repo/install.sh" "$@" 2>&1); code=$?; }
 calls() { cat "$T/calls" 2>/dev/null; }
 answer() { local a=$1; shift; out=$(installer -- python3 -I "$WORK/answer.py" "$a" bash "$T/repo/install.sh" "$@" 2>&1); code=$?; }
+# $1 the answers for root's prompt, $2 for the conflicts.
+answer_root() { local r=$1 a=$2; shift 2; out=$(installer ROOT_ANSWERS="$r" -- python3 -I "$WORK/answer.py" "$a" bash "$T/repo/install.sh" "$@" 2>&1); code=$?; }
+# A sudo that works: it runs what it is given as the user, without the
+# root ownership install would ask for, and logs each command.
+working_sudo() {
+    cat >"$T/bin/sudo" <<EOF
+#!/bin/bash
+echo "sudo \$*" >>"$T/calls"
+case "\$1" in
+    -v|-k|-n) exit 0 ;;
+    install) shift; args=(); while (( \$# )); do case "\$1" in -o|-g) shift 2 ;; *) args+=("\$1"); shift ;; esac; done; exec install "\${args[@]}" ;;
+    fc-cache|udevadm) exit 0 ;;
+    *) exec "\$@" ;;
+esac
+EOF
+    chmod +x "$T/bin/sudo"
+}
 commit() { git -C "$T/repo" add -A && git -C "$T/repo" -c user.name=test -c user.email=test@test commit -qm "$1"; }
 entries() { find "$T/home" -mindepth 1 -maxdepth 1 -printf '%f\n' | LC_ALL=C sort | tr '\n' ' '; }
 C=.config
@@ -456,6 +481,51 @@ run; is "a second run while one holds the lock" "$code" 1
 has "it says why" "$out" "another ./install.sh is running"
 kill "$holder" 2>/dev/null
 wait "$holder" 2>/dev/null
+
+# ---- root's files are shown before sudo writes them ----
+setup
+working_sudo
+answer_root y ""
+has "root's files are listed before sudo" "$out" "root's files (written with sudo)"
+has "a new one says so, with where it comes from" "$out" "$T/root/usr/local/libexec/keyfeed  new (keyfeed/keyfeed.py, committed)"
+has "y lets sudo write them" "$(calls)" "sudo install -D"
+same "the key reader is root's copy" "$T/root/usr/local/libexec/keyfeed" "$T/repo/keyfeed/keyfeed.py"
+present "and its polkit action" "$T/root/usr/share/polkit-1/actions/io.github.yugeun-song.keyfeed.policy"
+# An uncommitted edit is shown at once; n leaves root's copy as it was.
+cp -a "$T/root/etc/fonts/local.conf" "$T/fonts.before"
+echo '<!-- an uncommitted line -->' >>"$T/repo/fontconfig/local.conf"
+: >"$T/calls"
+answer_root n ""
+is "n leaves root's files for later" "$code" 1
+has "an uncommitted change is named" "$out" "(fontconfig/local.conf, not committed)"
+has "and its diff is shown without asking" "$out" "+<!-- an uncommitted line -->"
+same "n writes nothing of root's" "$T/root/etc/fonts/local.conf" "$T/fonts.before"
+lacks "n never asks sudo" "$(calls)" "sudo -v"
+# Committed and pushed content shows a count; d shows its diff too.
+commit "font line"
+branch=$(git -C "$T/repo" symbolic-ref --short HEAD)
+git -C "$T/repo" remote add origin "$T/repo"
+git -C "$T/repo" update-ref "refs/remotes/origin/$branch" HEAD
+git -C "$T/repo" branch -q --set-upstream-to="origin/$branch"
+answer_root n ""
+has "content as on the upstream branch says so" "$out" "(fontconfig/local.conf, as on origin/$branch)"
+lacks "and its diff waits to be asked for" "$out" "+<!-- an uncommitted line -->"
+answer_root dy ""
+has "d shows it" "$out" "+<!-- an uncommitted line -->"
+same "and y writes it" "$T/root/etc/fonts/local.conf" "$T/repo/fontconfig/local.conf"
+# A copy this repository did not write is shown, and kept beside the new one.
+echo '<!-- by hand -->' >"$T/root/etc/fonts/local.conf"
+answer_root y ""
+has "a copy written by hand is called out" "$out" "replaces a copy this repository did not write"
+has "and its diff is shown" "$out" "-<!-- by hand -->"
+has "the old copy is kept" "$out" "the previous $T/root/etc/fonts/local.conf is kept at"
+# Without a terminal they wait, unless --force.
+echo '<!-- another line -->' >>"$T/repo/fontconfig/local.conf"
+run
+has "without a terminal root's files wait" "$out" "root's files wait for a terminal to confirm them (or --force)"
+differs "and stay as they were" "$T/root/etc/fonts/local.conf" "$T/repo/fontconfig/local.conf"
+run --force
+same "--force writes them" "$T/root/etc/fonts/local.conf" "$T/repo/fontconfig/local.conf"
 
 # ---- monitor settings from before the preset ----
 setup
