@@ -41,10 +41,10 @@ ROOT=${DOTFILES_ROOT:-}
 FONTCONF=$ROOT/etc/fonts/local.conf
 GREETERCONF=$ROOT/etc/tuigreet/config.toml
 # The camera switch (camera/): the helper pkexec runs as root, the polkit
-# action that lets the seat's session run it without a password, and the udev
-# rule that turns off a camera appearing while the switch is off. Root's, with
-# these modes: whatever pkexec runs as root must not be writable by the user
-# it runs for. source:destination:mode
+# actions that let the seat's session turn cameras off without a password
+# (and on with one), and the udev rule that turns off a camera appearing
+# while the switch is off. Root's, with these modes: whatever pkexec runs as
+# root must not be writable by the user it runs for. source:destination:mode
 CAMERA_FILES=(
     "camera/camera-switch.py:$ROOT/usr/local/bin/camera-switch:755"
     "camera/io.github.yugeun-song.camera-switch.policy:$ROOT/usr/share/polkit-1/actions/io.github.yugeun-song.camera-switch.policy:644"

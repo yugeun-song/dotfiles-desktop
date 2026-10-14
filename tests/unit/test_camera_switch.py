@@ -976,9 +976,27 @@ class CommandLine(Case):
         return code, out, [c.args[0] for c in ran.call_args_list]
 
     def test_pkexec_goes_into_the_installed_copy(self):
-        code, _, ran = self.elevated(["toggle"], {"pkexec": "/usr/bin/pkexec"})
+        code, _, ran = self.elevated(["on"], {"pkexec": "/usr/bin/pkexec"})
         self.assertEqual(code, 0)
-        self.assertEqual(ran, [["/usr/bin/pkexec", cs.SYSTEM_COPY, "toggle"]])
+        self.assertEqual(ran, [["/usr/bin/pkexec", cs.SYSTEM_COPY, "on"]])
+
+    # polkit judges the word pkexec is handed: off needs no password, on
+    # does, so a toggle reaches pkexec as the one it means.
+    def test_a_toggle_reaches_pkexec_as_off_while_on(self):
+        _, _, ran = self.elevated(["toggle"], {"pkexec": "/usr/bin/pkexec"})
+        self.assertEqual(ran, [["/usr/bin/pkexec", cs.SYSTEM_COPY, "off"]])
+
+    def test_a_toggle_reaches_pkexec_as_on_while_off(self):
+        self.k.set_switch(True)
+        _, _, ran = self.elevated(["toggle"], {"pkexec": "/usr/bin/pkexec"})
+        self.assertEqual(ran, [["/usr/bin/pkexec", cs.SYSTEM_COPY, "on"]])
+
+    def test_a_toggle_goes_by_what_is_live_without_the_rule(self):
+        self.k.rm(cs.UDEV_RULE)
+        self.k.set_switch(True)
+        laptop_webcam(self.k)
+        _, _, ran = self.elevated(["toggle"], {"pkexec": "/usr/bin/pkexec"})
+        self.assertEqual(ran, [["/usr/bin/pkexec", cs.SYSTEM_COPY, "off"]])
 
     def test_without_the_installed_copy_pkexec_runs_this_one(self):
         self.k.installed = False

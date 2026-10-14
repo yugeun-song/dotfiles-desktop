@@ -7,10 +7,10 @@
 # per camera.
 #
 # Which copy: the root-owned one in /usr/local/bin that install.sh's sudo step
-# puts there, which its polkit action lets this session run without a
-# password; else the user copy in ~/.local/bin, which still works but asks
-# for an administrator password each time; else neither, and the notification
-# says how to install it. CAMERA_SWITCH_SYSTEM points the tests at a stand-in
+# puts there, whose polkit actions let this session turn the cameras off
+# without a password and on with one; else the user copy in ~/.local/bin,
+# which still works but asks for an administrator password each time; else
+# neither, and the notification says how to install it. CAMERA_SWITCH_SYSTEM points the tests at a stand-in
 # (polkit judges the path pkexec is handed, so another path gains nothing).
 set -uo pipefail
 

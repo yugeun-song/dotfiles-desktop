@@ -249,8 +249,11 @@ A camera nothing reaches is reported as still on, never as off. The switch
 persists in `/var/lib/camera-switch/off`; while it is off,
 `/etc/udev/rules.d/70-camera-switch.rules` turns off any camera that appears
 (plugged in, re-enumerated, at boot before its driver binds). The root-owned
-copy in `/usr/local/bin` runs through pkexec with a polkit action that lets
-the active local session use it without a password. Each missing piece of
+copy in `/usr/local/bin` runs through pkexec with polkit actions that let
+the active local session turn the cameras off without a password and on only
+with an administrator's: a camera that is on belongs to every program of the
+user's (udev's uaccess), so a switch they could undo silently would guard
+nothing. Each missing piece of
 that root step costs something the switch says (`camera-switch` lists it
 under `setup`); without the root copy the keys use `~/.local/bin`'s and ask
 for a password.

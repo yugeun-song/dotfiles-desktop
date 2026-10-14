@@ -6,12 +6,13 @@
     camera-switch off|on|toggle   root's to do; asks polkit through pkexec
     camera-switch enforce         udev's call when a camera appears
 
-Installed as /usr/local/bin/camera-switch by install.sh, with a polkit action
-that lets the active local session run it without a password: that session
-already holds the cameras through udev's uaccess, and a key that asks for a
-password is not a key anyone presses. Root-owned and outside the home
-directory, since whatever pkexec runs as root must not be writable by the user
-it runs for.
+Installed as /usr/local/bin/camera-switch by install.sh, with polkit actions
+that let the active local session turn the cameras off without a password
+(a privacy key that asks first is not pressed) and back on only with an
+administrator's: the session holds a camera that is on through udev's
+uaccess, so a switch any program of the user's could quietly undo would
+guard nothing. Root-owned and outside the home directory, since whatever
+pkexec runs as root must not be writable by the user it runs for.
 
 Cameras are found from what the kernel publishes, never from a list of
 models: video4linux nodes that capture from hardware, and USB interfaces of
@@ -890,13 +891,17 @@ def status(host, as_json):
     return 0
 
 
-def elevate(verb):
-    """Runs the verb again as root. pkexec goes into the installed copy, which
-    its polkit action lets the seat's session run without a password; with
-    none installed, into this copy, which polkit runs only for an
-    administrator's password. Without pkexec, sudo: asking on a terminal,
-    and from a key only if it needs no password."""
-    target = SYSTEM_COPY if Host().owned_by_root(SYSTEM_COPY) else os.path.realpath(__file__)
+def elevate(host, verb):
+    """Runs the verb again as root. pkexec goes into the installed copy, whose
+    polkit actions let the seat's session turn cameras off without a
+    password and on with one; with none installed, into this copy, which
+    polkit runs only for an administrator's password. A toggle is settled
+    here first, since polkit judges the word pkexec is handed: as `toggle`
+    it would ask even when the cameras are going off. Without pkexec, sudo:
+    asking on a terminal, and from a key only if it needs no password."""
+    if verb == "toggle":
+        verb = toggled(host, host.load_record())
+    target = SYSTEM_COPY if host.owned_by_root(SYSTEM_COPY) else os.path.realpath(__file__)
     pkexec = shutil.which("pkexec", path=TOOL_PATH)
     if pkexec:
         # pkexec's complaint is held back: printed before the headline, it
@@ -922,6 +927,18 @@ def elevate(verb):
     return 3
 
 
+def toggled(host, record):
+    """What a toggle means now: on while the switch is off, else off. Without
+    the udev rule, nothing turned off a camera that came up since the switch
+    was set (a reboot, a hotplug), so the switch file no longer says what is
+    on: the key goes by what is live. Readable as the user, so elevate()
+    settles it before asking."""
+    verb = "on" if host.switch_is_off() else "off"
+    if verb == "on" and not host.exists(UDEV_RULE) and any(c.nodes for c in discover(host, record)):
+        verb = "off"
+    return verb
+
+
 def act(host, verb, requested=None):
     """off, on, toggle or enforce, as root: (exit status, what to show)."""
     try:
@@ -941,13 +958,7 @@ def act(host, verb, requested=None):
             return (1 if report.failed() else 0), None
         record = host.load_record()
         if verb == "toggle":
-            verb = "on" if host.switch_is_off() else "off"
-            # Without the udev rule, nothing turned off a camera that came up
-            # since the switch was set (a reboot, a hotplug), so the switch
-            # file no longer says what is on: the key goes by what is live.
-            if verb == "on" and not host.exists(UDEV_RULE) \
-                    and any(c.nodes for c in discover(host, record)):
-                verb = "off"
+            verb = toggled(host, record)
         host.log(f"turning cameras {verb}" + (f" for uid {requested}" if requested else ""))
         report = Report(verb)
         # The position first: a camera that appears meanwhile meets the new one.
@@ -987,7 +998,7 @@ def main(argv):
         if verb == "enforce":
             print("camera-switch: enforce is run by udev, as root", file=sys.stderr)
             return 2
-        return elevate(verb)
+        return elevate(host, verb)
     syslog.openlog("camera-switch", 0, syslog.LOG_DAEMON)
     code, text = act(host, verb, os.environ.get("PKEXEC_UID") or os.environ.get("SUDO_UID"))
     if text:
