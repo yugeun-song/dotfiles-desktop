@@ -240,6 +240,8 @@ has "the summary says what is left" "$out" "left undone"
 has "root's files are left in their group" "$out" "left for sudo: $T/root/etc/fonts/local.conf"
 lacks "no compositor is reloaded from a test" "$(calls)" "hyprctl reload"
 has "a new bar launcher restarts the bar" "$(calls)" "systemctl --user try-restart bar.service"
+has "changed units restart the clipboard watchers" "$(calls)" "systemctl --user try-restart cliphist-text.service cliphist-image.service"
+has "and start the expiry the session now wants" "$(calls)" "systemctl --user start cliphist-expire.timer"
 : >"$T/calls"
 run; has "a second run writes nothing" "$out" "(0 written)"
 lacks "a second run finds no conflict" "$out" "conflict"
@@ -482,6 +484,20 @@ run; is "a second run while one holds the lock" "$code" 1
 has "it says why" "$out" "another ./install.sh is running"
 kill "$holder" 2>/dev/null
 wait "$holder" 2>/dev/null
+
+# ---- the clipboard history left on disk by an older setup ----
+setup
+mkdir -p "$T/home/.cache/cliphist"
+echo old >"$T/home/.cache/cliphist/db"
+run --check
+has "--check names the old history" "$out" "the old clipboard history is still on disk: ~/.cache/cliphist/db"
+present "--check leaves it" "$T/home/.cache/cliphist/db"
+run
+absent "an install removes it" "$T/home/.cache/cliphist/db"
+absent "and its directory" "$T/home/.cache/cliphist"
+: >"$T/calls"
+run
+lacks "an update with nothing new restarts no bar" "$(calls)" "try-restart bar.service"
 
 # ---- root's files are shown before sudo writes them ----
 setup

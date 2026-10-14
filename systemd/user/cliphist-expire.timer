@@ -1,0 +1,14 @@
+# dotfiles-desktop
+# Clipboard history, expired: every half hour, what was stored before the
+# last run goes (hypr/scripts/clipboard.sh expire), so an entry lives half an
+# hour to an hour. cliphist keeps no times, so the age is counted in runs.
+# Logout takes the rest: the history is on tmpfs (config/env.lua).
+[Unit]
+Description=Clipboard history expiry
+PartOf=hyprland-session.target
+After=hyprland-session.target
+
+[Timer]
+OnActiveSec=30min
+OnUnitActiveSec=30min
+AccuracySec=1min

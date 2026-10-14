@@ -56,6 +56,16 @@ if file_exists("/usr/bin/fcitx5") then
     hl.env("INPUT_METHOD", "fcitx")
 end
 
+-- The clipboard history (cliphist) in the runtime directory, a tmpfs that
+-- goes at logout, not under ~/.cache: what is copied (a token, a password
+-- typed out by hand) never reaches the disk, and expires within the session
+-- (cliphist-expire.timer). Here, so the picker and a terminal's `cliphist`
+-- read the history the watchers write.
+local runtime = os.getenv("XDG_RUNTIME_DIR") or ""
+if runtime:sub(1, 1) == "/" then
+    hl.env("CLIPHIST_DB_PATH", runtime .. "/cliphist/db")
+end
+
 hl.env("XDG_CURRENT_DESKTOP", "Hyprland")
 hl.env("XDG_SESSION_TYPE", "wayland")
 hl.env("XDG_SESSION_DESKTOP", "Hyprland")

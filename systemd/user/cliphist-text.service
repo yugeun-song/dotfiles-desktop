@@ -13,6 +13,10 @@ StartLimitBurst=5
 
 [Service]
 Type=simple
+# The history lives on tmpfs (config/env.lua). Set here as well: should the
+# session's environment not reach the user manager, cliphist would fall
+# back to a history on disk.
+Environment=CLIPHIST_DB_PATH=%t/cliphist/db
 ExecStart=/usr/bin/wl-paste --type text --watch cliphist store
 # always, not on-failure: see bar.service.
 Restart=always

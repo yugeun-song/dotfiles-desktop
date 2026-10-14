@@ -1,0 +1,13 @@
+# dotfiles-desktop
+# Run by cliphist-expire.timer.
+[Unit]
+Description=Clipboard history expiry
+PartOf=hyprland-session.target
+ConditionPathExists=/usr/bin/cliphist
+
+[Service]
+Type=oneshot
+# As in cliphist-text.service.
+Environment=CLIPHIST_DB_PATH=%t/cliphist/db
+ExecStart=/usr/bin/bash %E/hypr/scripts/clipboard.sh expire
+Slice=session.slice

@@ -940,6 +940,14 @@ user_services() {
             branch "${YELLOW}could not reload the user manager$RESET"
         fi
     fi
+    # The clipboard watchers keep nothing of their own, so a change to the
+    # units applies at once (try-restart: only those running), and a unit
+    # the session target has come to want is started with them.
+    if (( ! CHECK && UNITS_CHANGED )) && systemctl --user is-active --quiet hyprland-session.target 2>/dev/null; then
+        systemctl --user try-restart cliphist-text.service cliphist-image.service 2>/dev/null \
+            && systemctl --user start cliphist-expire.timer 2>/dev/null \
+            && branch "$GREEN✓$RESET restarted the clipboard watchers"
+    fi
     # hypridle uses its packaged unit; enabling hooks it to graphical-session.target.
     state=$(unit_state hypridle.service)
     if [[ "$state" == disabled ]]; then
@@ -1305,6 +1313,18 @@ mirror_file "$SRC/dbus/services/org.fcitx.Fcitx5.service" "$DATA/dbus-1/services
 # ~/.iex.exs) are dotfiles-terminal's alone: a file mirrored from both
 # repositories was whatever the last installer to run left there.
 mirror_file "$SRC/spotify/spotify-launcher.conf" "$CONFIG/spotify-launcher.conf"
+# The clipboard history moved to tmpfs (config/env.lua); the one cliphist kept
+# on disk before still holds what was copied, for as long as it exists.
+_old_clips="$(xdg "${XDG_CACHE_HOME:-}" "$HOME/.cache")/cliphist/db"
+if [[ -e "$_old_clips" ]]; then
+    if (( CHECK )); then
+        todo "${YELLOW}the old clipboard history is still on disk: $(tilde "$_old_clips")$RESET"
+    elif rm -f -- "$_old_clips"; then
+        rmdir -- "${_old_clips%/*}" 2>/dev/null
+        branch "$GREEN✓$RESET removed the old clipboard history on disk, $(tilde "$_old_clips")"
+    fi
+fi
+unset _old_clips
 group_close
 
 group_open "cursor theme"

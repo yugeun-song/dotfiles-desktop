@@ -153,6 +153,12 @@ machine. From a text console, `~/recover-desktop` repairs a desktop that runs
 but cannot be seen (`--status` only diagnoses), and `unlock` clears a stuck
 lock screen.
 
+The clipboard history (`Super+V`, cliphist) lives in `$XDG_RUNTIME_DIR`, a
+tmpfs gone at logout, and `cliphist-expire.timer` drops entries after half
+an hour to an hour; entries a password manager marks secret are never
+stored. The installer removes a history an older setup left in
+`~/.cache/cliphist`.
+
     journalctl --user -u bar.service -f
     journalctl --user -t session-start
 
