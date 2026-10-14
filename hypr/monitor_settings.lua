@@ -41,6 +41,11 @@ return {
     -- overrides that without an edit.
     keep_internal = true,
 
+    -- Shutting the lid with no other display lit locks the session (it is
+    -- leaving the laptop); beside a lit external it only darkens the panel.
+    -- false: the lid never locks.
+    lock_on_lid = true,
+
     -- Hotplug settle windows. Removal is answered fast (the desktop is dark
     -- until the panel returns), arrival waits for link training; a burst that
     -- keeps flapping is evaluated anyway after settle_max_ms.

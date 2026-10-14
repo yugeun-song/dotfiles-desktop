@@ -500,10 +500,11 @@ hl.bind("CTRL + SHIFT + ALT + SUPER + Delete", hl.dsp.exec_cmd(scripts .. "/sess
     { description = "Shut down" })
 
 --##! Lid
--- Panel off only; no suspend. Requires logind to ignore the lid
--- (/etc/systemd/logind.conf.d, see README).
+-- Panel off, and a lock when no other display is lit (monitors.lua); no
+-- suspend. Requires logind to ignore the lid (/etc/systemd/logind.conf.d,
+-- see README).
 hl.bind("switch:on:Lid Switch", function() MONITORS.lid_close() end,
-    { locked = true, description = "Lid: internal panel off" })
+    { locked = true, description = "Lid: internal panel off, lock if alone" })
 hl.bind("switch:off:Lid Switch", function() MONITORS.lid_open() end,
     { locked = true, description = "Lid: internal panel on" })
 

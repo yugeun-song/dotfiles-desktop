@@ -51,7 +51,10 @@ printf -- '-- emptied by monitors-selftest.sh\n' > "$WORK/config/execs.lua"
 mkdir -p "$WORK/acpi-lid/LID"
 lid() { printf 'state:      %s\n' "$1" > "$WORK/acpi-lid/LID/state"; }
 lid open
-override=$(printf 'MONITOR_POLICY_OVERRIDE = { internal = { "^WAYLAND%%-", "^WL%%-" }, synthetic = { "^FALLBACK$" }, sysfs = false, auto_scale = false, workspaces = "panel-first", acpi_lid = "%s", settle_removed_ms = 300, settle_added_ms = 300, verify_ms = 1500, panel_off_delay_ms = 200, panel_off_verify_ms = 400 }' "$WORK/acpi-lid")
+# The lid's lock goes to a file: loginctl from the nested compositor would
+# lock the session it runs in.
+locks() { if [[ -f "$WORK/locks" ]]; then wc -l < "$WORK/locks"; else echo 0; fi; }
+override=$(printf 'MONITOR_POLICY_OVERRIDE = { internal = { "^WAYLAND%%-", "^WL%%-" }, synthetic = { "^FALLBACK$" }, sysfs = false, auto_scale = false, workspaces = "panel-first", acpi_lid = "%s", lid_lock_cmd = "echo lock >> %s/locks", settle_removed_ms = 300, settle_added_ms = 300, verify_ms = 1500, panel_off_delay_ms = 200, panel_off_verify_ms = 400 }' "$WORK/acpi-lid" "$WORK")
 { printf '%s\n' "$override"; cat "$WORK/hyprland.lua"; } > "$WORK/hyprland.lua.new"
 mv "$WORK/hyprland.lua.new" "$WORK/hyprland.lua"
 # The log file is written through a stream nobody flushes, so a line can
@@ -252,6 +255,12 @@ else
     echo "PASS  lid shut: the lighting emission carried no disabled rule"
 fi
 
+if [[ "$(locks)" == 0 ]]; then
+    echo "PASS  lid shut beside an external: no lock"
+else
+    echo "FAIL  lid shut beside an external: the session was locked"; FAILED=1
+fi
+
 n eval 'MONITORS.lid_open()' >/dev/null
 sleep 1.2
 expect "lid open: panel back on" "WAYLAND-1 disabled=false"
@@ -307,6 +316,11 @@ mons | grep -q FALLBACK && echo "      FALLBACK appeared after the removal, as e
 sleep 2.5
 expect "undocked with the lid shut: panel back on" "WAYLAND-1 disabled=false"
 if mons | grep -q FALLBACK; then echo "FAIL  undocked: FALLBACK still present"; FAILED=1; else echo "PASS  undocked: FALLBACK gone"; fi
+if [[ "$(locks)" == 1 ]]; then
+    echo "PASS  undocked with the lid shut: the session locks"
+else
+    echo "FAIL  undocked with the lid shut: wanted one lock, got $(locks)"; FAILED=1
+fi
 lid open
 n eval 'MONITORS.lid_open()' >/dev/null
 sleep 0.5
@@ -391,6 +405,11 @@ fi
 n eval 'MONITORS.lid_close()' >/dev/null
 sleep 1.5
 expect "laptop only, lid shut: external back on" "HEADLESS-1 disabled=false"
+if [[ "$(locks)" == 1 ]]; then
+    echo "PASS  laptop only, lid shut: the external it lights again counts, no lock"
+else
+    echo "FAIL  laptop only, lid shut: locked beside the external the lid lit again"; FAILED=1
+fi
 expect "laptop only, lid shut: panel off" "WAYLAND-1 disabled=true"
 expect_panel_holds_none "laptop only, lid shut: no workspace left on the panel"
 n eval 'MONITORS.lid_open()' >/dev/null

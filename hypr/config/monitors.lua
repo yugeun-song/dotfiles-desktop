@@ -127,6 +127,12 @@ local policy = {
     -- See bindings_for; the override file's "*" line replaces it.
     workspaces = "dynamic",
     keep_internal = true,
+    -- The lid shut with no other display lit locks the session (see Lid).
+    lock_on_lid = true,
+    -- How it locks: as Ctrl+Alt+L does. Not settable from the settings file;
+    -- the tests point it at a file, since a nested session's loginctl would
+    -- lock the real one.
+    lid_lock_cmd = "loginctl lock-session",
     settle_removed_ms = 400,
     settle_added_ms = 2000,
     -- FALLBACK means no screen is left, so waiting cannot help; just long
@@ -211,6 +217,7 @@ local function load_settings(path, local_file)
     take("internal", is_pattern_list, "a non-empty list of valid Lua patterns")
     take("synthetic", is_pattern_list, "a non-empty list of valid Lua patterns")
     take("keep_internal", function(v) return type(v) == "boolean" end, "true or false")
+    take("lock_on_lid", function(v) return type(v) == "boolean" end, "true or false")
     take("settle_removed_ms", positive, "a number of milliseconds")
     take("settle_added_ms", positive, "a number of milliseconds")
     take("settle_max_ms", positive, "a number of milliseconds")
@@ -1391,7 +1398,10 @@ local function schedule_fit_recheck()
     end, { timeout = 1500, type = "oneshot" })
 end
 
+local schedule_lid_lock
+
 function M.evaluate(reason, at_load)
+    schedule_lid_lock()
     local state = present()
     local p = plan(state, at_load)
     bind_workspaces(p.bindings)
@@ -1571,6 +1581,48 @@ local function dpms_internal(action)
     end
 end
 
+-- The lid shut with no other display lit is leaving the laptop, not docking
+-- it: the session locks, as Ctrl+Alt+L locks it (hypridle runs lock.sh). Asked
+-- a second after each evaluation while the lid is shut, the one the lid
+-- itself starts included: by then an external an override had turned off is
+-- lit again (see plan), and still counts as docked; and one unplugged with
+-- the lid shut leaves the laptop alone. An external sysfs calls connected
+-- counts too, lit or not: it may still be training its link. A monitor in
+-- standby reads as lit; nothing tells it from one in use. Once per closing.
+local LID_LOCK_AFTER_MS = 1000
+local lid_locked = false
+local lid_lock_generation = 0
+
+local function external_attached()
+    if #present().external > 0 then
+        return true
+    end
+    if policy.sysfs then
+        for name, connected in pairs(sysfs_connectors()) do
+            if connected and classify(name) == "external" then
+                return true
+            end
+        end
+    end
+    return false
+end
+
+schedule_lid_lock = function()
+    if not policy.lock_on_lid or not lid_closed or lid_locked then
+        return
+    end
+    lid_lock_generation = lid_lock_generation + 1
+    local generation = lid_lock_generation
+    hl.timer(function()
+        if generation ~= lid_lock_generation or not lid_closed or lid_locked or external_attached() then
+            return
+        end
+        lid_locked = true
+        print("monitors: lid shut with no other display: locking")
+        hl.dispatch(hl.dsp.exec_cmd(policy.lid_lock_cmd))
+    end, { timeout = LID_LOCK_AFTER_MS, type = "oneshot" })
+end
+
 function M.lid_close()
     lid_closed = true
     dpms_internal("disable")
@@ -1579,6 +1631,8 @@ end
 
 function M.lid_open()
     lid_closed = false
+    lid_locked = false
+    lid_lock_generation = lid_lock_generation + 1
     dpms_internal("enable")
     schedule("lid open", policy.settle_removed_ms)
 end
