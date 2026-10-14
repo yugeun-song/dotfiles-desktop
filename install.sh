@@ -22,9 +22,9 @@
 # Files are copied, not linked: nothing edited here runs until this runs
 # again. A file this repository did not write (another program changed it,
 # or it was there first) is a conflict: the difference is shown and the
-# choice is the user's. /etc/fonts/local.conf, /etc/tuigreet/config.toml and
-# the camera switch need sudo, asked for once, up front: printed as manual
-# steps they never ran.
+# choice is the user's. /etc/fonts/local.conf, /etc/tuigreet/config.toml,
+# the camera switch and the key overlay's reader need sudo, asked for once,
+# up front: printed as manual steps when it never ran.
 #
 # Test hooks: DOTFILES_OS_RELEASE replaces /etc/os-release, DOTFILES_SYSTEMD
 # replaces /run/systemd/system, and DOTFILES_ROOT goes in front of root's
@@ -49,6 +49,14 @@ CAMERA_FILES=(
     "camera/camera-switch.py:$ROOT/usr/local/bin/camera-switch:755"
     "camera/io.github.yugeun-song.camera-switch.policy:$ROOT/usr/share/polkit-1/actions/io.github.yugeun-song.camera-switch.policy:644"
     "camera/70-camera-switch.rules:$ROOT/etc/udev/rules.d/70-camera-switch.rules:644"
+)
+# The key overlay's reader (keyfeed/), which pkexec runs as root once an
+# administrator's password is given: then no group of the user's has to read
+# the keyboards. Root's, as the camera switch's helper is, and for the same
+# reason.
+KEYFEED_FILES=(
+    "keyfeed/keyfeed.py:$ROOT/usr/local/libexec/keyfeed:755"
+    "keyfeed/io.github.yugeun-song.keyfeed.policy:$ROOT/usr/share/polkit-1/actions/io.github.yugeun-song.keyfeed.policy:644"
 )
 HYPRLAND_MIN=0.56
 
@@ -745,7 +753,7 @@ greeter_is_tuigreet() {
 system_files() {
     printf '%s\n' "fontconfig/local.conf:$FONTCONF:644"
     greeter_is_tuigreet && printf '%s\n' "tuigreet/config.toml:$GREETERCONF:644"
-    printf '%s\n' "${CAMERA_FILES[@]}"
+    printf '%s\n' "${CAMERA_FILES[@]}" "${KEYFEED_FILES[@]}"
 }
 
 system_current() {
@@ -1250,7 +1258,13 @@ fi
 if (( CHECK )) && ! greeter_is_tuigreet; then
     branch "${DIM}the greeter is not tuigreet, so $GREETERCONF is left alone$RESET"
 fi
-unset _src _dst _mode _fonts _camera
+# Said, not undone: the group may be there for something else, and leaving it
+# takes a login. Captured first, as a pipe into grep -q could trip pipefail.
+_groups=$(id -nG 2>/dev/null) || _groups=""
+if [[ " $_groups " == *" input "* ]]; then
+    NOTES+=("the key overlay no longer needs the input group, with which any program of yours can read the keyboards; sudo gpasswd -d $(id -un) input (from the next login)")
+fi
+unset _src _dst _mode _fonts _camera _groups
 group_close
 
 finish

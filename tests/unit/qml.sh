@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
 # Runs tests/unit/qml/shell.qml against a copy of quickshell/bar, offscreen.
 #
-# Nothing in the copy may reach the machine: the key reader would read the
-# keyboard, app-scope.sh would start programs in the user's systemd, and the
-# services call ddcutil (the monitor's i2c bus), brightnessctl and hyprctl the
-# moment they exist. Those become stubs on PATH or in the copy; the session
-# bus is one that does not exist, so the notification server cannot take the
-# running bar's name, and so is the system bus, so the network and weather
-# services see no NetworkManager; state, config and runtime directories are
-# temporary.
+# Nothing in the copy may reach the machine: the key reader would ask for a
+# password and read the keyboard, app-scope.sh would start programs in the
+# user's systemd, and the services call ddcutil (the monitor's i2c bus),
+# brightnessctl and hyprctl the moment they exist. Those become stubs on PATH
+# or in the copy; the session bus is one that does not exist, so the
+# notification server cannot take the running bar's name, and so is the
+# system bus, so the network and weather services see no NetworkManager;
+# state, config and runtime directories are temporary.
 # The runtime directory sits in /tmp, not under a long path: quickshell puts
 # its IPC socket there, and a socket path has a 108-byte limit.
 
@@ -25,9 +25,8 @@ chmod 700 "$WORK/run"
 cp -a "$REPO/quickshell/bar" "$WORK/bar"
 cp "$REPO/tests/unit/qml/shell.qml" "$WORK/bar/shell.qml"
 cp "$REPO/tests/unit/qml/TestModules.qml" "$WORK/bar/TestModules.qml"
-printf '#!/bin/sh\necho %s\n' "'{\"type\": \"ready\", \"devices\": 0}'; sleep 3600" > "$WORK/bar/scripts/keyfeed.py"
 printf '#!/bin/sh\nexit 0\n' > "$WORK/bar/scripts/app-scope.sh"
-for tool in ddcutil brightnessctl hyprctl notify-send canberra-gtk-play fcitx5-remote gdbus; do
+for tool in ddcutil brightnessctl notify-send canberra-gtk-play fcitx5-remote gdbus; do
     printf '#!/bin/sh\nexit 0\n' > "$WORK/bin/$tool"
     chmod +x "$WORK/bin/$tool"
 done
@@ -41,14 +40,45 @@ trap 'sleep 0.3; exit 0' TERM
 while kill -0 "$PPID" 2>/dev/null; do sleep 0.05; done
 EOF
 chmod +x "$WORK/bin/cava"
-# pgrep, asked only by the key overlay whether hyprlock runs: no answer
-# until $WORK/pgrep-go exists, then "none" unless $WORK/hyprlock-running does.
-cat > "$WORK/bin/pgrep" <<EOF
+# The key reader as the bar runs root's (KeyFeed.qml): pkexec runs it, or
+# answers as $WORK/keyfeed/mode says, and the reader ignores TERM, since the
+# bar cannot signal a process of root's: only the end of its stdin stops it.
+mkdir -p "$WORK/keyfeed"
+cat > "$WORK/bin/pkexec" <<'EOF'
 #!/bin/sh
-while [ ! -e "$WORK/pgrep-go" ] && kill -0 "\$PPID" 2>/dev/null; do sleep 0.05; done
-[ -e "$WORK/hyprlock-running" ]
+case "$(cat "$KEYFEED_TEST_DIR/mode" 2>/dev/null)" in
+    dismiss) exit 126 ;;
+    refuse) echo "Error executing command as another user: Not authorized" >&2; exit 127 ;;
+    noagent) echo "Error executing command as another user: No authentication agent found." >&2; exit 127 ;;
+esac
+exec "$@"
 EOF
-chmod +x "$WORK/bin/pgrep"
+# The reader logs its start, its arguments, every control line, and its end;
+# it sends one key for each resume.
+cat > "$WORK/keyfeed/reader" <<'EOF'
+#!/bin/sh
+trap '' TERM
+echo started >> "$KEYFEED_TEST_DIR/log"
+echo "$*" > "$KEYFEED_TEST_DIR/args"
+echo '{"type": "ready", "devices": 1}'
+while IFS= read -r line; do
+    echo "$line" >> "$KEYFEED_TEST_DIR/control"
+    [ "$line" = stop ] && break
+    [ "$line" = resume ] && echo '{"type": "key", "mods": ["Ctrl"], "key": "K"}'
+done
+echo stopped >> "$KEYFEED_TEST_DIR/log"
+EOF
+chmod +x "$WORK/bin/pkexec" "$WORK/keyfeed/reader"
+# hyprctl: `hyprctl locked`, which only the key overlay asks, holds its
+# answer until $WORK/lock-go exists, then says false unless
+# $WORK/session-locked does; anything else is a no-op.
+cat > "$WORK/bin/hyprctl" <<EOF
+#!/bin/sh
+[ "\$1" = locked ] || exit 0
+while [ ! -e "$WORK/lock-go" ] && kill -0 "\$PPID" 2>/dev/null; do sleep 0.05; done
+if [ -e "$WORK/session-locked" ]; then echo true; else echo false; fi
+EOF
+chmod +x "$WORK/bin/hyprctl"
 # The camera indicator's sources, driven by the suite through files in
 # $WORK/camera: the status reading and its exit code, the device events
 # (a line appended is an event), and the switch file. tail follows only
@@ -112,7 +142,10 @@ out="$WORK/out"
     CAMERA_SWITCH_FILE="$WORK/camera/state/off" \
     CAMERA_TEST_DIR="$WORK/camera" \
     WEATHER_TEST_DIR="$WORK/weather" \
-    QML_TEST_PGREP_GO="$WORK/pgrep-go" \
+    QML_TEST_LOCK_GO="$WORK/lock-go" \
+    KEYFEED_SYSTEM="$WORK/keyfeed/reader" \
+    KEYFEED_TEST_DIR="$WORK/keyfeed" \
+    XDG_VTNR=7 \
     timeout 60 qs -n -p "$WORK/bar" >"$out" 2>&1; true ) 2>/dev/null
 
 # The colour codes and log prefixes go; the test lines stay.

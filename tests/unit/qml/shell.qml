@@ -93,7 +93,7 @@ ShellRoot {
     }
 
     function testKeyFeed() {
-        // pgrep holds its answer until keyLockSteps lets it go.
+        // hyprctl holds its answer until keyLockSteps lets it go.
         check("keys: a bar starts locked until it knows there is no lock", KeyFeed.locked, true);
         KeyFeed.locked = false;
         check("mods: printed order", KeyFeed.symbolsFor(["Super", "Shift", "Ctrl"]),
@@ -112,14 +112,135 @@ ShellRoot {
         KeyFeed.push([], "x");
         check("chords: back after the unlock", KeyFeed.chords.map(c => c.key), ["x"]);
         KeyFeed.clear();
+        // A chord that leaves gives its key up, wherever its object went.
+        KeyFeed.push(["Ctrl"], "s");
+        const dropped = KeyFeed.chords[0];
+        KeyFeed.drop(dropped.id);
+        check("scrub: a dropped chord keeps no key", [dropped.key, dropped.mods], [null, null]);
+        KeyFeed.push([], "a");
+        const cleared = KeyFeed.chords[0];
+        KeyFeed.clear();
+        check("scrub: nor does a cleared one", cleared.key, null);
+        for (let i = 0; i < 5; i++)
+            KeyFeed.push([], String(i));
+        const oldest = KeyFeed.chords[0];
+        KeyFeed.push([], "5");
+        check("scrub: nor one cut by the cap", oldest.key, null);
+        KeyFeed.clear();
+        check("mods: a scrubbed chord prints none", KeyFeed.symbolsFor(null), "");
         // As at the start, until the probe answers.
         KeyFeed.locked = true;
     }
 
     function keyLockSteps() {
         return [
-            { wait: 50, run: () => Quickshell.execDetached(["touch", Quickshell.env("QML_TEST_PGREP_GO")]) },
-            { wait: 500, run: () => check("keys: no hyprlock running unlocks them", KeyFeed.locked, false) }
+            { wait: 50, run: () => Quickshell.execDetached(["touch", Quickshell.env("QML_TEST_LOCK_GO")]) },
+            { wait: 500, run: () => check("keys: a session the compositor calls unlocked unlocks them", KeyFeed.locked, false) }
+        ];
+    }
+
+    // The reader through pkexec, with the stand-ins of tests/unit/qml.sh.
+    readonly property string keyDir: Quickshell.env("KEYFEED_TEST_DIR") ?? ""
+    property string keyLog: ""
+    property string keyControl: ""
+
+    FileView {
+        id: keyControlFile
+
+        path: root.keyDir + "/control"
+        watchChanges: true
+        printErrors: false
+
+        onFileChanged: keyControlFile.reload()
+        onLoaded: root.keyControl = keyControlFile.text()
+        onLoadFailed: root.keyControl = ""
+    }
+
+    FileView {
+        id: keyLogFile
+
+        path: root.keyDir + "/log"
+        watchChanges: true
+        printErrors: false
+
+        onFileChanged: keyLogFile.reload()
+        onLoaded: root.keyLog = keyLogFile.text()
+        onLoadFailed: root.keyLog = ""
+    }
+
+    FileView {
+        id: keyArgsFile
+
+        path: root.keyDir + "/args"
+        blockLoading: true
+        printErrors: false
+    }
+
+    function keyMode(mode) {
+        Quickshell.execDetached(["sh", "-c", `printf %s "$2" > "$1/mode"`, "sh", root.keyDir, mode]);
+    }
+
+    function keyFeedSteps() {
+        const reader = Quickshell.env("KEYFEED_SYSTEM");
+        return [
+            { wait: 0, run: () => {
+                root.keyMode("ok");
+                KeyFeed.toggle();
+            } },
+            { wait: 700, run: () => {
+                keyArgsFile.reload();
+                check("reader: told the session's console", keyArgsFile.text().trim(), "--vt 7");
+                check("reader: told to send once it is ready", root.keyControl, "resume\n");
+                check("reader: its keys reach the overlay", KeyFeed.chords.map(c => c.key), ["K"]);
+                check("reader: started once", root.keyLog, "started\n");
+                KeyFeed.clear();
+                KeyFeed.locked = true;
+            } },
+            { wait: 300, run: () => {
+                check("reader: a lock pauses it", root.keyControl, "resume\npause\n");
+                KeyFeed.locked = false;
+            } },
+            { wait: 300, run: () => {
+                check("reader: the unlock resumes it", root.keyControl, "resume\npause\nresume\n");
+                check("reader: and its keys come again", KeyFeed.chords.map(c => c.key), ["K"]);
+                KeyFeed.toggle();
+            } },
+            { wait: 700, run: () => {
+                check("reader: Super+Y off tells it to stop", root.keyControl, "resume\npause\nresume\nstop\n");
+                check("reader: and it stops, though the bar cannot signal it", root.keyLog, "started\nstopped\n");
+                root.keyMode("dismiss");
+            } },
+            { wait: 100, run: () => KeyFeed.toggle() },
+            { wait: 700, run: () => {
+                check("reader: a dismissed password turns the overlay off", KeyFeed.enabled, false);
+                root.keyMode("refuse");
+            } },
+            { wait: 100, run: () => KeyFeed.toggle() },
+            { wait: 700, run: () => {
+                check("reader: a refusal leaves it on with pkexec's reason", [KeyFeed.enabled, KeyFeed.failure],
+                      [true, "Error executing command as another user: Not authorized"]);
+                check("reader: and asks no more", KeyFeed.running, false);
+                root.keyMode("noagent");
+                KeyFeed.toggle();
+            } },
+            { wait: 100, run: () => KeyFeed.toggle() },
+            { wait: 700, run: () => {
+                check("reader: a missing agent is waited for", KeyFeed.failure,
+                      "waiting for a polkit agent to ask for the password");
+                root.keyMode("ok");
+            } },
+            { wait: 2600, run: () => {
+                check("reader: the retry starts it", [KeyFeed.failure, KeyFeed.chords.map(c => c.key)], ["", ["K"]]);
+                KeyFeed.toggle();
+                Quickshell.execDetached(["chmod", "-x", reader]);
+            } },
+            { wait: 300, run: () => KeyFeed.toggle() },
+            { wait: 600, run: () => {
+                check("reader: one not installed is said", KeyFeed.failure,
+                      "the key reader is not installed; ./install.sh puts it in place");
+                KeyFeed.toggle();
+                Quickshell.execDetached(["chmod", "+x", reader]);
+            } }
         ];
     }
 
@@ -396,11 +517,14 @@ ShellRoot {
                 }
             }
             root.steps = root.keyLockSteps()
+                .concat(root.keyDir !== "" ? root.keyFeedSteps() : [])
                 .concat(root.cavaSteps())
                 .concat(root.camDir !== "" ? root.cameraSteps() : [])
                 .concat(root.weatherDir !== "" ? root.weatherSteps() : []);
             if (root.camDir === "")
                 console.log("[test] SKIP camera events: no CAMERA_TEST_DIR");
+            if (root.keyDir === "")
+                console.log("[test] SKIP key reader: no KEYFEED_TEST_DIR");
             if (root.weatherDir === "")
                 console.log("[test] SKIP weather: no WEATHER_TEST_DIR");
             root.runSteps();

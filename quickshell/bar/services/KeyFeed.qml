@@ -5,9 +5,10 @@ import Quickshell
 import Quickshell.Io
 import qs.services
 
-// Key presses for the on-screen overlay, read by scripts/keyfeed.py (evdev,
-// needs the input group) over a JSON-lines protocol. Not named "Keys": that
-// would shadow the attached type and break every Keys.onPressed.
+// Key presses for the on-screen overlay, read by root's copy of
+// keyfeed/keyfeed.py (evdev) over a JSON-lines protocol; pkexec asks for an
+// administrator's password each time the reader starts. Not named "Keys":
+// that would shadow the attached type and break every Keys.onPressed.
 Singleton {
     id: root
 
@@ -25,12 +26,13 @@ Singleton {
     // typed into the lock screen too: a chord younger than its dwell was drawn
     // the moment the session unlocked (the Enter and the last keys of the
     // password). hypridle reports the lock and the unlock (on_lock_cmd,
-    // on_unlock_cmd), lock.sh the lock as it starts hyprlock; keys in between
-    // are dropped. The unlock comes from hypridle only: lock.sh also returns
-    // when hyprlock crashes and the session stays locked. It starts locked
-    // and asks pgrep at once: a bar restarted during a lock knew nothing of
-    // it and drew the password's last keys at the unlock. The keys of the
-    // milliseconds the answer takes are the cheaper loss.
+    // on_unlock_cmd), lock.sh the lock as it starts hyprlock; while locked the
+    // reader is paused (readerOpen), so those keys never leave it. The unlock
+    // comes from hypridle, or from the compositor itself (below): lock.sh also
+    // returns when hyprlock crashes and the session stays locked. It starts
+    // locked and asks the compositor at once: a bar restarted during a lock
+    // knew nothing of it and drew the password's last keys at the unlock.
+    // The keys of the milliseconds the answer takes are the cheaper loss.
     property bool locked: true
 
     Component.onCompleted: lockProbe.running = true
@@ -50,8 +52,11 @@ Singleton {
     }
 
     // With hypridle not running, no unlock would come and the overlay would
-    // stay mute after the first lock. While locked, hyprlock is looked for
-    // now and then, and its absence counts as the unlock.
+    // stay mute after the first lock. While locked, the compositor is asked
+    // now and then whether the session still is. Asked, not hyprlock looked
+    // for: with the locker crashed the session stays locked (a red screen
+    // that takes the keys typed to recover), and its absence had counted as
+    // the unlock.
     Timer {
         interval: 5000
         repeat: true
@@ -66,13 +71,16 @@ Singleton {
     Process {
         id: lockProbe
 
-        command: ["pgrep", "-x", "hyprlock"]
+        command: ["hyprctl", "locked"]
 
-        // pgrep: 0 found, 1 none.
-        onExited: code => {
-            if (code === 1 && root.locked) {
-                root.locked = false;
-                root.clear();
+        // "true" or "false"; anything else (no compositor to ask) changes
+        // nothing.
+        stdout: StdioCollector {
+            onStreamFinished: {
+                if (this.text.trim() === "false" && root.locked) {
+                    root.locked = false;
+                    root.clear();
+                }
             }
         }
     }
@@ -117,7 +125,10 @@ Singleton {
     }
 
     // Printed order. The feed sends names; symbols are the shell's concern.
+    // A scrubbed chord has none.
     function symbolsFor(mods) {
+        if (!mods)
+            return "";
         const order = ["Ctrl", "Alt", "Shift", "Super"];
         let out = "";
         for (let i = 0; i < order.length; i++)
@@ -131,6 +142,16 @@ Singleton {
 
     readonly property bool running: feed.running
 
+    // A chord leaving gives its key up at once. Its object can outlive the
+    // list (an older copy in the model, a delegate being torn down), and
+    // nothing should lead to the key through it. This drops the reference,
+    // not the bytes: the engine frees a string when it collects it and does
+    // not clear it, which is why the bar never writes a core file (bin/bar).
+    function scrub(chord) {
+        chord.key = null;
+        chord.mods = null;
+    }
+
     function push(mods, key) {
         if (root.locked)
             return;
@@ -139,31 +160,44 @@ Singleton {
         // Overflow is cut without an exit animation; animating it kept its
         // width and stacked chords across the screen during fast typing.
         while (next.length > root.maxVisible)
-            next.shift();
+            root.scrub(next.shift());
         root.chords = next;
     }
 
     function drop(id) {
         const next = [];
-        for (let i = 0; i < root.chords.length; i++)
+        for (let i = 0; i < root.chords.length; i++) {
             if (root.chords[i].id !== id)
                 next.push(root.chords[i]);
+            else
+                root.scrub(root.chords[i]);
+        }
         root.chords = next;
     }
 
     function clear() {
+        for (let i = 0; i < root.chords.length; i++)
+            root.scrub(root.chords[i]);
         root.chords = [];
     }
 
     function toggle() {
         root.chosen = true;
-        root.enabled = !root.enabled;
+        root.setEnabled(!root.enabled);
+    }
+
+    function setEnabled(on) {
+        // Said before the stop, which a reader of root's would not feel
+        // (see feed).
+        if (!on && feed.running)
+            feed.write("stop\n");
+        root.enabled = on;
         root.failure = "";
         supervisor.stop();
         supervisor.delay = 2000;
-        if (!root.enabled)
+        if (!on)
             root.clear();
-        store.setText(root.enabled ? "on\n" : "off\n");
+        store.setText(on ? "on\n" : "off\n");
     }
 
     FileView {
@@ -180,11 +214,37 @@ Singleton {
         onSaveFailed: error => console.warn("[keyfeed] could not keep the switch in", store.path, "-", error)
     }
 
-    // A reader that dies while the overlay is on is started again, 2 s to a
-    // minute apart like the other helpers. Switching the overlay off at the
-    // first exit lost the user's choice and the strip that would have said
-    // why; the strip shows the reason until the reader runs again or Super+Y
-    // turns the overlay off.
+    // Whether the reader may send keys at all: not while the session is
+    // locked. Said to the reader on every change and as it starts, which
+    // keeps those keys inside it (keyfeed.py); push() drops any that cross on
+    // the way. Password dialogs are not told apart: the user turns the overlay
+    // off by hand for a secret (a script that knew those moments could be
+    // misused, and one reading the keys would be a keylogger of its own).
+    readonly property bool readerOpen: !root.locked
+
+    onReaderOpenChanged: root.steer()
+
+    function steer() {
+        if (feed.running)
+            feed.write(root.readerOpen ? "resume\n" : "pause\n");
+    }
+
+    // The session's console, for the reader to hold the keys back while
+    // another one is in front (a text console's login, another greeter).
+    readonly property string vt: Quickshell.env("XDG_VTNR") ?? ""
+
+    // Root's copy of the reader, put in place by install.sh's sudo step.
+    // KEYFEED_SYSTEM points the tests at a stand-in (polkit judges the path
+    // pkexec is handed, so another path gains nothing).
+    readonly property string reader: Quickshell.env("KEYFEED_SYSTEM") || "/usr/local/libexec/keyfeed"
+
+    // pkexec's last complaint, which tells a missing agent from a refusal.
+    property string complaint: ""
+
+    // A start that found no polkit agent to ask (the bar can come up before
+    // it at login) is tried again, 2 s to a minute apart. Nothing else is:
+    // every start costs a password, so a refusal or a reader that stopped
+    // waits for Super+Y, with the reason in the strip until then.
     Timer {
         id: supervisor
 
@@ -205,9 +265,26 @@ Singleton {
         id: feed
 
         running: root.enabled
-        // -I: no PYTHON* variables and no user site-packages, whose .pth
-        // files would run inside the process holding the keyboard.
-        command: ["python3", "-I", Quickshell.shellPath("scripts/keyfeed.py")]
+        // Through bash rather than pkexec alone: once authorized, pkexec
+        // becomes the reader, a process of root's that the bar cannot
+        // signal. bash can be stopped, and passes the stop on while pkexec
+        // still asks; after that, its end of stdin closing is the reader's
+        // signal to go (keyfeed.py). stdin is passed explicitly: a
+        // background job's is /dev/null otherwise. 69 (EX_UNAVAILABLE): root's
+        // copy is not installed.
+        command: ["bash", "-c",
+            "[ -x \"$0\" ] || exit 69; " +
+            "trap 'kill \"$p\" 2>/dev/null; exit 143' TERM; " +
+            "pkexec \"$0\" \"$@\" 0<&0 & p=$!; wait \"$p\"",
+            root.reader].concat(/^[0-9]+$/.test(root.vt) ? ["--vt", root.vt] : [])
+        stdinEnabled: true
+
+        stderr: SplitParser {
+            onRead: line => {
+                if (line.trim() !== "")
+                    root.complaint = line.trim();
+            }
+        }
 
         stdout: SplitParser {
             onRead: line => {
@@ -223,16 +300,14 @@ Singleton {
                     console.warn("[keyfeed] unparseable line of", t.length, "characters");
                     return;
                 }
-                // A reader that got this far works: the backoff starts over.
-                // Not on an error line, which a failing reader sends just
-                // before it exits.
                 if (msg.type === "key") {
                     root.failure = "";
-                    supervisor.delay = 2000;
                     root.push(msg.mods ?? [], msg.key ?? "?");
                 } else if (msg.type === "ready") {
                     root.failure = "";
                     supervisor.delay = 2000;
+                    // It starts paused; it learns whether to send now.
+                    root.steer();
                 } else if (msg.type === "error") {
                     root.failure = msg.reason ?? "unknown";
                     console.warn("[keyfeed]", root.failure);
@@ -240,14 +315,33 @@ Singleton {
             }
         }
 
+        // pkexec: 126 the dialog was dismissed, 127 not authorized or no
+        // agent to ask. 143 is this bar stopping it.
         onExited: code => {
-            if (!root.enabled)
+            // Taken and cleared, so a later start reports only its own.
+            const complaint = root.complaint;
+            root.complaint = "";
+            if (!root.enabled || code === 143)
                 return;
-            // The reader's own complaint, when it sent one, says more.
-            if (root.failure === "")
-                root.failure = `the key feed exited with ${code}`;
-            console.warn("[keyfeed]", root.failure, "- retrying");
-            supervisor.restart();
+            if (code === 126) {
+                // The user said no: the overlay goes off rather than ask again.
+                console.warn("[keyfeed] authentication dismissed; the overlay is off");
+                root.setEnabled(false);
+                return;
+            }
+            if (code === 127 && /authentication agent/i.test(complaint)) {
+                root.failure = "waiting for a polkit agent to ask for the password";
+                console.warn("[keyfeed]", root.failure, "- retrying");
+                supervisor.restart();
+                return;
+            }
+            if (code === 69)
+                root.failure = "the key reader is not installed; ./install.sh puts it in place";
+            else if (code === 127)
+                root.failure = complaint !== "" ? complaint : "not authorized to read the keyboards";
+            else if (root.failure === "")
+                root.failure = `the key reader stopped (${code}); Super+Y twice starts it again`;
+            console.warn("[keyfeed]", root.failure);
         }
     }
 }

@@ -108,7 +108,7 @@ benv() {
     env WAYLAND_DISPLAY="$WL" HYPRLAND_INSTANCE_SIGNATURE="$SIG" DBUS_SESSION_BUS_ADDRESS="$BUS" \
         XDG_STATE_HOME="$WORK/state" XDG_CONFIG_HOME="$WORK/config" XDG_CACHE_HOME="$WORK/cache" \
         CAMERA_SWITCH_SYSTEM="$WORK/bin/camera-switch-stub" CAMERA_SWITCH_FILE="$WORK/camera-off" \
-        PATH="$WORK/bin:$PATH" "$@"
+        KEYFEED_SYSTEM="$WORK/keyfeed-stub" PATH="$WORK/bin:$PATH" "$@"
 }
 ipc() { benv qs -p "$WORK/bar" ipc call "$@" 2>/dev/null; }
 # Only ever the nested socket: refused if it is the session's own.
@@ -192,6 +192,10 @@ cat > "$WORK/bin/udevadm" <<'EOF'
 exec tail -f /dev/null --pid="$PPID"
 EOF
 chmod +x "$WORK/bin/camera-switch-stub" "$WORK/bin/udevadm"
+# pkexec runs the key reader's stand-in as asked, with no password: the bar
+# under test must never put a dialog on the real session.
+printf '#!/bin/sh\nexec "$@"\n' > "$WORK/bin/pkexec"
+chmod +x "$WORK/bin/pkexec"
 
 cp -a "$REPO/hypr" "$WORK/config/hypr"
 cp -a "$REPO/quickshell/bar" "$WORK/bar"
@@ -342,19 +346,22 @@ start_bar
 sleep 1
 check "the overlay is still on after a restart" overlay_on
 
-# 5. A reader that dies is restarted, and says why meanwhile.
+# 5. A reader that dies says why, and is not started again behind the
+# user's back: every start asks for a password. Super+Y twice starts it.
 echo "ERR every keyboard went away" > "$WORK/keyfifo"
 echo EXIT > "$WORK/keyfifo"
 sleep 0.3
-# One reading for both: the supervisor starts the reader again after two
-# seconds, and the reason goes with that start.
 state=$(ipc e2e keys)
 echo "$state" > "$WORK/reader-state.json"
 check "a dead reader leaves the overlay on" test "$(jq -r .enabled <<<"$state")" = true
 check "and shows its reason" test "$(jq -r .failure <<<"$state")" = "every keyboard went away"
 sleep 2.5
-echo "k" > "$WORK/keyfifo"
-check "the reader is started again" wait_for 3 key_state_is .failure ""
+check "and is not started again by itself" key_state_is .failure "every keyboard went away"
+input key super 21 sleep 800
+input key super 21 sleep 800
+# Bounded: with no reader started, a write to the fifo would wait forever.
+timeout 5 tee "$WORK/keyfifo" <<<k >/dev/null
+check "Super+Y twice starts it again" wait_for 3 key_state_is .failure ""
 
 # 6. Keys typed while the session is locked never reach the overlay.
 ipc keys lock >/dev/null

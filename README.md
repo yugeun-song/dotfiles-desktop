@@ -42,6 +42,7 @@ systemd/user/        the session target, one unit per long-running program
 dbus/                fcitx5's D-Bus activation, pointed at its unit
 bin/                 bar and unlock (to ~/.local/bin), recover-desktop (to ~/)
 camera/              the camera switch, its polkit action and udev rule (root's)
+keyfeed/             the key overlay's reader and its polkit action (root's)
 fontconfig/          font chain (to /etc/fonts/local.conf)
 gtk/ kde/ fcitx5/    seeded settings: GTK, Qt/KDE colours, Korean input
 tuigreet/            the greeter's look (only when greetd runs tuigreet)
@@ -174,13 +175,18 @@ local files and `Theme.artHosts`. Weather refetches when a link comes up and
 again when NetworkManager's check sees the internet answer, so a boot without
 network shows it within seconds of connecting; a click fetches at once.
 
-**Key overlay** (`Super+Y`): `scripts/keyfeed.py` reads the keyboards, which
-takes membership of the `input` group, and runs only while the overlay is on;
-the switch persists in `~/.local/state/quickshell/bar/keyoverlay`. Keys go
-nowhere but the overlay (no socket, no file, no log line, at most five
-chords for under a second, the reader undumpable), and nothing is shown
-between a lock and its unlock. The group is the exposure: every program of
-the user can read the keyboards, overlay on or off.
+**Key overlay** (`Super+Y`): `keyfeed/keyfeed.py`, installed as root's
+`/usr/local/libexec/keyfeed`, reads the keyboards. pkexec asks for an
+administrator's password every time the bar starts it (`Super+Y`, a login
+with the overlay on, a bar restart); it opens the keyboards as root, then
+runs as nobody with the `input` group alone, so the user needs no group
+that would let every program read the keyboards. The switch persists in
+`~/.local/state/quickshell/bar/keyoverlay`. The reader sends nothing while
+the session is locked or another console is in front: those keys never
+leave it, and it zeroes what it read. Keys go nowhere but the overlay (no
+socket, no file, no log line, at most five chords for under a second, each
+scrubbed as it leaves). Password prompts are not told apart; turn the
+overlay off by hand to type a secret.
 
 **Screensaver**: off unless a display gets a time in the Displays panel.
 After that long with nothing done on the display it goes exact black

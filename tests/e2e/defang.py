@@ -6,7 +6,8 @@ Usage: defang.py WORK     (WORK holds bar/, config/hypr/ and the log apps.log)
 Every action that would leave the nested session is replaced with a line in
 WORK/apps.log: the session dialog's lock, sleep, sign-out, restart and power-off,
 programs started from the bar, brightness and volume writes, the alarm chime.
-The key reader becomes a reader of WORK/keyfifo, never of /dev/input. The
+The key reader (KEYFEED_SYSTEM, which run.sh points here) becomes a reader
+of WORK/keyfifo, never of /dev/input. The
 weather script prints a fixed reading instead of going to the network. Then
 a probe is added to shell.qml for the suite to read the bar's state, the
 screensaver's minutes become five-second units so its stages come within a
@@ -67,21 +68,34 @@ edit(BAR / "services/Alarms.qml",
     "#!/bin/sh\n"
     "echo '{\"code\": 1, \"temp\": 18, \"feels\": 17, \"day\": 1, \"place\": \"Test\", "
     "\"fetched\": '\"$(date +%s)\"', \"live\": true}'\n")
-(BAR / "scripts/keyfeed.py").write_text(f'''#!/usr/bin/env python3
-import json, sys
+(WORK / "keyfeed-stub").write_text(f'''#!/usr/bin/env python3
+import json, os, sys, threading
+# Steered as the real reader is: paused until the bar says resume, and gone
+# at stop or the end of stdin (one left over would steal lines from the fifo).
+state = {{"open": False}}
+def control():
+    for line in sys.stdin:
+        word = line.strip()
+        if word == "stop":
+            break
+        if word in ("resume", "pause"):
+            state["open"] = word == "resume"
+    os._exit(0)
+threading.Thread(target=control, daemon=True).start()
 print(json.dumps({{"type": "ready", "devices": 1}}), flush=True)
 while True:
     with open("{WORK / 'keyfifo'}") as fh:
         for line in fh:
             line = line.strip()
             if line == "EXIT":
-                sys.exit(3)
+                os._exit(3)
             if line.startswith("ERR "):
                 print(json.dumps({{"type": "error", "reason": line[4:]}}), flush=True)
-            elif line:
+            elif line and state["open"]:
                 parts = line.split("+")
                 print(json.dumps({{"type": "key", "mods": parts[:-1], "key": parts[-1]}}), flush=True)
 ''')
+(WORK / "keyfeed-stub").chmod(0o755)
 
 saver = BAR / "modules/ScreensaverDpms.qml"
 edit(saver, "timeout: Math.max(1, slot.minutes) * 60", "timeout: Math.max(1, slot.minutes) * 5")

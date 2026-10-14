@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD polkit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">
+<!--
+  dotfiles-desktop: installed by install.sh into /usr/share/polkit-1/actions/
+
+  pkexec runs the key overlay's reader, /usr/local/libexec/keyfeed, as root
+  once an administrator's password is given, every time: the reader sees
+  every key typed anywhere, and a password is the proof that the user, not
+  a program of theirs, turned it on. Not auth_admin_keep: polkit keeps an
+  authorization for the process that asked, and the bar asks from a new one
+  each start, so keeping it would save no prompt. Never for a session not
+  at the seat.
+-->
+<policyconfig>
+  <vendor>dotfiles-desktop</vendor>
+  <action id="io.github.yugeun-song.keyfeed">
+    <description>Show the keys being pressed on screen</description>
+    <message>Authentication is required to let the key overlay read the keyboards</message>
+    <defaults>
+      <allow_any>no</allow_any>
+      <allow_inactive>no</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/libexec/keyfeed</annotate>
+  </action>
+</policyconfig>
