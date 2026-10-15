@@ -51,6 +51,20 @@ Singleton {
     property double asOf: 0
     property int restarts: 0
 
+    // Every line from the helper, the answer to ask() or a change it saw.
+    signal answered()
+
+    // A reading now instead of at the next poll, for the key overlay
+    // (KeyFeed), which holds a letter back until the answer: the poll's last
+    // reading can be 0.3 s old. The line carries no key, only the moment.
+    // False with no helper to ask.
+    function ask(): bool {
+        if (!poller.running)
+            return false;
+        poller.write("ask\n");
+        return true;
+    }
+
     // Exponential backoff (2 s to 60 s): the helper exits at once when the
     // session bus cannot be reached, and when it drops the connection.
     Timer {
@@ -75,6 +89,7 @@ Singleton {
         // One D-Bus connection, polled; see the script for why not
         // fcitx5-remote.
         command: ["python3", "-I", Quickshell.shellPath("scripts/inputmethod.py")]
+        stdinEnabled: true
 
         onRunningChanged: {
             if (!poller.running) {
@@ -87,27 +102,32 @@ Singleton {
 
         stdout: SplitParser {
             onRead: line => {
-                // Any output resets the backoff.
-                supervisor.delay = 2000;
-                // Only the line ending is cut: trim() would also eat the tab
-                // that ends "0<TAB>" (state 0, no engine name), leaving one
-                // field and a spurious warning on every unfocused input.
-                const raw = line.replace(/[\r\n]+$/, "");
-                // "-": fcitx5 did not answer (not the same as "no IM").
-                if (raw.trim() === "-") {
-                    root.asOf = 0;
-                    return;
-                }
-                // An empty engine name is valid; an empty state is not.
-                const parts = raw.split("\t");
-                if (parts.length !== 2 || parts[0] === "") {
-                    console.warn("[ime] unexpected line:", raw);
-                    return;
-                }
-                root.state = parts[0];
-                root.method = parts[1];
-                root.asOf = Date.now();
+                root.take(line);
+                root.answered();
             }
         }
+    }
+
+    function take(line) {
+        // Any output resets the backoff.
+        supervisor.delay = 2000;
+        // Only the line ending is cut: trim() would also eat the tab
+        // that ends "0<TAB>" (state 0, no engine name), leaving one
+        // field and a spurious warning on every unfocused input.
+        const raw = line.replace(/[\r\n]+$/, "");
+        // "-": fcitx5 did not answer (not the same as "no IM").
+        if (raw.trim() === "-") {
+            root.asOf = 0;
+            return;
+        }
+        // An empty engine name is valid; an empty state is not.
+        const parts = raw.split("\t");
+        if (parts.length !== 2 || parts[0] === "") {
+            console.warn("[ime] unexpected line:", raw);
+            return;
+        }
+        root.state = parts[0];
+        root.method = parts[1];
+        root.asOf = Date.now();
     }
 }

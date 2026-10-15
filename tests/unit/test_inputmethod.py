@@ -10,12 +10,14 @@ in between, a late reply, a message cut in half by a timeout).
 import importlib.util
 import os
 import pathlib
+import select
 import shutil
 import socket
 import struct
 import subprocess
 import sys
 import tempfile
+import time
 import unittest
 from unittest import mock
 
@@ -137,6 +139,42 @@ class Stream(unittest.TestCase):
             self.bus.call(*im.FCITX, "State")
 
 
+class Requests(unittest.TestCase):
+    def setUp(self):
+        self.r, self.w = os.pipe()
+
+    def tearDown(self):
+        for fd in (self.r, self.w):
+            try:
+                os.close(fd)
+            except OSError:
+                pass
+
+    def test_a_line_ends_the_wait(self):
+        os.write(self.w, b"ask\n")
+        start = time.monotonic()
+        self.assertTrue(im.Requests(self.r).wait(5))
+        self.assertLess(time.monotonic() - start, 1)
+
+    def test_silence_waits_it_out(self):
+        self.assertFalse(im.Requests(self.r).wait(0.05))
+
+    def test_the_end_of_stdin_leaves_the_plain_poll(self):
+        os.close(self.w)
+        requests = im.Requests(self.r)
+        start = time.monotonic()
+        self.assertFalse(requests.wait(0.1))
+        # A sleep, not a turn of the loop at every pass.
+        self.assertGreaterEqual(time.monotonic() - start, 0.1)
+        self.assertIsNone(requests.fd)
+
+    def test_no_stdin_at_all(self):
+        os.close(self.r)
+        requests = im.Requests(self.r)
+        self.assertFalse(requests.wait(0.01))
+        self.assertIsNone(requests.fd)
+
+
 @unittest.skipUnless(shutil.which("dbus-daemon"), "dbus-daemon is not installed")
 class PrivateBus(unittest.TestCase):
     def setUp(self):
@@ -165,6 +203,26 @@ class PrivateBus(unittest.TestCase):
         proc = subprocess.Popen([sys.executable, "-I", str(SCRIPT)], env=env, stdout=subprocess.PIPE, text=True)
         try:
             self.assertEqual(proc.stdout.readline(), "-\n")
+        finally:
+            proc.kill()
+            proc.wait()
+
+    def test_a_request_is_answered_though_nothing_changed(self):
+        env = dict(os.environ, DBUS_SESSION_BUS_ADDRESS=self.address, INPUTMETHOD_POLL_INTERVAL="0.05")
+        proc = subprocess.Popen([sys.executable, "-I", str(SCRIPT)], env=env,
+                                stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True)
+
+        def line(timeout):
+            if not select.select([proc.stdout], [], [], timeout)[0]:
+                return None
+            return proc.stdout.readline()
+
+        try:
+            self.assertEqual(line(5), "-\n")
+            self.assertIsNone(line(0.5), "an unchanged reading printed unasked")
+            proc.stdin.write("ask\n")
+            proc.stdin.flush()
+            self.assertEqual(line(5), "-\n")
         finally:
             proc.kill()
             proc.wait()

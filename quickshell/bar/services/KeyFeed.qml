@@ -154,15 +154,118 @@ Singleton {
         onExited: root.promptSecret = false
     }
 
-    // {mods: [...], key: "C", id: n}. The only place keys are kept: at most
-    // maxVisible, each dropped by its cap's exit (dwell plus the fall, under
-    // a second), all of them on Super+Y off, on a lock or unlock and when a
-    // password is being typed. Nothing reads them but the overlay.
+    // {mods: [...], key: "C", id: n}, key being a jamo for a letter typed in
+    // Hangul. With waiting below, the only place keys are kept: at most
+    // maxVisible between the two, each chord dropped by its cap's exit
+    // (dwell plus the fall, under a second), all of them on Super+Y off, on a
+    // lock or unlock and when a password is being typed. Nothing reads them
+    // but the overlay.
     property var chords: []
 
     readonly property int dwellMs: 500
 
     readonly property int maxVisible: 5
+
+    // A letter typed into Hangul is drawn as the jamo fcitx5-hangul makes of
+    // it, the shifted ones included. The tables are Dubeolsik, the layout
+    // fcitx5/conf/hangul.conf sets; another layout there needs its own here.
+    // Caps Lock is left out: the engine undoes it, so Shift alone decides.
+    readonly property var dubeolsik: ({
+        Q: "ㅂ", W: "ㅈ", E: "ㄷ", R: "ㄱ", T: "ㅅ", Y: "ㅛ", U: "ㅕ", I: "ㅑ", O: "ㅐ", P: "ㅔ",
+        A: "ㅁ", S: "ㄴ", D: "ㅇ", F: "ㄹ", G: "ㅎ", H: "ㅗ", J: "ㅓ", K: "ㅏ", L: "ㅣ",
+        Z: "ㅋ", X: "ㅌ", C: "ㅊ", V: "ㅍ", B: "ㅠ", N: "ㅜ", M: "ㅡ"
+    })
+
+    readonly property var dubeolsikShift: ({ Q: "ㅃ", W: "ㅉ", E: "ㄸ", R: "ㄲ", T: "ㅆ", O: "ㅒ", P: "ㅖ" })
+
+    // With Ctrl, Alt or Super held the engine passes a letter on untouched:
+    // it is a shortcut then, and stays latin.
+    function typesJamo(mods, key) {
+        return root.dubeolsik[key] !== undefined && mods.every(m => m === "Shift");
+    }
+
+    function jamoFor(mods, key) {
+        if (!root.typesJamo(mods, key))
+            return key;
+        return (mods.indexOf("Shift") !== -1 ? root.dubeolsikShift[key] : undefined) ?? root.dubeolsik[key];
+    }
+
+    // fcitx5-hangul converting in the focused field, by a reading that is
+    // not stale: with the helper gone or fcitx5 not answering, keys are
+    // drawn as they always were.
+    readonly property bool hangul: Ime.hangul && Ime.method === "hangul" && Ime.asOf !== 0
+
+    // Keys waiting on the input method (Ime.ask), in the order typed: a
+    // letter, and whatever came behind it before the answer. Milliseconds as
+    // a rule, answerMs at most.
+    property var waiting: []
+
+    readonly property int answerMs: 100
+
+    // A key from the reader. A letter waits for a reading taken after it was
+    // typed, so the first one after a switch to Hangul is drawn as Hangul;
+    // drawn with the poll's last reading, it came out latin about half the
+    // time.
+    function receive(mods, key) {
+        if (root.locked || root.guarded)
+            return;
+        if (root.waiting.length === 0 && !(root.typesJamo(mods, key) && Ime.asOf !== 0)) {
+            root.push(mods, key);
+            return;
+        }
+        root.waiting = root.waiting.concat([{ mods: mods, key: key }]);
+        root.fit();
+        if (answerWait.running)
+            return;
+        if (Ime.ask())
+            answerWait.start();
+        else
+            root.settle();
+    }
+
+    // The waiting keys drawn, with whatever reading came last: the answer,
+    // or after answerMs the one before it.
+    function settle() {
+        answerWait.stop();
+        const batch = root.waiting;
+        root.waiting = [];
+        for (let i = 0; i < batch.length; i++) {
+            root.push(batch[i].mods, root.hangul ? root.jamoFor(batch[i].mods, batch[i].key) : batch[i].key);
+            root.scrub(batch[i]);
+        }
+    }
+
+    // Held to maxVisible keys between the two lists: the oldest chord goes
+    // first, as push() would cut it a moment later.
+    function fit() {
+        while (root.chords.length + root.waiting.length > root.maxVisible) {
+            if (root.chords.length > 0) {
+                const next = root.chords.slice();
+                root.scrub(next.shift());
+                root.chords = next;
+            } else {
+                const next = root.waiting.slice();
+                root.scrub(next.shift());
+                root.waiting = next;
+            }
+        }
+    }
+
+    Timer {
+        id: answerWait
+
+        interval: root.answerMs
+        onTriggered: root.settle()
+    }
+
+    Connections {
+        target: Ime
+
+        function onAnswered() {
+            if (answerWait.running)
+                root.settle();
+        }
+    }
 
     // Keys Inter has no symbol for, drawn from the icon font instead. Modifier
     // and other key symbols live in Theme.modSymbol / Theme.keySymbol.
@@ -248,6 +351,10 @@ Singleton {
         for (let i = 0; i < root.chords.length; i++)
             root.scrub(root.chords[i]);
         root.chords = [];
+        answerWait.stop();
+        for (let i = 0; i < root.waiting.length; i++)
+            root.scrub(root.waiting[i]);
+        root.waiting = [];
     }
 
     function toggle() {
@@ -370,7 +477,7 @@ Singleton {
                 }
                 if (msg.type === "key") {
                     root.failure = "";
-                    root.push(msg.mods ?? [], msg.key ?? "?");
+                    root.receive(msg.mods ?? [], msg.key ?? "?");
                 } else if (msg.type === "ready") {
                     root.failure = "";
                     supervisor.delay = 2000;

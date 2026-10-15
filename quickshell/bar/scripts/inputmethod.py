@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Print the input method's state on change: <state>TAB<im name>, or `-` when
-fcitx5 does not answer.
+fcitx5 does not answer. A line on stdin asks for a reading now, printed
+whether or not it changed.
 
 fcitx5-hangul keeps the name "hangul" while toggling conversion, so the state
 (2 = converting) is what tells Hangul from latin. With no focused input
@@ -14,11 +15,17 @@ connection asked over costs about a tenth of that. The wire protocol is
 spoken directly, the subset two argumentless calls need, so the standard
 library suffices (python3 already runs the key overlay's reader).
 
+The key overlay asks at every letter it is about to draw: a poll can be a
+whole interval old, and the first letter typed after a switch to Hangul
+came out latin about half the time. Asking costs a pass while someone
+types and nothing otherwise, where a faster poll would cost all the time.
+
 Exits when the bus cannot be reached or drops the connection; the bar's
 supervisor (services/Ime.qml) starts it again with a backoff.
 """
 
 import os
+import select
 import socket
 import struct
 import sys
@@ -195,6 +202,31 @@ def ask(bus, member):
         return None
 
 
+class Requests:
+    """The lines on stdin. Run by hand or with stdin closed, the end of it
+    leaves the plain poll rather than ending the helper."""
+
+    def __init__(self, fd):
+        self.fd = fd
+
+    def wait(self, timeout):
+        """Sleep up to timeout; True as soon as a request comes. Anything
+        read counts, a part of a line included."""
+        if self.fd is not None:
+            try:
+                if not select.select([self.fd], [], [], timeout)[0]:
+                    return False
+                if os.read(self.fd, 4096):
+                    return True
+            except BlockingIOError:
+                return False
+            except (OSError, ValueError):
+                pass
+            self.fd = None
+        time.sleep(timeout)
+        return False
+
+
 def main():
     interval = float(os.environ.get("INPUTMETHOD_POLL_INTERVAL", "0.3"))
     try:
@@ -204,15 +236,18 @@ def main():
     if bus is None:
         return 1
 
+    requests = Requests(0)
     last = None
     last_state = None
     name = ""
     n = 0
+    requested = False
     while True:
         state = ask(bus, "State")
-        # The name is read again on a state change and every tenth pass
-        # (about 3 s), so an engine switch with no state change still shows.
-        if state != last_state or n % 10 == 0:
+        # The name is read again on a state change, on a request and every
+        # tenth pass (about 3 s), so an engine switch with no state change
+        # still shows, and a request is answered with both fresh.
+        if requested or state != last_state or n % 10 == 0:
             fresh = ask(bus, "CurrentInputMethod")
             # The last non-empty name stays: the engine cannot change while
             # no input context is focused.
@@ -222,10 +257,10 @@ def main():
         n += 1
 
         line = "-" if state is None else f"{state}\t{name}"
-        if line != last:
+        if line != last or requested:
             print(line, flush=True)
             last = line
-        time.sleep(interval)
+        requested = requests.wait(interval)
 
 
 if __name__ == "__main__":

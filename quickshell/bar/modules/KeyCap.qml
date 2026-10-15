@@ -14,6 +14,12 @@ Item {
     // Set when the glyph came from the icon font rather than from Inter.
     property bool iconGlyph: false
 
+    // Hangul is drawn in the Hangul font by name: left to fontconfig's
+    // fallback its taller line made the cap 5 px taller than a latin one. At
+    // the latin size, though Pretendard draws a lone jamo smaller than a
+    // latin capital: sized up to match, the jamo filled its cap.
+    readonly property bool hangul: /[\u3131-\u318E\uAC00-\uD7A3]/.test(root.text)
+
     readonly property color face: Theme.beige
     readonly property color shadow: Theme.muted
     readonly property color ink: Theme.readableOn(root.face)
@@ -23,6 +29,16 @@ Item {
 
     implicitWidth: Math.max(label.implicitWidth + Theme.px(20), Theme.px(42))
     implicitHeight: label.implicitHeight + Theme.px(16) + root.drop
+
+    // The latin line's height, given to every text label: one cap height
+    // whatever the font.
+    FontMetrics {
+        id: latinLine
+
+        font.family: Theme.uiFont
+        font.pixelSize: Theme.px(17)
+        font.weight: Font.DemiBold
+    }
 
     Rectangle {
         anchors.left: parent.left
@@ -63,8 +79,10 @@ Item {
 
             Text {
                 anchors.verticalCenter: parent.verticalCenter
+                height: root.iconGlyph ? implicitHeight : Math.ceil(latinLine.height)
+                verticalAlignment: Text.AlignVCenter
                 text: root.text
-                font.family: root.iconGlyph ? Theme.iconFont : Theme.uiFont
+                font.family: root.iconGlyph ? Theme.iconFont : root.hangul ? Theme.hangulFont : Theme.uiFont
                 // Nerd Font glyphs sit small in their em box; size up to match.
                 font.pixelSize: root.iconGlyph ? Theme.px(20) : Theme.px(17)
                 font.weight: Font.DemiBold

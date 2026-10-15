@@ -151,6 +151,40 @@ ShellRoot {
         KeyFeed.guarded = false;
         // As at the start, until the probe answers.
         KeyFeed.locked = true;
+        check("hangul: letters", ["R", "K", "M", "Z"].map(k => KeyFeed.jamoFor([], k)), ["ㄱ", "ㅏ", "ㅡ", "ㅋ"]);
+        check("hangul: with Shift", ["R", "T", "O", "K"].map(k => KeyFeed.jamoFor(["Shift"], k)), ["ㄲ", "ㅆ", "ㅒ", "ㅏ"]);
+        check("hangul: a shortcut stays latin", [KeyFeed.jamoFor(["Ctrl"], "R"), KeyFeed.jamoFor(["Shift", "Super"], "R")],
+              ["R", "R"]);
+        check("hangul: not a letter", [KeyFeed.jamoFor([], "1"), KeyFeed.jamoFor(["Shift"], "Space")], ["1", "Space"]);
+        const jamo = Object.values(KeyFeed.dubeolsik);
+        check("hangul: 26 letters, 26 jamo", [jamo.length, jamo.filter((j, i) => jamo.indexOf(j) !== i)], [26, []]);
+        check("hangul: shifted keys are letters",
+              Object.keys(KeyFeed.dubeolsikShift).filter(k => KeyFeed.dubeolsik[k] === undefined), []);
+        check("caps: Hangul ones are as tall as latin ones",
+              [jamoCap.implicitHeight, wordCap.implicitHeight], [latinCap.implicitHeight, latinCap.implicitHeight]);
+    }
+
+    KeyCap {
+        id: latinCap
+
+        visible: false
+        mods: Theme.modSymbol.Shift
+        text: "R"
+    }
+
+    KeyCap {
+        id: jamoCap
+
+        visible: false
+        mods: Theme.modSymbol.Shift
+        text: "ㄲ"
+    }
+
+    KeyCap {
+        id: wordCap
+
+        visible: false
+        text: "한/영"
     }
 
     function keyLockSteps() {
@@ -287,6 +321,100 @@ ShellRoot {
                       "the key reader is not installed; ./install.sh puts it in place");
                 KeyFeed.toggle();
                 Quickshell.execDetached(["chmod", "+x", reader]);
+            } }
+        ];
+    }
+
+    // The input method helper of tests/unit/qml.sh, which answers only when
+    // asked: a reading changed behind the bar's back stands for a switch the
+    // poll has not seen yet.
+    readonly property string imeDir: Quickshell.env("IME_TEST_DIR") ?? ""
+    property int imeAsks: 0
+
+    FileView {
+        id: imeAskLog
+
+        path: root.imeDir + "/asks"
+        watchChanges: true
+        printErrors: false
+
+        onFileChanged: imeAskLog.reload()
+        onLoaded: root.imeAsks = imeAskLog.text().split("\n").filter(l => l === "ask").length
+        onLoadFailed: root.imeAsks = 0
+    }
+
+    function imeReading(line) {
+        Quickshell.execDetached(["sh", "-c", line === null ? `rm -f "$1/reading"` : `printf '%s\\n' "$2" > "$1/reading"`,
+                                 "sh", root.imeDir, line ?? ""]);
+    }
+
+    function imeMute(on) {
+        Quickshell.execDetached(on ? ["touch", root.imeDir + "/mute"] : ["rm", "-f", root.imeDir + "/mute"]);
+    }
+
+    function imeSteps() {
+        return [
+            { wait: 0, run: () => {
+                check("ime: the helper's reading at the start", [Ime.state, Ime.method], ["1", "keyboard-kr-kr104"]);
+                check("ime: latin is not drawn as Hangul", KeyFeed.hangul, false);
+                KeyFeed.clear();
+                root.imeReading("2\thangul");
+            } },
+            { wait: 300, run: () => {
+                check("ime: a switch not seen yet", Ime.state, "1");
+                KeyFeed.receive([], "R");
+                check("ime: a letter waits for the answer", [KeyFeed.chords.length, KeyFeed.waiting.length], [0, 1]);
+            } },
+            { wait: 300, run: () => {
+                check("ime: it asked", root.imeAsks, 1);
+                check("ime: the first letter after a switch is Hangul", KeyFeed.chords.map(c => c.key), ["ㄱ"]);
+                KeyFeed.receive(["Shift"], "R");
+                KeyFeed.receive([], "Space");
+                KeyFeed.receive(["Ctrl"], "R");
+            } },
+            { wait: 300, run: () => {
+                check("ime: what came behind a waiting letter keeps its place",
+                      KeyFeed.chords.map(c => [c.mods, c.key]), [[[], "ㄱ"], [["Shift"], "ㄲ"], [[], "Space"], [["Ctrl"], "R"]]);
+                check("ime: one ask for the lot", root.imeAsks, 2);
+                KeyFeed.clear();
+                root.imeReading("1\tkeyboard-kr-kr104");
+            } },
+            { wait: 300, run: () => KeyFeed.receive([], "R") },
+            { wait: 300, run: () => {
+                check("ime: switched back, latin again", KeyFeed.chords.map(c => c.key), ["R"]);
+                KeyFeed.clear();
+                root.imeMute(true);
+                root.imeReading("2\thangul");
+            } },
+            { wait: 300, run: () => KeyFeed.receive([], "A") },
+            { wait: 50, run: () => check("ime: unanswered, it waits", KeyFeed.waiting.length, 1) },
+            { wait: 250, run: () => {
+                check("ime: then is drawn with the last reading", [KeyFeed.waiting.length, KeyFeed.chords.map(c => c.key)],
+                      [0, ["A"]]);
+                KeyFeed.clear();
+                root.imeMute(false);
+            } },
+            { wait: 300, run: () => {
+                for (let i = 0; i < 5; i++)
+                    KeyFeed.push([], String(i));
+                KeyFeed.receive([], "R");
+                check("ime: five keys at most, waiting ones counted", [KeyFeed.chords.length, KeyFeed.waiting.length], [4, 1]);
+                // What lock() does.
+                KeyFeed.locked = true;
+                KeyFeed.clear();
+            } },
+            { wait: 300, run: () => {
+                check("ime: a letter waiting at a lock is never drawn", KeyFeed.chords.length, 0);
+                KeyFeed.locked = false;
+                root.imeReading(null);
+            } },
+            { wait: 300, run: () => KeyFeed.receive([], "R") },
+            { wait: 300, run: () => {
+                check("ime: fcitx5 not answering reads latin", [Ime.asOf, KeyFeed.chords.map(c => c.key)], [0, ["R"]]);
+                KeyFeed.receive([], "K");
+                check("ime: and nothing waits for it", [KeyFeed.waiting.length, KeyFeed.chords.map(c => c.key)],
+                      [0, ["R", "K"]]);
+                KeyFeed.clear();
             } }
         ];
     }
@@ -565,6 +693,7 @@ ShellRoot {
             }
             root.steps = root.keyLockSteps()
                 .concat(root.keyDir !== "" ? root.keyFeedSteps() : [])
+                .concat(root.imeDir !== "" ? root.imeSteps() : [])
                 .concat(root.cavaSteps())
                 .concat(root.camDir !== "" ? root.cameraSteps() : [])
                 .concat(root.weatherDir !== "" ? root.weatherSteps() : []);
@@ -572,6 +701,8 @@ ShellRoot {
                 console.log("[test] SKIP camera events: no CAMERA_TEST_DIR");
             if (root.keyDir === "")
                 console.log("[test] SKIP key reader: no KEYFEED_TEST_DIR");
+            if (root.imeDir === "")
+                console.log("[test] SKIP input method: no IME_TEST_DIR");
             if (root.weatherDir === "")
                 console.log("[test] SKIP weather: no WEATHER_TEST_DIR");
             root.runSteps();

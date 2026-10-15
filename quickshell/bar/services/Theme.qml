@@ -353,6 +353,11 @@ Singleton {
     // Same file as iconFont, named for where columns must line up.
     readonly property string monoFont: root.iconFont
 
+    // For Hangul where a line's height matters (the key overlay's caps).
+    // Pretendard is what fontconfig/local.conf falls back to for it.
+    readonly property string hangulFont: root.firstInstalled(
+        ["Pretendard", "Noto Sans CJK KR", "Noto Sans KR", "Source Han Sans K", "NanumGothic"], root.uiFont)
+
     // Key and modifier symbols, used by the key overlay (via KeyFeed).
     // Super is a diamond: U+2318 means Command on a Mac.
     readonly property var modSymbol: ({

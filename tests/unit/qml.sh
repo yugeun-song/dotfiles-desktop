@@ -89,6 +89,31 @@ while True:
         print(word, flush=True)
         said = word
 EOF
+# inputmethod.py in the copy: the reading in $WORK/ime/reading ("-" while
+# there is none), printed at the start and then only for a line from the
+# bar, which it logs, so a reading changed meanwhile stays unseen until
+# asked; with $WORK/ime/mute present a line goes unanswered.
+mkdir -p "$WORK/ime"
+printf '1\tkeyboard-kr-kr104\n' > "$WORK/ime/reading"
+cat > "$WORK/bar/scripts/inputmethod.py" <<'EOF'
+import os, sys
+d = os.environ["IME_TEST_DIR"]
+def reading():
+    try:
+        with open(os.path.join(d, "reading")) as fh:
+            return fh.read().rstrip("\n")
+    except OSError:
+        return "-"
+print(reading(), flush=True)
+while True:
+    line = sys.stdin.readline()
+    if not line:
+        break
+    with open(os.path.join(d, "asks"), "a") as fh:
+        fh.write(line)
+    if not os.path.exists(os.path.join(d, "mute")):
+        print(reading(), flush=True)
+EOF
 # hyprctl: `hyprctl locked`, which only the key overlay asks, holds its
 # answer until $WORK/lock-go exists, then says false unless
 # $WORK/session-locked does; anything else is a no-op.
@@ -167,6 +192,7 @@ out="$WORK/out"
     KEYFEED_TEST_DIR="$WORK/keyfeed" \
     ECHOWATCH_TEST_FLAG="$WORK/echo/secret" \
     ECHOWATCH_TEST_LOG="$WORK/echo/log" \
+    IME_TEST_DIR="$WORK/ime" \
     XDG_VTNR=7 \
     timeout 60 qs -n -p "$WORK/bar" >"$out" 2>&1; true ) 2>/dev/null
 

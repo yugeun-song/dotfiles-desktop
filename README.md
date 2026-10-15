@@ -213,6 +213,13 @@ key). What it does read it zeroes once decoded. Keys go nowhere but the
 overlay (no socket, no file, no log line, at most five chords for under a
 second, each scrubbed as it leaves).
 
+In Hangul mode a letter is drawn as the jamo Dubeolsik types for it (`R`
+as ㄱ, `Shift+R` as ⇧ㄲ), and as the letter while Ctrl, Alt or Super is
+held, since fcitx5 passes a shortcut on untouched. The bar asks fcitx5 at
+each letter rather than trusting its last poll, which can be 0.3 s old, so
+the first letter after a switch is drawn in the right script; the question
+(a line to `scripts/inputmethod.py`) carries no key.
+
 **Screensaver**: off unless a display gets a time in the Displays panel.
 After that long with nothing done on the display it goes exact black
 (`dim_around`, no modeset) while someone works elsewhere, and DPMS-off once
