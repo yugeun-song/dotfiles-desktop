@@ -147,12 +147,13 @@ before the import. `Ctrl+Super+R` starts whatever died. Units restart always
 (SIGTERM counts as success), capped at five starts in two minutes.
 
 The session menu (power key, `Ctrl+Alt+Delete`, the bar's power glyph) is the
-bar's; with the bar down those keys restart it and say so.
-`Ctrl+Shift+Alt+Super+Delete` powers off without it. Power-off and restart go
-through `scripts/session-power.sh`, which ends the compositor before the
-transaction: a direct `systemctl poweroff` with an external lit hung this
-machine. From a text console, `~/recover-desktop` repairs a desktop that runs
-but cannot be seen (`--status` only diagnoses), and `unlock` clears a stuck
+bar's, drawn over the screensaver's black; with the bar down those keys
+restart it and say so. `Ctrl+Shift+Alt+Super+Delete` powers off without it.
+Power-off and restart go through `scripts/session-power.sh`, which ends the
+compositor before the transaction: a direct `systemctl poweroff` with an
+external lit hung this machine. From a text console, `~/recover-desktop`
+repairs a desktop that runs but cannot be seen (`--status` only diagnoses),
+and `unlock` clears a stuck
 lock screen. On the lock screen itself, `Ctrl+Alt+Shift+U` starts a new
 locker when hyprlock has crashed: the way out is the password, never an
 unlock without one.

@@ -45,6 +45,12 @@ hl.layer_rule({ match = { namespace = "^(quickshell:keys)$" }, no_anim = true })
 -- wake is instant. Never above_lock: a screensaver is not a lock.
 hl.layer_rule({ match = { namespace = "^(quickshell:screensaver)$" }, dim_around = true, no_anim = true, order = -10 })
 
+-- The session dialog goes over that black: it is the way to sign out or
+-- shut down, and under a black that failed to lift (the panel after the
+-- external was unplugged, 2026-10-17) the power key opened it out of sight,
+-- so the machine seemed not to react. It opens only when asked for.
+hl.layer_rule({ match = { namespace = "^(quickshell:powermenu)$" }, order = -15 })
+
 -- The Identify badges go over every other layer of their level (the
 -- Displays card, the screensaver's black), so a numbered screen can always
 -- be read.

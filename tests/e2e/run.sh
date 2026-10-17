@@ -611,6 +611,30 @@ for settled in 1 0; do
 done
 rm -f "$WORK/state/quickshell/bar/screensaver"
 
+# 19. The session dialog shows over the screensaver's black.
+ipc screensaver preview HEADLESS-1 30 >/dev/null
+input move 3400 600 sleep 200 move 3420 610 >/dev/null
+n dispatch 'hl.dsp.global("quickshell:powerMenu")' >/dev/null
+if wait_for 3 has_layer quickshell:powermenu HEADLESS-1 && wait_for 3 has_layer quickshell:screensaver HEADLESS-1; then
+    sleep 0.5
+    # Counted, not the brightest pixel: the pointer sits on this screen and
+    # the nested compositor draws it into the capture (about 300 pixels; the
+    # dialog lights about 30000).
+    lit=0
+    if (( PIL )) && shot -o HEADLESS-1 -t ppm "$WORK/dialog.ppm" 2>/dev/null; then
+        lit=$(python3 -c 'import sys; from PIL import Image; print(sum(Image.open(sys.argv[1]).convert("L").histogram()[41:]))' "$WORK/dialog.ppm")
+    fi
+    if (( PIL )); then
+        check "the session dialog is drawn over the black" test "$lit" -gt 5000
+    else
+        skip "session dialog over the black: python3-pillow is not installed"
+    fi
+else
+    fail "the session dialog over the black: it did not open on the black panel"
+fi
+input key 1 sleep 300
+ipc screensaver wake >/dev/null
+
 check "no session action or hardware write was even attempted" no_writes
 
 if (( failed == 0 )); then
