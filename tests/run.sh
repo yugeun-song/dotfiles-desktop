@@ -30,10 +30,19 @@ failed=0
 fail() { echo "FAIL  $*"; failed=1; }
 have() { command -v "$1" >/dev/null 2>&1; }
 
-# Every tracked shell script, by extension or by its first line.
+# The working tree as install.sh would copy it: tracked files that are
+# still there and new ones not yet added, ignored ones left out. Tracked
+# alone, a file deleted but not yet committed failed the python check and a
+# new script went unchecked.
+tree_files() {
+    git ls-files --cached --others --exclude-standard "$@" | sort -u | while read -r f; do
+        [[ -f "$f" ]] && echo "$f"
+    done
+}
+
+# Every shell script, by extension or by its first line.
 shell_files() {
-    git ls-files | while read -r f; do
-        [[ -f "$f" ]] || continue
+    tree_files | while read -r f; do
         case "$f" in
             *.sh) echo "$f" ;;
             *.*) ;;
@@ -59,13 +68,13 @@ if [[ -n "$luac" ]]; then
     bad=0
     while read -r f; do
         "$luac" -p "$f" || bad=1
-    done < <(git ls-files '*.lua')
+    done < <(tree_files '*.lua')
     (( bad )) && fail "lua syntax" || echo "PASS  lua syntax"
 else
     echo "SKIP  lua syntax: no luac"
 fi
 
-mapfile -t py < <(git ls-files '*.py')
+mapfile -t py < <(tree_files '*.py')
 if python3 -m py_compile "${py[@]}" 2>&1; then
     if have pyflakes; then
         if out=$(pyflakes "${py[@]}" 2>&1); then echo "PASS  python: ${#py[@]} files"; else fail "pyflakes:"; echo "$out"; fi

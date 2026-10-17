@@ -76,7 +76,11 @@ EOF
 setup() {
     T=$(mktemp -d "$WORK/case.XXXXXX")
     mkdir -p "$T/home" "$T/bin" "$T/repo"
-    (cd "$REPO" && git ls-files -z --cached --others --exclude-standard | xargs -0 cp -a --parents -t "$T/repo")
+    # The working tree as it is: a file deleted but not yet committed is
+    # still listed, and is passed over.
+    (cd "$REPO" && git ls-files -z --cached --others --exclude-standard \
+        | while IFS= read -r -d '' f; do [[ -e "$f" ]] && printf '%s\0' "$f"; done \
+        | xargs -0 cp -a --parents -t "$T/repo")
     # The cursor builders read /usr/share/icons and take seconds; stand-ins,
     # run through python3 as the installer runs the real ones, log the build
     # and leave the theme's index behind. The arrow fails while

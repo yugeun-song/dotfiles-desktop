@@ -87,8 +87,10 @@ cleanup() {
     for d in "$RT"/quickshell/by-pid/*; do
         [[ -L "$d" && ! -e "$d" ]] && rm -f -- "$d"
     done
+    # vfs holds a lock per shell id, and every run's bar is a new id.
     for id in "${shells[@]}"; do
-        rm -rf -- "${RT:?}/quickshell/by-shell/${id:?}" "${RT:?}/quickshell/by-path/${id:?}"
+        rm -rf -- "${RT:?}/quickshell/by-shell/${id:?}" "${RT:?}/quickshell/by-path/${id:?}" \
+            "${RT:?}/quickshell/vfs/${id:?}"
     done
     # E2E_KEEP=1 keeps the screenshots and logs for a look at a failure.
     if [[ "${E2E_KEEP:-}" == 1 ]]; then
