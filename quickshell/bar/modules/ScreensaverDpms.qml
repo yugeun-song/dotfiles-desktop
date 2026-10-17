@@ -63,6 +63,7 @@ Scope {
     //   qs -p ~/.config/quickshell/bar ipc call screensaver previewOff eDP-1 10
     //
     // And for hypr/scripts/capture.sh (lift N, then lift 0); see `lifted`.
+    // bin/recover-desktop calls wake when a lit display shows nothing.
     IpcHandler {
         target: "screensaver"
 
@@ -83,7 +84,20 @@ Scope {
                 liftTimer.stop();
             }
         }
+
+        // Every display as if just used: lit, both clocks started over, a
+        // preview ended. The way out of a black this module still believes
+        // in, whatever the reason, without restarting the bar.
+        function wake(): void {
+            console.info("[screensaver] woken over IPC");
+            previewTimer.stop();
+            root.previewName = "";
+            root.waking = 0;
+            root.wakeRequested();
+        }
     }
+
+    signal wakeRequested
 
     // A display that comes or goes: the monitor list is read again, at once
     // and after reconcile's settle window. Nothing announces a DPMS change,
@@ -395,6 +409,19 @@ Scope {
                         slot.slept = false;
                     if (slot.off)
                         Hyprland.refreshMonitors();
+                }
+
+                // Asked unconditionally: M.saver passes over a lit display,
+                // and this display may be off with `off` already cleared.
+                function onWakeRequested() {
+                    slot.waking = false;
+                    slot.inheritedDark = false;
+                    slot.rested = false;
+                    slot.slept = false;
+                    slot.away = false;
+                    slot.blocked = false;
+                    restart.restart();
+                    slot.ask(false);
                 }
             }
 

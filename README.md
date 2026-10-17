@@ -151,9 +151,10 @@ bar's, drawn over the screensaver's black; with the bar down those keys
 restart it and say so. `Ctrl+Shift+Alt+Super+Delete` powers off without it.
 Power-off and restart go through `scripts/session-power.sh`, which ends the
 compositor before the transaction: a direct `systemctl poweroff` with an
-external lit hung this machine. From a text console, `~/recover-desktop`
-repairs a desktop that runs but cannot be seen (`--status` only diagnoses),
-and `unlock` clears a stuck
+external lit hung this machine. From a text console or typed blind into a
+terminal, `~/recover-desktop` repairs a desktop that runs but cannot be seen,
+a display lit but black included (`--status` only diagnoses; `--relight`
+also gives every lit display a full modeset), and `unlock` clears a stuck
 lock screen. On the lock screen itself, `Ctrl+Alt+Shift+U` starts a new
 locker when hyprlock has crashed: the way out is the password, never an
 unlock without one.

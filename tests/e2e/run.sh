@@ -611,6 +611,39 @@ for settled in 1 0; do
 done
 rm -f "$WORK/state/quickshell/bar/screensaver"
 
+# 18. bin/recover-desktop finds a lit display that shows nothing but black
+# and has the bar's screensaver let go of it, with no modeset or bar
+# restart. Its systemd steps go to stubs, since they would reach this
+# session's units; the outputs it may count as real are listed in a stand-in
+# for /sys/class/drm (WAYLAND-1 too, which it would otherwise remove).
+mkdir -p "$WORK/recover-bin"
+for o in HEADLESS-1 HEADLESS-2 WAYLAND-1; do
+    mkdir -p "$WORK/drm/card0-$o"
+    echo connected > "$WORK/drm/card0-$o/status"
+done
+for tool in systemctl dbus-update-activation-environment; do
+    printf '#!/bin/sh\necho "%s $*" >> "%s/recover-calls"\n' "$tool" "$WORK" > "$WORK/recover-bin/$tool"
+    chmod +x "$WORK/recover-bin/$tool"
+done
+recover() {
+    env PATH="$WORK/recover-bin:$PATH" HYPRLAND_INSTANCE_SIGNATURE="$SIG" RECOVER_DRM_DIR="$WORK/drm" \
+        BAR_CONFIG_DIR="$WORK/bar" "$REPO/bin/recover-desktop" "$@"
+}
+replug
+ipc screensaver preview HEADLESS-1 60 >/dev/null
+if wait_for 3 has_layer quickshell:screensaver HEADLESS-1; then
+    recover > "$WORK/recover.out" 2>&1
+    check "recover-desktop finds the lit display that shows only black" \
+        logged "$WORK/recover.out" "lit but showing nothing but black: HEADLESS-1"
+    check "and the bar's screensaver lets go of it" lacks_layer quickshell:screensaver HEADLESS-1
+    check "without a modeset" bash -c "! grep -q 'DPMS off, then on' '$WORK/recover.out'"
+    check "or a bar restart" bash -c "! grep -q 'restart bar.service' '$WORK/recover-calls'"
+    recover --status > "$WORK/recover-status.out" 2>&1
+    check "then nothing reads black" bash -c "! grep -q 'nothing but black' '$WORK/recover-status.out'"
+else
+    fail "recover: the preview did not black the panel"
+fi
+
 # 19. The session dialog shows over the screensaver's black.
 ipc screensaver preview HEADLESS-1 30 >/dev/null
 input move 3400 600 sleep 200 move 3420 610 >/dev/null

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Gets a Hyprland session back from a text console (Ctrl+Alt+F2, log in, then
-# Ctrl+Alt+F1 back): a disabled panel, a test-created output, DPMS off, a dead
-# service, a hung compositor. A stuck lock screen is `unlock`'s job.
+# Ctrl+Alt+F1 back), or typed blind into a terminal: a disabled panel, a
+# test-created output, DPMS off, a display lit but black, a dead service, a
+# hung compositor. A stuck lock screen is `unlock`'s job.
 #
 # Nothing machine-specific: everything comes from the uid, the lock file,
 # sysfs connectors and the session target, since a console login has none of
@@ -9,6 +10,8 @@
 #
 #   recover-desktop            diagnose, then safe repairs (never ends anything)
 #   recover-desktop --status   diagnose only
+#   recover-desktop --relight  the repairs, then a full modeset of every lit
+#                              display (each blinks once)
 #   recover-desktop --logout   ask the compositor to exit, back to the greeter
 #   recover-desktop --kill     SIGTERM, then SIGKILL, the compositor
 
@@ -16,8 +19,8 @@ set -uo pipefail
 
 MODE="${1:-}"
 case "$MODE" in
-    ""|--status|--logout|--kill) ;;
-    *) echo "usage: ${0##*/} [--status|--logout|--kill]" >&2; exit 2 ;;
+    ""|--status|--relight|--logout|--kill) ;;
+    *) echo "usage: ${0##*/} [--status|--relight|--logout|--kill]" >&2; exit 2 ;;
 esac
 
 UID_NOW=$(id -u)
@@ -193,10 +196,12 @@ if [[ "$MODE" == "--logout" ]]; then
 fi
 
 # Kernel connectors and built-in panels; same classification as
-# hypr/config/monitors.lua.
+# hypr/config/monitors.lua. RECOVER_DRM_DIR stands in for /sys/class/drm in
+# the tests, whose headless outputs it lists.
+DRM_DIR="${RECOVER_DRM_DIR:-/sys/class/drm}"
 declare -A KERNEL=()
 INTERNAL=()
-for status in /sys/class/drm/card*-*/status; do
+for status in "$DRM_DIR"/card*-*/status; do
     [[ -e "$status" ]] || continue
     name=$(basename "$(dirname "$status")")
     name="${name#card*-}"
@@ -206,29 +211,48 @@ for status in /sys/class/drm/card*-*/status; do
     esac
 done
 
+# What a display shows: the brightest channel of its picture scaled down 20
+# times, read from a screencopy and never written anywhere. 0 is nothing but
+# black, the bar included, which no working desktop shows: the screensaver's
+# layer, or the compositor's own black over an output it has just lit. No
+# answer within 3 s (the session is not on screen, as from a text console)
+# is no answer, and the run stops asking (CAN_SEE 2). Never asked of an
+# output with DPMS off, whose screencopy never completes (Hyprland 0.56.2).
+CAN_SEE=0
+command -v grim >/dev/null 2>&1 && command -v od >/dev/null 2>&1 && CAN_SEE=1
+peak() {
+    timeout 3 grim -o "$1" -s 0.05 -t ppm - 2>/dev/null | od -An -v -tu1 | awk '
+        { for (i = 1; i <= NF; i++) { if (h < 3) { if ($i == 10) h++; continue } if ($i > m) m = $i } }
+        END { if (h < 3) exit 1; print m + 0 }'
+}
+
 report() {
-    local json real=0 synthetic=() fake=() line name disabled
+    local json real=0 synthetic=() fake=() lit=() line name disabled dpms
     json=$(hc monitors all -j 2>/dev/null) || { warn "could not list monitors"; return 1; }
     say "compositor $SIG, pid ${HL_PID:-?}, display ${WL:-?}"
-    while IFS=$'\t' read -r name disabled line; do
+    while IFS=$'\t' read -r name disabled dpms line; do
         [[ -n "$name" ]] || continue
         printf '  %-12s %s  %s\n' "$name" "$([[ "$disabled" == "true" ]] && echo off || echo on )" "$line"
+        # A connector the kernel lists is real whatever its name.
+        if [[ -n "${KERNEL[$name]:-}" ]]; then
+            if [[ "$disabled" != "true" ]]; then
+                real=$((real + 1))
+                [[ "$dpms" == "true" ]] && lit+=("$name")
+            fi
+            continue
+        fi
         case "$name" in
             FALLBACK|HEADLESS-*) synthetic+=("$name") ;;
-            *)
-                if [[ -z "${KERNEL[$name]:-}" ]]; then
-                    fake+=("$name")
-                elif [[ "$disabled" != "true" ]]; then
-                    real=$((real + 1))
-                fi
-                ;;
+            *) fake+=("$name") ;;
         esac
-    done < <(printf '%s' "$json" | jq -r '.[] | [.name, (.disabled // false), "\(.width)x\(.height)@\(.refreshRate|floor) at \(.x)x\(.y) scale \(.scale) dpms \(.dpmsStatus)"] | @tsv')
+    done < <(printf '%s' "$json" | jq -r '.[] | [.name, (.disabled // false), .dpmsStatus, "\(.width)x\(.height)@\(.refreshRate|floor) at \(.x)x\(.y) scale \(.scale) dpms \(.dpmsStatus)"] | @tsv')
     REAL_ENABLED=$real
     FAKE_OUTPUTS=("${fake[@]}")
+    LIT=("${lit[@]}")
     (( ${#synthetic[@]} )) && say "synthetic outputs present: ${synthetic[*]}"
     (( ${#fake[@]} )) && say "outputs the kernel does not have (created by hand or by a test): ${fake[*]}"
     say "real outputs enabled: $real; built-in panels known to the kernel: ${INTERNAL[*]:-none}"
+    look
     if command -v systemctl >/dev/null 2>&1; then
         say "session target: $(systemctl --user is-active "$TARGET" 2>/dev/null)"
         local u
@@ -236,6 +260,35 @@ report() {
             printf '  %-32s %s\n' "$u" "$(systemctl --user is-active "$u" 2>/dev/null)"
         done
     fi
+}
+
+# Which lit displays show nothing but black (BLACK), which the bar's
+# screensaver covers (SAVER), which could not be read (UNSEEN).
+look() {
+    local name value
+    BLACK=() UNSEEN=() SAVER=()
+    mapfile -t SAVER < <(hc layers -j 2>/dev/null | jq -r \
+        'to_entries[] | select([.value.levels[][]? | .namespace] | index("quickshell:screensaver")) | .key' 2>/dev/null)
+    (( ${#SAVER[@]} )) && say "the bar's screensaver black is up on: ${SAVER[*]}"
+    (( ${#LIT[@]} )) || return 0
+    case "$CAN_SEE" in
+        0) say "grim is not installed, so what each display shows is not checked"; return 0 ;;
+        2) say "what each display shows cannot be read from here"; return 0 ;;
+    esac
+    for name in "${LIT[@]}"; do
+        value=$(peak "$name")
+        if [[ -z "$value" ]]; then
+            UNSEEN+=("$name")
+        elif [[ "$value" == 0 ]]; then
+            BLACK+=("$name")
+        fi
+    done
+    (( ${#BLACK[@]} )) && say "lit but showing nothing but black: ${BLACK[*]}"
+    if (( ${#UNSEEN[@]} )); then
+        say "could not read what these show (is the session on screen?): ${UNSEEN[*]}"
+        (( ${#UNSEEN[@]} == ${#LIT[@]} )) && CAN_SEE=2
+    fi
+    return 0
 }
 
 # The session's units are the target's Wants=, listed only in the target file.
@@ -246,6 +299,10 @@ fi
 
 REAL_ENABLED=0
 FAKE_OUTPUTS=()
+LIT=()
+BLACK=()
+UNSEEN=()
+SAVER=()
 report || exit 1
 [[ "$MODE" == "--status" ]] && exit 0
 
@@ -310,7 +367,81 @@ if command -v systemctl >/dev/null 2>&1; then
     systemctl --user start "$TARGET" 2>/dev/null || warn "could not start $TARGET"
 fi
 
+# The bar, over its IPC socket. The path must be the one it was started with
+# (bin/bar), or no instance answers. An answer is exit 0 with nothing
+# printed: a missing target prints "Target not found." and exits 0 too.
+BAR_CONFIG="${BAR_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar}"
+QS=$(command -v qs || command -v quickshell || true)
+bar_call() {
+    local out
+    [[ -n "$QS" ]] || return 1
+    out=$(timeout 3 "$QS" -p "$BAR_CONFIG" ipc call "$@" 2>&1) || return 1
+    [[ -z "$out" ]]
+}
+
+# A full modeset: DPMS off, then on. "DPMS on" above leaves a lit output
+# untouched, so this is the one repair that reaches a display which stays
+# dark although the compositor draws on it. Names go into Lua source, so one
+# no connector would have is refused rather than escaped.
+relight() {
+    local name
+    for name in "$@"; do
+        [[ "$name" =~ ^[A-Za-z0-9._-]+$ ]] || continue
+        say "$name: DPMS off, then on (a full modeset; it blinks once)"
+        hc dispatch "hl.dsp.dpms({ action = \"disable\", monitor = \"$name\" })" >/dev/null 2>&1
+        sleep 1
+        hc dispatch "hl.dsp.dpms({ action = \"enable\", monitor = \"$name\" })" >/dev/null 2>&1
+    done
+}
+
+recheck() { report >/dev/null 2>&1; }
+
+# Lit but black, cheapest first, each step only for what the one before left
+# black: the bar's screensaver (its layer, or a darkness it still believes
+# in), a modeset of each such display, then the bar itself, whose stop lights
+# whatever it left off (bar.service ExecStopPost). On 2026-10-17 the panel
+# stayed black with no bar for a minute or two after the external was
+# unplugged, reported lit, and nothing above changed it.
+lift_black() {
+    (( ${#BLACK[@]} )) || return 0
+    say "lit but black: ${BLACK[*]}; asking the bar's screensaver to wake every display"
+    if ! bar_call screensaver wake && ! bar_call screensaver lift 300; then
+        warn "the bar did not answer over IPC"
+    fi
+    sleep 1
+    recheck
+    (( ${#BLACK[@]} )) || { say "every display shows a picture again"; return 0; }
+    relight "${BLACK[@]}"
+    sleep 1.5
+    recheck
+    (( ${#BLACK[@]} )) || { say "every display shows a picture again"; return 0; }
+    if command -v systemctl >/dev/null 2>&1; then
+        say "still black: ${BLACK[*]}; restarting the bar"
+        systemctl --user reset-failed bar.service 2>/dev/null
+        systemctl --user restart bar.service 2>/dev/null || warn "could not restart bar.service"
+        sleep 3
+        recheck
+        (( ${#BLACK[@]} )) || { say "every display shows a picture again"; return 0; }
+    fi
+    warn "still nothing but black on: ${BLACK[*]}"
+    return 1
+}
+
+recheck
+lift_black
+if [[ "$MODE" == "--relight" ]]; then
+    recheck
+    relight "${LIT[@]}"
+    sleep 1
+fi
+
 echo
 report
+# Exit 1 while a display still shows nothing, for a caller to act on.
+STATUS=0
+(( ${#BLACK[@]} )) && STATUS=1
 echo
+[[ "$MODE" == "--relight" ]] \
+    || say "if a display stays dark although this shows it lit: ${0##*/} --relight, a modeset of each"
 say "if the screen is still dark: ${0##*/} --logout, then log in again; ${0##*/} --kill if the compositor hangs"
+exit "$STATUS"
