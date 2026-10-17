@@ -489,6 +489,33 @@ ShellRoot {
 
     // The camera service on events: a step waits, then acts or checks. The
     // reading starts as switch off, camera off (tests/unit/qml.sh).
+    // Caps Lock, from the same helper: the stub prints what $WORK/caps
+    // holds, on change.
+    readonly property string capsFile: Quickshell.env("CAPS_TEST_FILE") ?? ""
+
+    function capsWrite(value) {
+        Quickshell.execDetached(["sh", "-c", `printf '%s\\n' "$2" > "$1"`, "sh", root.capsFile, value]);
+    }
+
+    function capsSteps() {
+        return [
+            { wait: 0, run: () => {
+                check("caps: off at the start", [InputWatch.caps, InputWatch.capsAsOf > 0], [false, true]);
+                root.capsWrite("1");
+            } },
+            { wait: 300, run: () => {
+                check("caps: on", [InputWatch.caps, InputWatch.capsAsOf > 0], [true, true]);
+                root.capsWrite("-");
+            } },
+            { wait: 300, run: () => {
+                check("caps: no LED readable keeps the reading, marked unknown",
+                      [InputWatch.caps, InputWatch.capsAsOf], [true, 0]);
+                root.capsWrite("0");
+            } },
+            { wait: 300, run: () => check("caps: off again", [InputWatch.caps, InputWatch.capsAsOf > 0], [false, true]) }
+        ];
+    }
+
     function cameraSteps() {
         return [
             { wait: 600, run: () => {
@@ -694,6 +721,7 @@ ShellRoot {
             root.steps = root.keyLockSteps()
                 .concat(root.keyDir !== "" ? root.keyFeedSteps() : [])
                 .concat(root.imeDir !== "" ? root.imeSteps() : [])
+                .concat(root.capsFile !== "" ? root.capsSteps() : [])
                 .concat(root.cavaSteps())
                 .concat(root.camDir !== "" ? root.cameraSteps() : [])
                 .concat(root.weatherDir !== "" ? root.weatherSteps() : []);

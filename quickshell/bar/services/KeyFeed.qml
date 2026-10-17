@@ -91,9 +91,11 @@ Singleton {
     // window has the focus (polkit agents, among them the one that asks
     // for this reader's password, pinentry, ssh and sudo askpass helpers,
     // the GNOME keyring's and KDE wallet's prompts), or the focused window's
-    // terminal reads with its echo off (echowatch.py: sudo, su, ssh,
-    // passwd, read -s). The reader is paused for it, which closes the
-    // keyboards (keyfeed.py).
+    // terminal reads with its echo off (the input helper's terminal watch,
+    // scripts/inputstate.py: sudo, su, ssh, passwd, read -s). The reader is
+    // paused for it, which closes the keyboards (keyfeed.py). With the
+    // helper down, nothing can tell a prompt, so the reader stays paused
+    // until it is back: blank keys for a moment rather than a password.
     readonly property var secretWindows: /polkit|policykit|pinentry|askpass|gcr-prompter|kwalletd/i
 
     readonly property var focusedWindow: Screens.focusedWindow
@@ -101,9 +103,8 @@ Singleton {
     readonly property bool secretFocused:
         root.secretWindows.test(root.focusedWindow?.wayland?.appId ?? root.focusedWindow?.lastIpcObject?.class ?? "")
 
-    property bool promptSecret: false
-
-    readonly property bool secretInput: root.secretFocused || root.promptSecret
+    readonly property bool secretInput: root.secretFocused || InputWatch.echoSecret
+        || (root.enabled && !InputWatch.running)
 
     // Set the moment either says so, with whatever was drawn just before
     // cleared (a first key can beat the word to the bar), and held a moment
@@ -128,14 +129,16 @@ Singleton {
         onTriggered: root.guarded = root.secretInput
     }
 
-    // The focused window's process, for echowatch.py to find its terminals.
+    // The focused window's process, for the terminal watch to find its
+    // terminals.
     readonly property int focusedPid: root.focusedWindow?.lastIpcObject?.pid ?? 0
 
     onFocusedPidChanged: root.tellFocus()
 
+    // Only while the overlay is on: nothing else wants to know, and with no
+    // window to watch the helper does no terminal work at all.
     function tellFocus() {
-        if (echoWatch.running)
-            echoWatch.write(`pid ${root.focusedPid}\n`);
+        InputWatch.watch(root.enabled ? root.focusedPid : 0);
     }
 
     // quickshell fills a window's lastIpcObject, its pid included, from
@@ -151,23 +154,9 @@ Singleton {
             Hyprland.refreshToplevels();
     }
 
-    onEnabledChanged: root.askForPid()
-
-    // Only while the overlay is on: nothing else wants to know.
-    Process {
-        id: echoWatch
-
-        running: root.enabled
-        command: ["python3", "-I", Quickshell.shellPath("scripts/echowatch.py")]
-        stdinEnabled: true
-
-        onStarted: root.tellFocus()
-
-        stdout: SplitParser {
-            onRead: line => root.promptSecret = line.trim() === "secret"
-        }
-
-        onExited: root.promptSecret = false
+    onEnabledChanged: {
+        root.askForPid();
+        root.tellFocus();
     }
 
     // {mods: [...], key: "C", id: n}, key being a jamo for a letter typed in

@@ -54,8 +54,8 @@ Row {
     }
 
     StatusItem {
-        visible: CapsLock.active
-        unknown: Theme.stale(CapsLock.asOf, 0)
+        visible: InputWatch.caps
+        unknown: Theme.stale(InputWatch.capsAsOf, 0)
         icon: Theme.iconCapsLock
         // Shown only while on, so presence is the reading; no fill.
         tooltip: "Caps Lock is on"

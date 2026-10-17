@@ -2,16 +2,16 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
-import Quickshell.Io
 import qs.services
 
 // Not "InputMethod": QtQuick exports that name and silently shadows this
-// singleton (empty label, "Unable to assign [undefined]").
+// singleton (empty label, "Unable to assign [undefined]"). The readings come
+// from the input helper (InputWatch).
 Singleton {
     id: root
 
-    property string state: ""
-    property string method: ""
+    readonly property string state: InputWatch.imeState
+    readonly property string method: InputWatch.imeMethod
 
     readonly property bool present: root.state !== "" && root.state !== "none"
 
@@ -46,88 +46,27 @@ Singleton {
         Quickshell.execDetached(["fcitx5-remote", "-r"]);
     }
 
-    // When state/method were last confirmed; 0 = unknown. The helper prints
-    // only on change, so silence is normal.
-    property double asOf: 0
-    property int restarts: 0
+    // When state/method were last confirmed; 0 = unknown. Kept, not
+    // cleared, when unknown: hiding the pill would claim there is no input
+    // method. The helper prints only on change, so silence is normal.
+    readonly property double asOf: InputWatch.imeAsOf
 
-    // Every line from the helper, the answer to ask() or a change it saw.
+    // Every reading from the helper, the answer to ask() or a change it saw.
     signal answered()
+
+    Connections {
+        target: InputWatch
+
+        function onImeAnswered() {
+            root.answered();
+        }
+    }
 
     // A reading now instead of at the next poll, for the key overlay
     // (KeyFeed), which holds a letter back until the answer: the poll's last
     // reading can be 0.3 s old. The line carries no key, only the moment.
     // False with no helper to ask.
     function ask(): bool {
-        if (!poller.running)
-            return false;
-        poller.write("ask\n");
-        return true;
-    }
-
-    // Exponential backoff (2 s to 60 s): the helper exits at once when the
-    // session bus cannot be reached, and when it drops the connection.
-    Timer {
-        id: supervisor
-
-        property int delay: 2000
-
-        interval: supervisor.delay
-        repeat: false
-        onTriggered: {
-            root.restarts = root.restarts + 1;
-            console.warn("[ime] helper exited, restart", root.restarts);
-            supervisor.delay = Math.min(supervisor.delay * 2, 60000);
-            poller.running = true;
-        }
-    }
-
-    Process {
-        id: poller
-
-        running: true
-        // One D-Bus connection, polled; see the script for why not
-        // fcitx5-remote.
-        command: ["python3", "-I", Quickshell.shellPath("scripts/inputmethod.py")]
-        stdinEnabled: true
-
-        onRunningChanged: {
-            if (!poller.running) {
-                // Keep state (pill stays), mark it stale; hiding the pill
-                // would claim there is no input method.
-                root.asOf = 0;
-                supervisor.restart();
-            }
-        }
-
-        stdout: SplitParser {
-            onRead: line => {
-                root.take(line);
-                root.answered();
-            }
-        }
-    }
-
-    function take(line) {
-        // Any output resets the backoff.
-        supervisor.delay = 2000;
-        // Only the line ending is cut: trim() would also eat the tab
-        // that ends "0<TAB>" (state 0, no engine name), leaving one
-        // field and a spurious warning on every unfocused input.
-        const raw = line.replace(/[\r\n]+$/, "");
-        // "-": fcitx5 did not answer (not the same as "no IM").
-        if (raw.trim() === "-") {
-            root.asOf = 0;
-            return;
-        }
-        // An empty engine name is valid; an empty state is not.
-        const parts = raw.split("\t");
-        if (parts.length !== 2 || parts[0] === "") {
-            console.warn("[ime] unexpected line:", raw);
-            return;
-        }
-        root.state = parts[0];
-        root.method = parts[1];
-        root.asOf = Date.now();
+        return InputWatch.ask();
     }
 }

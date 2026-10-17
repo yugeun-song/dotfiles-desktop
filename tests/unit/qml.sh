@@ -69,50 +69,54 @@ done
 echo stopped >> "$KEYFEED_TEST_DIR/log"
 EOF
 chmod +x "$WORK/bin/pkexec" "$WORK/keyfeed/reader"
-# echowatch.py in the copy: "secret" while $WORK/echo/secret exists, else
-# "clear", on every change; each "pid" line the bar sends is logged.
-mkdir -p "$WORK/echo"
-cat > "$WORK/bar/scripts/echowatch.py" <<'EOF'
+# inputstate.py in the copy, the bar's input helper, its three parts driven
+# through files. The input method: the reading in $WORK/ime/reading ("-"
+# while there is none), printed at the start and then only for an "ask",
+# which it logs, so a reading changed meanwhile stays unseen until asked;
+# with $WORK/ime/mute present an ask goes unanswered. The terminal watch:
+# "secret" while $WORK/echo/secret exists, else "clear", on every change and
+# once for every "pid" line, which it logs. Caps Lock: the contents of
+# $WORK/caps ("0", "1" or "-"), printed on change.
+mkdir -p "$WORK/echo" "$WORK/ime"
+printf '1\tkeyboard-kr-kr104\n' > "$WORK/ime/reading"
+printf '0\n' > "$WORK/caps"
+cat > "$WORK/bar/scripts/inputstate.py" <<'EOF'
 import os, select, sys
+d = os.environ["IME_TEST_DIR"]
 flag, log = os.environ["ECHOWATCH_TEST_FLAG"], os.environ["ECHOWATCH_TEST_LOG"]
-said = None
+caps_file = os.environ["CAPS_TEST_FILE"]
+def read(path, default):
+    try:
+        with open(path) as fh:
+            return fh.read().rstrip("\n")
+    except OSError:
+        return default
+def say(line):
+    print(line, flush=True)
+say("ime " + read(os.path.join(d, "reading"), "-"))
+said = caps = None
 while True:
     if select.select([sys.stdin], [], [], 0.05)[0]:
         line = sys.stdin.readline()
         if not line:
             break
-        with open(log, "a") as fh:
-            fh.write(line)
-        said = None
+        if line.strip() == "ask":
+            with open(os.path.join(d, "asks"), "a") as fh:
+                fh.write(line)
+            if not os.path.exists(os.path.join(d, "mute")):
+                say("ime " + read(os.path.join(d, "reading"), "-"))
+        elif line.startswith("pid "):
+            with open(log, "a") as fh:
+                fh.write(line)
+            said = None
     word = "secret" if os.path.exists(flag) else "clear"
     if word != said:
-        print(word, flush=True)
+        say("echo " + word)
         said = word
-EOF
-# inputmethod.py in the copy: the reading in $WORK/ime/reading ("-" while
-# there is none), printed at the start and then only for a line from the
-# bar, which it logs, so a reading changed meanwhile stays unseen until
-# asked; with $WORK/ime/mute present a line goes unanswered.
-mkdir -p "$WORK/ime"
-printf '1\tkeyboard-kr-kr104\n' > "$WORK/ime/reading"
-cat > "$WORK/bar/scripts/inputmethod.py" <<'EOF'
-import os, sys
-d = os.environ["IME_TEST_DIR"]
-def reading():
-    try:
-        with open(os.path.join(d, "reading")) as fh:
-            return fh.read().rstrip("\n")
-    except OSError:
-        return "-"
-print(reading(), flush=True)
-while True:
-    line = sys.stdin.readline()
-    if not line:
-        break
-    with open(os.path.join(d, "asks"), "a") as fh:
-        fh.write(line)
-    if not os.path.exists(os.path.join(d, "mute")):
-        print(reading(), flush=True)
+    now = read(caps_file, "-")
+    if now != caps:
+        say("caps " + now)
+        caps = now
 EOF
 # hyprctl: `hyprctl locked`, which only the key overlay asks, holds its
 # answer until $WORK/lock-go exists, then says false unless
@@ -193,6 +197,7 @@ out="$WORK/out"
     ECHOWATCH_TEST_FLAG="$WORK/echo/secret" \
     ECHOWATCH_TEST_LOG="$WORK/echo/log" \
     IME_TEST_DIR="$WORK/ime" \
+    CAPS_TEST_FILE="$WORK/caps" \
     XDG_VTNR=7 \
     timeout 60 qs -n -p "$WORK/bar" >"$out" 2>&1; true ) 2>/dev/null
 

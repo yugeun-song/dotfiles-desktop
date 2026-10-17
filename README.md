@@ -210,8 +210,9 @@ open, so nothing typed is read or queued anywhere, while the session is
 locked, while another console is in front, and while a password is being
 typed: a polkit, pinentry, askpass, keyring or wallet window has the focus,
 or the focused window's terminal reads with its echo off (sudo, su, ssh,
-passwd, `read -s`; `scripts/echowatch.py` reads two terminal flags, never a
-key). What it does read it zeroes once decoded. Keys go nowhere but the
+passwd, `read -s`; `scripts/inputstate.py` reads two terminal flags, never a
+key), and while that watch is not running. What it does read it zeroes once
+decoded. Keys go nowhere but the
 overlay (no socket, no file, no log line, at most five chords for under a
 second, each scrubbed as it leaves).
 
@@ -220,7 +221,8 @@ as ㄱ, `Shift+R` as ⇧ㄲ), and as the letter while Ctrl, Alt or Super is
 held, since fcitx5 passes a shortcut on untouched. The bar asks fcitx5 at
 each letter rather than trusting its last poll, which can be 0.3 s old, so
 the first letter after a switch is drawn in the right script; the question
-(a line to `scripts/inputmethod.py`) carries no key.
+(a line to `scripts/inputstate.py`, the one helper behind the Caps Lock and
+input method pills and the terminal watch) carries no key.
 
 **Screensaver**: off unless a display gets a time in the Displays panel.
 After that long with nothing done on the display it goes exact black
