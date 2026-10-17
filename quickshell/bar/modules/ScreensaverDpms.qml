@@ -85,6 +85,32 @@ Scope {
         }
     }
 
+    // A display that comes or goes: the monitor list is read again, at once
+    // and after reconcile's settle window. Nothing announces a DPMS change,
+    // so a display this module turned off and something else lit again
+    // stays black under its layer until a reading shows it lit, and
+    // reconcile passes over a reading taken within Theme.saverSettleMs of
+    // its own request. Unplugged from the external within that window, the
+    // panel showed nothing but black until the next poll (a minute) or input
+    // (nested session, 2026-10-17); the later reading reaches reconcile,
+    // which starts the clocks over.
+    Connections {
+        target: Quickshell
+
+        function onScreensChanged() {
+            console.info(`[screensaver] displays: ${Quickshell.screens.map(s => s.name).join(" ")}`);
+            Hyprland.refreshMonitors();
+            rescan.restart();
+        }
+    }
+
+    Timer {
+        id: rescan
+
+        interval: Theme.saverSettleMs + 500
+        onTriggered: Hyprland.refreshMonitors()
+    }
+
     // Set while a region shot or a colour pick runs. Both grab every output
     // before their overlay shows, and a display in the black stage came out
     // black. Only the black goes: the clocks run on, so it comes back as it
@@ -371,6 +397,13 @@ Scope {
                         Hyprland.refreshMonitors();
                 }
             }
+
+            // One journal line per change: the time a display went black,
+            // off or lit is what a report of a dark screen needs, and the
+            // bar runs without its detailed log.
+            readonly property string stage: slot.wantOff ? "off" : slot.dark ? "black" : "lit"
+
+            onStageChanged: console.info(`[screensaver] ${slot.name}: ${slot.stage}`)
 
             // Set while a display taken over off waits for the next input.
             property bool waking: false

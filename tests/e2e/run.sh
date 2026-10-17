@@ -563,6 +563,54 @@ n eval 'MONITORS.lid_close()' >/dev/null
 check "the lid shut with no other display locks" wait_for 5 locked_once
 n eval 'MONITORS.lid_open()' >/dev/null
 
+# 17. The external unplugged beside a panel the screensaver keeps dark: the
+# panel shows the desktop. Black for being unused, it is in use once it is
+# the only screen. Off and then lit by something else, it is seen lit when
+# the displays are read again: the workspace events of the unplug already
+# cause a reading, but reconcile passes over one taken within its settle
+# window of the saver's request, so the bar reads them once more after it
+# (2026-10-17: the panel stayed black on the desk).
+replug() {
+    outputs_are "HEADLESS-1=2880 HEADLESS-2=2560" || n output create headless HEADLESS-2 >/dev/null
+    wait_for 10 outputs_are "HEADLESS-1=2880 HEADLESS-2=2560"
+    sleep 0.5
+}
+panel_off() { [[ "$(dpms HEADLESS-1)" == false ]]; }
+replug
+printf 'name:HEADLESS-1\t1\n' > "$WORK/state/quickshell/bar/screensaver"
+for _ in $(seq 12); do
+    input move $((1000 + RANDOM % 50)) 700 >/dev/null
+    has_layer quickshell:screensaver HEADLESS-1 && break
+    sleep 2
+done
+if has_layer quickshell:screensaver HEADLESS-1; then
+    n output remove HEADLESS-2 >/dev/null
+    check "unplugged from the external, a panel black for being unused is lit at once" \
+        wait_for 1 lacks_layer quickshell:screensaver HEADLESS-1
+else
+    fail "unplug: the panel was not black to begin with"
+fi
+for settled in 1 0; do
+    replug
+    input move 1000 700 >/dev/null
+    if ! wait_for 25 panel_off; then
+        fail "unplug: the panel did not go off with nobody at the keys"
+        continue
+    fi
+    # Lit behind the bar's back, long after its request or within reconcile's
+    # settle window; nothing but the change of screens may lift the black.
+    (( settled )) && sleep 5
+    n dispatch 'hl.dsp.dpms({ action = "enable", monitor = "HEADLESS-1" })' >/dev/null
+    sleep 0.5
+    n output remove HEADLESS-2 >/dev/null
+    if (( settled )); then
+        check "nor one the saver turned off and something else lit" wait_for 2 lacks_layer quickshell:screensaver HEADLESS-1
+    else
+        check "nor one lit again right after the saver's request" wait_for 8 lacks_layer quickshell:screensaver HEADLESS-1
+    fi
+done
+rm -f "$WORK/state/quickshell/bar/screensaver"
+
 check "no session action or hardware write was even attempted" no_writes
 
 if (( failed == 0 )); then
