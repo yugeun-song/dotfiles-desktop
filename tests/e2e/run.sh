@@ -668,6 +668,32 @@ fi
 input key 1 sleep 300
 ipc screensaver wake >/dev/null
 
+# 20. The key overlay's guard for a terminal asking for a password, in a
+# window opened after the bar started. quickshell knew no pid for such a
+# window, so its terminal was never watched (2026-10-17). promptwin.py's
+# process holds a terminal with its echo off, as a shell under sudo does.
+promptwin_pid() { n clients -j | jq -r '[.[] | select(.class == "promptwin") | .pid] | first // empty'; }
+promptwin_up() { [[ -n "$(promptwin_pid)" ]]; }
+input key super 21 sleep 800
+if overlay_on; then
+    n dispatch "hl.dsp.exec_cmd('python3 -I $REPO/tests/e2e/promptwin.py')" >/dev/null
+    if wait_for 10 promptwin_up; then
+        pid=$(promptwin_pid)
+        n dispatch "hl.dsp.focus({ window = 'class:promptwin' })" >/dev/null
+        check "a window opened after the bar is known by its pid" wait_for 3 key_state_is .pid "$pid"
+        check "its terminal asking for a password pauses the key reader" wait_for 3 key_state_is .secret true
+        kill -USR1 "$pid"
+        check "and the prompt's end lets the reader go" wait_for 3 key_state_is .secret false
+        kill "$pid"
+    else
+        fail "the guard: the prompt window did not open"
+    fi
+    input key super 21 sleep 800
+    check "Super+Y turns the overlay off again" lacks_layer quickshell:keys
+else
+    fail "the guard: the overlay did not come on"
+fi
+
 check "no session action or hardware write was even attempted" no_writes
 
 if (( failed == 0 )); then

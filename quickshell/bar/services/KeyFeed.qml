@@ -2,6 +2,7 @@ pragma Singleton
 
 import QtQuick
 import Quickshell
+import Quickshell.Hyprland
 import Quickshell.Io
 import qs.services
 
@@ -136,6 +137,21 @@ Singleton {
         if (echoWatch.running)
             echoWatch.write(`pid ${root.focusedPid}\n`);
     }
+
+    // quickshell fills a window's lastIpcObject, its pid included, from
+    // Hyprland's client list, which it asks for when it starts and on a
+    // config reload only. A window opened since had none: the watch was told
+    // pid 0 and never looked at the terminals of any terminal opened after
+    // the bar started (found 2026-10-17). The list is asked for again when
+    // the window taking the keys has no pid yet.
+    onFocusedWindowChanged: root.askForPid()
+
+    function askForPid() {
+        if (root.enabled && root.focusedWindow && !(root.focusedWindow.lastIpcObject?.pid > 0))
+            Hyprland.refreshToplevels();
+    }
+
+    onEnabledChanged: root.askForPid()
 
     // Only while the overlay is on: nothing else wants to know.
     Process {

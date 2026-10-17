@@ -114,7 +114,8 @@ probe = '''
 
         function keys(): string {
             return JSON.stringify({ enabled: KeyFeed.enabled, locked: KeyFeed.locked,
-                                    chords: KeyFeed.chords.map(c => c.key), failure: KeyFeed.failure });
+                                    chords: KeyFeed.chords.map(c => c.key), failure: KeyFeed.failure,
+                                    secret: KeyFeed.secretInput, pid: KeyFeed.focusedPid });
         }
         function notifs(): string {
             return JSON.stringify(Notifications.history.map(e => ({ id: e.id, read: e.read, at: e.at })));
