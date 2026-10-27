@@ -1,0 +1,268 @@
+#!/usr/bin/env python3
+"""Turn the copies tests/e2e/run.sh made into ones that cannot reach the machine.
+
+Usage: defang.py WORK     (WORK holds bar/, config/hypr/ and the log apps.log)
+
+Every action that would leave the nested session is replaced with a line in
+WORK/apps.log: the session dialog's lock, sleep, sign-out, restart and power-off,
+programs started from the bar, brightness and volume writes, the alarm chime.
+The key reader (KEYFEED_SYSTEM, which run.sh points here) becomes a reader
+of WORK/keyfifo, never of /dev/input. The
+weather script prints a fixed reading instead of going to the network. Then
+a probe is added to shell.qml for the suite to read the bar's state, the
+screensaver's minutes become five-second units so its stages come within a
+test's patience, and the Displays panel stops hiding headless outputs, which
+are all the nested session has. A pattern that is not found is an error:
+a defang that silently did nothing would let a test reach the machine.
+"""
+
+import pathlib
+import re
+import sys
+
+WORK = pathlib.Path(sys.argv[1]).resolve()
+BAR = WORK / "bar"
+HYPR = WORK / "config" / "hypr"
+LOG = WORK / "apps.log"
+
+
+def edit(path, old, new, count=1, regex=False):
+    text = path.read_text()
+    if regex:
+        text, n = re.subn(old, new, text, count=count, flags=re.S)
+    else:
+        n = text.count(old)
+        text = text.replace(old, new, count)
+    if n == 0:
+        sys.exit(f"defang: {path.relative_to(WORK)}: pattern not found: {old[:70]!r}")
+    path.write_text(text)
+
+
+def logger(name):
+    return f'["sh", "-c", "echo {name} >> {LOG}"]'
+
+
+power = BAR / "modules/PowerMenu.qml"
+edit(power, 'command: ["loginctl", "lock-session"],', f"command: {logger('lock')},")
+edit(power, r'command: \["sh", "-c",\n.*?"notify-send -u critical .*?\],', f"command: {logger('suspend')},", regex=True)
+if "systemctl suspend" in power.read_text() or "loginctl" in power.read_text().split("command:")[1]:
+    sys.exit("defang: PowerMenu.qml still holds a real session command")
+
+(HYPR / "scripts/session-power.sh").write_text(f'#!/bin/sh\necho "session-power $*" >> {LOG}\n')
+
+edit(BAR / "services/Brightness.qml",
+     'writeProc.command = ["ddcutil", "-b", String(bus), "setvcp", "10", String(root.pending)];',
+     f"writeProc.command = {logger('ddc-set')};")
+edit(BAR / "services/Brightness.qml",
+     'writeProc.command = ["brightnessctl", "--class", "backlight", "-q", "s", `${root.pending}%`];',
+     f"writeProc.command = {logger('backlight-set')};")
+edit(BAR / "services/Volume.qml", "root.audio.volume = clamped / 100;", "console.warn('[e2e] volume write refused');")
+edit(BAR / "services/Volume.qml", "root.audio.muted = !root.audio.muted;", "console.warn('[e2e] mute refused');")
+edit(BAR / "services/Volume.qml", 'fallback.command = ["wpctl"', 'fallback.command = ["true", "wpctl"', count=3)
+# The probe below finds the speaker on a bar by this name, and the bars
+# through this id: the speaker's place depends on which readouts show.
+edit(BAR / "modules/StatusItems.qml", "        onActivated: Volume.toggleMute()",
+     '        objectName: "e2e-sound"\n        onActivated: Volume.toggleMute()')
+edit(BAR / "shell.qml", "    Variants {\n        model: Quickshell.screens\n",
+     "    Variants {\n        id: e2eBars\n\n        model: Quickshell.screens\n")
+# The island on each bar, for the probe's island().
+edit(BAR / "modules/Bar.qml", "            MediaChip {\n",
+     '            MediaChip {\n                objectName: "e2e-island"\n')
+edit(BAR / "services/Alarms.qml",
+     'command: ["canberra-gtk-play", "-f", "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"]',
+     'command: ["true"]')
+
+(BAR / "scripts/app-scope.sh").write_text(f'#!/bin/sh\necho "app $*" >> {LOG}\n')
+(BAR / "scripts/weather.sh").write_text(
+    "#!/bin/sh\n"
+    "echo '{\"code\": 1, \"temp\": 18, \"feels\": 17, \"day\": 1, \"place\": \"Test\", "
+    "\"fetched\": '\"$(date +%s)\"', \"live\": true}'\n")
+(WORK / "keyfeed-stub").write_text(f'''#!/usr/bin/env python3
+import json, os, sys, threading
+# Steered as the real reader is: paused until the bar says resume, and gone
+# at stop or the end of stdin (one left over would steal lines from the fifo).
+state = {{"open": False}}
+def control():
+    for line in sys.stdin:
+        word = line.strip()
+        if word == "stop":
+            break
+        if word in ("resume", "pause"):
+            state["open"] = word == "resume"
+    os._exit(0)
+threading.Thread(target=control, daemon=True).start()
+print(json.dumps({{"type": "ready", "devices": 1}}), flush=True)
+while True:
+    with open("{WORK / 'keyfifo'}") as fh:
+        for line in fh:
+            line = line.strip()
+            if line == "EXIT":
+                os._exit(3)
+            if line.startswith("ERR "):
+                print(json.dumps({{"type": "error", "reason": line[4:]}}), flush=True)
+            elif line and state["open"]:
+                parts = line.split("+")
+                print(json.dumps({{"type": "key", "mods": parts[:-1], "key": parts[-1]}}), flush=True)
+''')
+(WORK / "keyfeed-stub").chmod(0o755)
+
+saver = BAR / "modules/ScreensaverDpms.qml"
+edit(saver, "timeout: Math.max(1, slot.minutes) * 60", "timeout: Math.max(1, slot.minutes) * 5")
+edit(saver, "interval: Math.max(1, slot.minutes) * 60000", "interval: Math.max(1, slot.minutes) * 5000")
+
+edit(BAR / "modules/Displays.qml", "if (/^(FALLBACK$|HEADLESS-)/.test(m.name))", "if (/^(FALLBACK$)/.test(m.name))")
+
+capture = HYPR / "scripts/capture.sh"
+edit(capture, '    RUN="$XDG_RUNTIME_DIR/capture"', f'    RUN="{WORK / "capture"}"')
+edit(capture, 'BAR_CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar"', f'BAR_CONFIG="{BAR}"')
+
+probe = '''
+    // tests/e2e only: the suite reads the bar's state through this.
+    IpcHandler {
+        target: "e2e"
+
+        function keys(): string {
+            return JSON.stringify({ enabled: KeyFeed.enabled, locked: KeyFeed.locked,
+                                    chords: KeyFeed.chords.map(c => c.key), failure: KeyFeed.failure,
+                                    secret: KeyFeed.secretInput, pid: KeyFeed.focusedPid });
+        }
+        function notifs(): string {
+            return JSON.stringify(Notifications.history.map(e => ({ id: e.id, read: e.read, at: e.at })));
+        }
+        function toasts(): int {
+            return e2eToasts.count;
+        }
+        function alarm(): string {
+            return Alarms.ringing ? Alarms.ringing.label : "";
+        }
+        function displaysState(): string {
+            return JSON.stringify({ countdown: displays.countdown, current: displays.current ? displays.current.name : "" });
+        }
+        function session(): bool {
+            return Session.menuOpen;
+        }
+        function badge(): string {
+            return JSON.stringify({ choice: Badge.choice, current: Badge.current.id, offered: Badge.offered.map(m => m.id) });
+        }
+        function tray(): string {
+            return JSON.stringify({ items: Tray.items.map(i => i.title), hiders: Tray.running.map(p => p.name) });
+        }
+        // The speaker's centre on HEADLESS-2's bar, in that screen's pixels.
+        function sound(): string {
+            const find = item => {
+                if (!item)
+                    return null;
+                if (item.objectName === "e2e-sound")
+                    return item;
+                for (let i = 0; i < item.children.length; i++) {
+                    const hit = find(item.children[i]);
+                    if (hit)
+                        return hit;
+                }
+                return null;
+            };
+            let speaker = null;
+            for (let i = 0; i < e2eBars.instances.length; i++) {
+                const bar = e2eBars.instances[i];
+                if (bar.screen && bar.screen.name === "HEADLESS-2")
+                    speaker = find(bar.contentItem);
+            }
+            const p = speaker ? speaker.mapToItem(null, speaker.width / 2, speaker.height / 2) : null;
+            return JSON.stringify({ x: p ? Math.round(p.x) : -1, y: p ? Math.round(p.y) : -1,
+                                    known: Volume.known });
+        }
+        // The island on each screen: its width and the parts it holds.
+        function island(): string {
+            const find = item => {
+                if (!item)
+                    return null;
+                if (item.objectName === "e2e-island")
+                    return item;
+                for (let i = 0; i < item.children.length; i++) {
+                    const hit = find(item.children[i]);
+                    if (hit)
+                        return hit;
+                }
+                return null;
+            };
+            const out = {};
+            for (let i = 0; i < e2eBars.instances.length; i++) {
+                const bar = e2eBars.instances[i];
+                const chip = find(bar.contentItem);
+                if (bar.screen && chip)
+                    out[bar.screen.name] = { up: chip.up, width: chip.width, widest: chip.widest, music: chip.musicWanted,
+                                             call: chip.callWanted, obs: chip.obsWanted, share: chip.shareWanted,
+                                             event: chip.eventWanted };
+            }
+            return JSON.stringify(out);
+        }
+        // An event, a call and OBS as the services would have them: no key,
+        // microphone or OBS reaches the nested session.
+        function islandReadout(text: string, value: string, level: real): void {
+            Island.quiet = false;
+            Island.show("volume", Theme.iconVolume, text, value, level, -1, Theme.islandBlue, true);
+        }
+        function islandAlert(text: string, value: string, battery: real): void {
+            Island.quiet = false;
+            Island.alert("power", Theme.iconBolt, text, value, battery, Theme.islandGreen);
+        }
+        function obsFeed(text: string): void {
+            Obs.receive(text);
+        }
+        // One program as a JSON object, or "none": qs's command line takes a
+        // bracketed argument for a list and strips the brackets.
+        function callsFake(found: string): void {
+            const one = found === "none" ? null : JSON.parse(found);
+            const list = one === null ? [] : [one];
+            const started = {};
+            for (const p of list)
+                started[p.class || p.binary || p.name] = Date.now() - 65000;
+            Calls.started = started;
+            Calls.found = list;
+        }
+
+        // HEADLESS-2's status items, left to right, as boxes in that screen's
+        // pixels: a glyph and its value are one box, for the gap check.
+        function statusBoxes(): string {
+            const boxes = [];
+            const walk = item => {
+                if (!item || !item.visible)
+                    return;
+                if (item.actionable !== undefined && item.unread !== undefined) {
+                    const a = item.mapToItem(null, 0, 0);
+                    const b = item.mapToItem(null, item.width, 0);
+                    boxes.push({ x: Math.round(a.x), w: Math.round(b.x - a.x), filled: item.filled });
+                    return;
+                }
+                for (let i = 0; i < item.children.length; i++)
+                    walk(item.children[i]);
+            };
+            for (let i = 0; i < e2eBars.instances.length; i++) {
+                const bar = e2eBars.instances[i];
+                if (bar.screen && bar.screen.name === "HEADLESS-2")
+                    walk(bar.contentItem);
+            }
+            return JSON.stringify(boxes.sort((a, b) => a.x - b.x));
+        }
+    }
+
+    QtObject {
+        id: e2eToasts
+
+        property int count: 0
+    }
+
+    Connections {
+        target: Notifications
+
+        function onToast(entry) {
+            e2eToasts.count += 1;
+        }
+    }
+}
+'''
+shell = BAR / "shell.qml"
+text = shell.read_text().rstrip()
+if not text.endswith("}"):
+    sys.exit("defang: shell.qml does not end with its root's brace")
+shell.write_text(text[:-1] + probe)

@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE policyconfig PUBLIC "-//freedesktop//DTD polkit Policy Configuration 1.0//EN"
+ "http://www.freedesktop.org/software/polkit/policyconfig-1.dtd">
+<!--
+  dotfiles-desktop: installed by install.sh into /usr/share/polkit-1/actions/
+
+  pkexec runs /usr/local/bin/camera-switch as root, judged by the word it is
+  handed (exec.argv1). `off` needs no password for the session at the seat:
+  it only takes the cameras away, and a privacy key that asks first is not
+  pressed. `on` asks for an administrator's password, each time (polkit
+  would keep it only for the process that asked, and every press is a new
+  one): otherwise any program of the user's could quietly undo the switch
+  and then use the cameras, which the session holds through udev's uaccess.
+  camera-switch turns `toggle` into one of the two before it asks; `toggle`
+  and `enforce` handed to pkexec directly ask as `on` does. Every action is
+  for an administrator outside the seat's session. Under /usr/share because
+  polkit reads actions from nowhere else. Each action names its argv1: pkexec
+  takes the first action whose path matches, so one without would catch
+  every word.
+-->
+<policyconfig>
+  <vendor>dotfiles-desktop</vendor>
+  <action id="io.github.yugeun-song.camera-switch.off">
+    <description>Turn the cameras off</description>
+    <message>Authentication is required to turn the cameras off</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>yes</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/camera-switch</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">off</annotate>
+  </action>
+  <action id="io.github.yugeun-song.camera-switch.on">
+    <description>Turn the cameras back on</description>
+    <message>Authentication is required to turn the cameras back on</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/camera-switch</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">on</annotate>
+  </action>
+  <action id="io.github.yugeun-song.camera-switch.toggle">
+    <description>Turn the cameras on or off</description>
+    <message>Authentication is required to turn the cameras on or off</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/camera-switch</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">toggle</annotate>
+  </action>
+  <action id="io.github.yugeun-song.camera-switch.enforce">
+    <description>Turn off a camera that has just appeared</description>
+    <message>Authentication is required to turn off a camera that has just appeared</message>
+    <defaults>
+      <allow_any>auth_admin</allow_any>
+      <allow_inactive>auth_admin</allow_inactive>
+      <allow_active>auth_admin</allow_active>
+    </defaults>
+    <annotate key="org.freedesktop.policykit.exec.path">/usr/local/bin/camera-switch</annotate>
+    <annotate key="org.freedesktop.policykit.exec.argv1">enforce</annotate>
+  </action>
+</policyconfig>

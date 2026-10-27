@@ -1,0 +1,47 @@
+# dotfiles-desktop
+# The status bar; bin/bar is its front end. A broken config gives up after
+# five starts in two minutes, the retry delay growing to thirty seconds.
+#
+# Restart=always, not on-failure: systemd counts SIGTERM and exit 0 as success
+# (`qs -n` exits 0 when another copy holds the config), so on-failure left a
+# pkilled bar inactive. A stop job is still never restarted.
+#
+# Pill helpers die with this cgroup; apps opened from the bar go to
+# app-hyprland.slice through app-scope.sh and survive a bar restart.
+
+[Unit]
+Description=Status bar
+PartOf=hyprland-session.target
+After=hyprland-session.target
+Requisite=hyprland-session.target
+ConditionPathExists=%E/quickshell/bar/shell.qml
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# Launched apps inherit this cwd, scopes included.
+WorkingDirectory=%h
+# quickshell never removes its per-instance log dirs (they pile up in tmpfs,
+# full of window titles). Swept only when no quickshell is running.
+ExecStartPre=-/bin/sh -c 'pgrep -x qs >/dev/null || pgrep -x quickshell >/dev/null || rm -rf -- "${XDG_RUNTIME_DIR}/quickshell/by-id"/*'
+# bin/bar --once resolves qs vs quickshell, carries the log rules and turns
+# off core files (not LimitCORE=: the programs the bar starts inherit it, and
+# a hard limit of 0 could not be raised back for them).
+ExecStart=%h/.local/bin/bar --once
+# The bar is what wakes a display its screensaver turned off; with the bar
+# gone (a crash, a restart, a give-up) such an output would stay off whatever
+# is done on it, so every stop lights them again. Bounded, and harmless once
+# the compositor itself is gone.
+ExecStopPost=-/bin/sh -c 'timeout 2 hyprctl eval "if MONITORS and MONITORS.saver_release then MONITORS.saver_release() end" >/dev/null 2>&1'
+Restart=always
+RestartSec=1
+RestartSteps=5
+RestartMaxDelaySec=30
+Slice=session.slice
+# Huge pages only where a program asks. Under the kernel default (always) the
+# bar held 110 MiB of anonymous memory a minute after a start, 58 MiB of it in
+# 2 MB pages, and 153 MiB after three hours; with madvise, 57 MiB after a
+# minute. Programs started from the launcher inherit this. Ignored by systemd
+# before 260 and by kernels without the madvise mode.
+MemoryTHP=madvise

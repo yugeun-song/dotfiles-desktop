@@ -1,0 +1,7 @@
+# dotfiles-desktop
+# Programs opened from the bar, placed here by quickshell/bar/scripts/app-scope.sh
+# so a `bar --restart` does not kill them (a fork never leaves its cgroup).
+# The file exists only for PartOf: the slice ends with the session target.
+[Unit]
+Description=Programs started from the Hyprland session
+PartOf=hyprland-session.target

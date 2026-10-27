@@ -1,0 +1,22 @@
+# dotfiles-desktop
+# Polkit agent; the script runs the first one installed and reports if none.
+[Unit]
+Description=Polkit authentication agent
+PartOf=hyprland-session.target
+After=hyprland-session.target
+Requisite=hyprland-session.target
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+ExecStart=%E/hypr/scripts/polkit-agent.sh
+# always, not on-failure: see bar.service. 78 is polkit-agent.sh finding no
+# agent to run, which a restart cannot change.
+Restart=always
+RestartPreventExitStatus=78
+SuccessExitStatus=78
+RestartSec=1
+Slice=session.slice
+# See bar.service.
+MemoryTHP=madvise

@@ -1,0 +1,78 @@
+# tuigreet appearance. A file, not greetd command-line flags: tuigreet 0.11.1
+# ignores every background flag once it loads any config file.
+#
+# Colours are names, never hex: hex goes out as 24-bit SGR, which the text
+# console quantises to one bit per channel (rgb_foreground() in
+# drivers/tty/vt/vt.c), merging distinct colours. Names are indexed SGR from the
+# palette the kernel command line sets (vt.default_red/_grn/_blu = kitty's
+# spaceduck values), so the greeter matches the terminal. The names lie: slot 5
+# "magenta" is #F2CE00, slot 3 "yellow" a lilac. Trust the hex in each comment.
+
+[display]
+# Shows the machine awake and its clock sane before a password.
+show_time = true
+
+# Explicit: a [display] table flips the default from false to true, so the
+# hostname would silently depend on the table existing.
+show_title = true
+
+# Fixed, not by locale: a Korean locale asks VT1's built-in 8x16 font (no FONT=
+# in /etc/vconsole.conf) for Hangul month and weekday names.
+time_format = "%Y-%m-%d %H:%M"
+
+# A lone percentage in the corner reads as an artefact; the bar shows it after
+# login.
+battery = false
+
+[secret]
+# The default "hidden" gives no feedback, so a dead keyboard looks like a wrong
+# password; that once ended in a pam_faillock lockout.
+mode = "characters"
+
+[user_menu]
+# Lists existing accounts, keeping any username out of this file. Not combined
+# with remember: upstream bug creates the session twice (apognu/tuigreet#216).
+enabled = true
+
+[theme]
+# White for input and its prompts, the palette's green and yellow for the rest.
+# Ratios are contrast against black.
+container = "reset"     # terminal default; "black" is a hole on any other bg
+border    = "green"     # slot 2,  #5CCC96  10.53:1
+title     = "green"     # slot 2,  #5CCC96  10.53:1  one object with the frame
+time      = "white"     # slot 15, #F0F1CE  18.18:1
+text      = "white"     # slot 15, #F0F1CE  18.18:1
+prompt    = "white"     # slot 15, #F0F1CE  18.18:1  Username: and Password:
+input     = "white"     # slot 15, #F0F1CE  18.18:1  typed text and the mask,
+                        # the brightest thing on screen (see [secret])
+action    = "green"     # slot 2,  #5CCC96  10.53:1  reference only, kept quiet
+button    = "magenta"   # slot 5,  #F2CE00  13.60:1  yellow; the F-key badges
+greet     = "green"     # slot 2,  #5CCC96  10.53:1  unused until a greeting is set
+
+[background]
+kind = "matrix"
+
+[background.matrix]
+# Three fixed bands per drop: head, first third of the trail, the rest. An
+# unknown name silently drops all three back to the hex defaults.
+head_color   = "white"     # slot 15, #F0F1CE  18.18:1  one cell per drop
+bright_color = "magenta"   # slot 5,  #F2CE00  13.60:1  yellow; first third
+dim_color    = "green"     # slot 2,  #5CCC96  10.53:1  the remaining two thirds
+
+[layout]
+# No width: the default 80 fits the title (21 + hostname columns) and truncates
+# silently past it. The two defaults pin the geometry and keep a key appended at
+# the end of the file from landing in [layout.widgets].
+container_padding = 1
+prompt_padding    = 1
+
+[layout.widgets]
+# The enum is default/top/bottom/hidden; bottom merges it into the action bar.
+time_position = "top"
+
+[layout.widgets.status_bar]
+# Hides the badges only; the keys still work. F2 runs any command in place of a
+# session (undoing --sessions narrowing); F4 rebuilds the animation with
+# hard-coded hex colours, the 24-bit path this file avoids.
+show_command    = false
+show_background = false

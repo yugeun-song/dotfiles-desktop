@@ -1,0 +1,22 @@
+# dotfiles-desktop
+# The session: hypr/scripts/session-start.sh starts it once the compositor is
+# up, session-watch.sh stops it when the compositor exits. Every session
+# daemon is Wanted here and PartOf it, so login starts them, logout ends them,
+# and a relaunched compositor restarts them against the new one.
+#
+# BindsTo raises graphical-session.target (portals and hypridle key on it);
+# PropagatesStopTo takes it down too.
+[Unit]
+Description=Hyprland session
+BindsTo=graphical-session.target
+PropagatesStopTo=graphical-session.target
+Wants=graphical-session-pre.target
+After=graphical-session-pre.target
+Wants=hyprland-session-watch.service
+Wants=bar.service fcitx5.service hyprpaper.service
+Wants=cliphist-text.service cliphist-image.service cliphist-expire.timer polkit-agent.service
+# Listed although already pulled in elsewhere: this Wants= list is the
+# session's unit list, read back via `systemctl show -p Wants` by
+# session-start.sh and recover-desktop.
+Wants=hypridle.service
+Wants=app-hyprland.slice

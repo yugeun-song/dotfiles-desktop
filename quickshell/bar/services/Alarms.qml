@@ -1,0 +1,194 @@
+pragma Singleton
+
+import QtQuick
+import Quickshell
+import Quickshell.Io
+
+Singleton {
+    id: root
+
+    // JSON state owned by scripts/alarm.sh; watched, so no IPC is needed.
+    readonly property string statePath: (Quickshell.env("XDG_STATE_HOME") ?? `${Quickshell.env("HOME")}/.local/state`) + "/quickshell-bar/alarms.json"
+
+    property var entries: []
+    property var ringing: null
+
+    // Last good load. entries survive a failed load, so this marks staleness.
+    property double asOf: 0
+
+    // Set while the state file does not exist. alarm.sh creates it with the
+    // first alarm, and a file missing when the bar started was never watched:
+    // after a fresh install the first alarm did not ring until the bar was
+    // restarted. Looked for again on every tick until it appears.
+    property bool missing: false
+
+    // Uses nowSeconds, not Date.now(): a binding only re-runs on dependencies.
+    readonly property var pending: root.entries.filter(a => a.epoch > root.nowSeconds).sort((a, b) => a.epoch - b.epoch)
+
+    readonly property var next: root.pending[0] ?? null
+
+    // Ticked by the timer below; drives pending.
+    property real nowSeconds: Date.now() / 1000
+
+    readonly property bool hasAlarm: root.next !== null || root.ringing !== null
+
+    // Rung occurrences as id@epoch, so a rolled-forward daily alarm rings again.
+    property var firedKeys: []
+    property real lastReap: 0
+
+    // The ringing alarm and the occurrences rung, kept across reloads: a
+    // reload mid-ring (install.sh) took the red pill down while the alarm
+    // still had minutes to ring. JSON, as in Notifications.qml.
+    PersistentProperties {
+        id: kept
+
+        reloadableId: "alarms"
+
+        property string ringing: ""
+        property string fired: "[]"
+
+        onReloaded: {
+            try {
+                root.ringing = kept.ringing !== "" ? JSON.parse(kept.ringing) : null;
+                root.firedKeys = JSON.parse(kept.fired);
+            } catch (e) {
+                root.ringing = null;
+            }
+        }
+    }
+
+    onRingingChanged: kept.ringing = root.ringing ? JSON.stringify(root.ringing) : ""
+    onFiredKeysChanged: kept.fired = JSON.stringify(root.firedKeys)
+
+    function reload() {
+        try {
+            const parsed = JSON.parse(file.text());
+            if (!Array.isArray(parsed))
+                throw new Error("state file is not a list");
+            // The ringing pill prints the label and every check compares
+            // epochs; drop entries that would print "undefined" or never
+            // come due.
+            const good = parsed.filter(a => a
+                                       && typeof a.epoch === "number" && isFinite(a.epoch)
+                                       && typeof a.label === "string");
+            if (good.length !== parsed.length)
+                console.warn("[alarms] dropped", parsed.length - good.length, "malformed entries");
+            root.entries = good;
+            root.asOf = Date.now();
+        } catch (error) {
+            // Keep the previous list (a half-written file must not erase it),
+            // but mark it stale.
+            root.asOf = 0;
+            console.warn("[alarms] unreadable state:", error);
+        }
+    }
+
+    function dismiss() {
+        root.ringing = null;
+    }
+
+    // Rate-limited: a reap that cannot write leaves the entry due, and the
+    // 5 s tick would respawn it forever. It names every rung alarm still in
+    // the file, so one skipped here is reaped by the next.
+    function reap() {
+        if (clean.running || root.nowSeconds - root.lastReap < 60)
+            return;
+        root.lastReap = root.nowSeconds;
+        const rung = root.entries.map(a => `${a.id}@${a.epoch}`).filter(k => root.firedKeys.includes(k));
+        clean.command = [Quickshell.shellPath("scripts/alarm.sh"), "reap"].concat(rung);
+        clean.running = true;
+    }
+
+    function check() {
+        const now = Date.now() / 1000;
+
+        // Auto-dismiss after 5 min, or the latch blocks every later alarm.
+        if (root.ringing !== null && now - root.ringing.epoch >= 300)
+            root.dismiss();
+
+        // Missed across suspend or restart: roll forward or a daily alarm
+        // never comes due again.
+        if (root.entries.some(a => !a.fired && now - a.epoch >= 300))
+            root.reap();
+
+        if (root.ringing !== null)
+            return;
+        // Every alarm due now rings at once, under one label: one at a time,
+        // a second set for the same minute waited out its window.
+        const due = root.entries.filter(a => !a.fired && !root.firedKeys.includes(`${a.id}@${a.epoch}`) && a.epoch <= now && now - a.epoch < 300);
+        if (due.length === 0)
+            return;
+        // Recorded locally: if reap fails the entries stay due and would re-ring.
+        root.firedKeys = root.firedKeys.concat(due.map(a => `${a.id}@${a.epoch}`));
+        root.ringing = due.length === 1 ? due[0]
+                                         : Object.assign({}, due[0], { label: due.map(a => a.label).join(", ") });
+        chime.running = true;
+        root.reap();
+    }
+
+    FileView {
+        id: file
+
+        path: root.statePath
+        watchChanges: true
+        // Missing until alarm.sh first runs; onLoadFailed says why that is fine.
+        printErrors: false
+        onLoaded: {
+            root.missing = false;
+            root.reload();
+        }
+        onFileChanged: {
+            file.reload();
+            root.reload();
+        }
+        onLoadFailed: error => {
+            if (error === FileViewError.FileNotFound) {
+                // alarm.sh never ran: a valid empty reading, not a failure.
+                root.entries = [];
+                root.asOf = Date.now();
+                root.missing = true;
+                return;
+            }
+            // Deleted after a good load, or unreadable: mark stale.
+            root.asOf = 0;
+            console.warn("[alarms] load failed:", error);
+        }
+    }
+
+    // Rings once, never loops.
+    Process {
+        id: chime
+
+        command: ["canberra-gtk-play", "-f", "/usr/share/sounds/freedesktop/stereo/alarm-clock-elapsed.oga"]
+    }
+
+    // Rolls a fired alarm forward if it repeats, drops it if it does not.
+    Process {
+        id: clean
+
+        // Set by reap(), with the keys of the alarms rung.
+        command: [Quickshell.shellPath("scripts/alarm.sh"), "reap"]
+
+        onExited: code => {
+            if (code !== 0)
+                console.warn("[alarms] reap failed, exit", code);
+        }
+
+        stderr: SplitParser {
+            onRead: line => console.warn("[alarms]", line)
+        }
+    }
+
+    Timer {
+        interval: 5000
+        running: true
+        repeat: true
+        triggeredOnStart: true
+        onTriggered: {
+            if (root.missing)
+                file.reload();
+            root.nowSeconds = Date.now() / 1000;
+            root.check();
+        }
+    }
+}

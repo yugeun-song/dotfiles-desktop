@@ -1,0 +1,7 @@
+# Off: kded6's gtkconfig rewrites the GTK ini files and dconf from KDE settings
+# (breeze_cursors among them) over the cursor hypr/config/env.lua sets, so
+# gtk/*-settings.ini and gsettings-apply.sh stay the only writers. kded6
+# reads kded5rc, the name KF6 kept (KF 6.31); a kded6rc is never read. It
+# starts on demand, when a KDE program calls it over D-Bus.
+[Module-gtkconfig]
+autoload=false

@@ -1,0 +1,24 @@
+# dotfiles-desktop
+# Clipboard history, text. Outside the bar so it survives a bar restart;
+# one unit per type because wl-paste --watch takes one type.
+[Unit]
+Description=Clipboard history (text)
+PartOf=hyprland-session.target
+After=hyprland-session.target
+Requisite=hyprland-session.target
+ConditionPathExists=/usr/bin/wl-paste
+ConditionPathExists=/usr/bin/cliphist
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+# The history lives on tmpfs (config/env.lua). Set here as well: should the
+# session's environment not reach the user manager, cliphist would fall
+# back to a history on disk.
+Environment=CLIPHIST_DB_PATH=%t/cliphist/db
+ExecStart=/usr/bin/wl-paste --type text --watch cliphist store
+# always, not on-failure: see bar.service.
+Restart=always
+RestartSec=1
+Slice=session.slice

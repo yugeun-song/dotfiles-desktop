@@ -1,0 +1,267 @@
+#!/usr/bin/env bash
+# Signs out, shuts down or restarts by ending the Hyprland session first:
+#
+#   session-power.sh poweroff|reboot|logout [--dry-run]
+#
+# Not plain `systemctl poweroff`: with the external monitor attached, a
+# shutdown started inside the session left this machine (Lunar Lake, xe) dark
+# and deaf after userspace had finished, until the power button was held.
+# Signing out and powering off from the greeter did not, as long as the
+# session had ended on the external alone. The journal shows the direct path
+# finishing every unit within a second, so what differs is what the
+# compositor and the GPU clients are doing when the kernel shuts the device
+# down: in the direct path they die in that same second, after a sign-out
+# they are long gone. This reproduces the sign-out order without the greeter.
+#
+# The panel: until 28 September 2026 the policy kept the panel off beside the
+# external, and seven power-offs from the greeter after such sessions were
+# clean. From the 29th both stayed lit, and two of the next three needed an EC
+# reset. So before a sign-out or power-off with both lit, the panel goes off
+# first (MONITORS.prepare_exit in config/monitors.lua). A small sample and no
+# known mechanism: this reproduces the state that held. A restart skips it: it
+# never enters S5, and restarts have not hung here.
+#
+# Order: the action is requested under a logind delay inhibitor, which holds
+# the shutdown transaction until released, for at most InhibitDelayMaxSec (5 s
+# by default, which also bounds any hang here). Inside that window the
+# compositor is asked to exit and waited for; only then does the lock go. A
+# failed request leaves the session untouched and the panel lit again.
+#
+# Where: a transient user unit in app.slice, not the caller's cgroup.
+# bar.service and its children die with hyprland-session.target when the
+# compositor's lock file goes, and a keybind's child sits in the session
+# scope; neither reliably holds the inhibitor while the compositor releases
+# the GPU. The user manager stops when the last session ends, so the
+# inhibitor and the inner copy ignore SIGTERM, and TimeoutStopSec keeps that
+# from holding the manager's stop for the default 90 s.
+#
+# Stages, in SESSION_POWER_STAGE: none (move into the unit), unit (prepare the
+# outputs, then take the inhibitor or just sign out), inhibited (the work).
+# Log: journalctl --user -u session-power-*
+
+set -uo pipefail
+
+SELF="$(readlink -f -- "${BASH_SOURCE[0]}")"
+ACTION="${1:-}"
+DRY_RUN=0
+case "${2:-}" in
+    --dry-run) DRY_RUN=1 ;;
+    "") ;;
+    *) echo "usage: ${0##*/} poweroff|reboot|logout [--dry-run]" >&2; exit 2 ;;
+esac
+case "$ACTION" in
+    poweroff|reboot|logout) ;;
+    *) echo "usage: ${0##*/} poweroff|reboot|logout [--dry-run]" >&2; exit 2 ;;
+esac
+
+log() { printf 'session-power: %s\n' "$*" >&2; }
+
+# Detached and time-limited: notify-send blocks forever without a server.
+notify() {
+    command -v notify-send >/dev/null 2>&1 || return 0
+    ( timeout 2 notify-send -u critical "$@" >/dev/null 2>&1 & ) 2>/dev/null
+    return 0
+}
+
+now_ms() { echo $(( $(date +%s%N) / 1000000 )); }
+
+STAGE="${SESSION_POWER_STAGE:-}"
+UNIT="session-power-$ACTION"
+(( DRY_RUN )) && UNIT="$UNIT-dryrun"
+
+# The lit outputs as "internal" and "external", one word each. The patterns
+# are the policy's default internal and synthetic ones (config/monitors.lua
+# policy.internal, policy.synthetic); only whether each kind is lit matters.
+lit_kinds() {
+    timeout 2 hyprctl monitors -j 2>/dev/null | jq -r '.[].name' 2>/dev/null \
+        | while read -r name; do
+            case "$name" in
+                FALLBACK|HEADLESS-*) ;;
+                eDP*|LVDS*|DSI*) echo internal ;;
+                *) echo external ;;
+            esac
+        done
+}
+
+# Panel off beside a lit external, then a pause before the session ends.
+# Returns 0 only when the panel was asked to go off, so the caller knows to
+# light it again if the power-off is refused. The pause is a margin, not a
+# measurement: the clean sessions had the panel off long before they ended,
+# and its power-down sequence takes up to about a second after the modeset.
+prepare_outputs() {
+    if ! command -v hyprctl >/dev/null 2>&1 || ! command -v jq >/dev/null 2>&1; then
+        log "hyprctl or jq is missing; the outputs stay as they are"
+        return 1
+    fi
+    local kinds
+    kinds="$(lit_kinds)"
+    if ! grep -qx internal <<<"$kinds" || ! grep -qx external <<<"$kinds"; then
+        log "the panel and an external are not both lit; the outputs stay as they are"
+        return 1
+    fi
+    if (( DRY_RUN )); then
+        log "dry run: would turn the panel off with MONITORS.prepare_exit() and wait for it"
+        return 1
+    fi
+    local reply
+    reply="$(timeout 2 hyprctl eval 'MONITORS.prepare_exit()' 2>&1)"
+    if [[ "$reply" != ok* ]]; then
+        log "MONITORS.prepare_exit() failed (${reply:-no reply}); the outputs stay as they are"
+        return 1
+    fi
+    # The policy turns the panel off in its own modeset 700 ms later
+    # (panel_off_delay_ms); 3 s covers that and a slow modeset.
+    local started deadline
+    started=$(now_ms)
+    deadline=$(( started + 3000 ))
+    while grep -qx internal <<<"$(lit_kinds)" && (( $(now_ms) < deadline )); do
+        sleep 0.1
+    done
+    if grep -qx internal <<<"$(lit_kinds)"; then
+        log "the panel is still lit after 3 s; going on regardless"
+    else
+        log "the panel went off after $(( $(now_ms) - started )) ms"
+    fi
+    sleep 2
+    return 0
+}
+
+# ---------------------------------------------------------------------------
+# Stage 1: move into a transient user unit that outlives the session target.
+# ---------------------------------------------------------------------------
+if [[ -z "$STAGE" ]]; then
+    if command -v systemd-run >/dev/null 2>&1; then
+        # --collect: a failed run is garbage-collected so the name is free
+        # for the next attempt. A live unit of this name means an attempt is
+        # already in progress; that is not an error.
+        if systemctl --user is-active --quiet "$UNIT.service" 2>/dev/null; then
+            log "$UNIT is already running; leaving it to that one"
+            exit 0
+        fi
+        if systemd-run --user --collect --quiet --unit="$UNIT" \
+               --property=Slice=app.slice --property=TimeoutStopSec=8s \
+               --setenv=SESSION_POWER_STAGE=unit \
+               --setenv=HYPRLAND_INSTANCE_SIGNATURE="${HYPRLAND_INSTANCE_SIGNATURE:-}" \
+               -- "$SELF" "$@"; then
+            exit 0
+        fi
+        log "systemd-run refused; running here instead"
+    fi
+    # No user manager: the caller's cgroup will have to do.
+    SESSION_POWER_STAGE=unit setsid -f "$SELF" "$@"
+    exit 0
+fi
+
+# ---------------------------------------------------------------------------
+# Stage 2: prepare the outputs, then sign out or take the delay inhibitor.
+# ---------------------------------------------------------------------------
+if [[ "$STAGE" == "unit" ]]; then
+    trap '' TERM
+    PREPARED=0
+    if [[ "$ACTION" != reboot ]] && prepare_outputs; then
+        PREPARED=1
+    fi
+    if [[ "$ACTION" == logout ]]; then
+        if (( DRY_RUN )); then
+            log "dry run: would dispatch hl.dsp.exit()"
+            exit 0
+        fi
+        # Lua syntax: see stage 3.
+        if ! timeout 2 hyprctl dispatch 'hl.dsp.exit()' >/dev/null 2>&1; then
+            log "the compositor did not take the exit request; the session stays"
+            (( PREPARED )) && timeout 2 hyprctl eval 'MONITORS.cancel_exit()' >/dev/null 2>&1
+            notify "Could not sign out" "see journalctl --user -u $UNIT"
+            exit 1
+        fi
+        log "sign-out requested"
+        exit 0
+    fi
+    if ! command -v systemd-inhibit >/dev/null 2>&1; then
+        log "systemd-inhibit is not available; no ordering is possible, requesting $ACTION directly"
+        exec systemctl "$ACTION"
+    fi
+    exec systemd-inhibit --what=shutdown --mode=delay --who="Hyprland session" \
+        --why="ending the session before the $ACTION" \
+        -- env SESSION_POWER_STAGE=inhibited SESSION_POWER_PREPARED="$PREPARED" "$SELF" "$@"
+fi
+
+# ---------------------------------------------------------------------------
+# Stage 3, under the lock: request, then end the compositor, then release.
+# ---------------------------------------------------------------------------
+# Again here: systemd-inhibit resets signal dispositions in its child, so
+# stage 2's ignore covers only systemd-inhibit itself. Every wait below is
+# bounded, so ignoring the manager's SIGTERM costs a few seconds at most, and
+# TimeoutStopSec still ends it.
+trap '' TERM
+
+RT="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+SIG="${HYPRLAND_INSTANCE_SIGNATURE:-}"
+LOCK=""
+PID=""
+if [[ -n "$SIG" && -r "$RT/hypr/$SIG/hyprland.lock" ]]; then
+    LOCK="$RT/hypr/$SIG/hyprland.lock"
+    read -r PID < "$LOCK" 2>/dev/null
+    [[ "$PID" =~ ^[0-9]+$ ]] || PID=""
+fi
+
+if (( DRY_RUN )); then
+    log "dry run: would request systemctl $ACTION under the delay inhibitor"
+else
+    if ! systemctl "$ACTION"; then
+        log "systemctl $ACTION was refused; the session stays as it is"
+        if [[ "${SESSION_POWER_PREPARED:-0}" == 1 ]]; then
+            timeout 2 hyprctl eval 'MONITORS.cancel_exit()' >/dev/null 2>&1
+        fi
+        notify "Could not $ACTION" "systemctl $ACTION was refused; see journalctl --user -u $UNIT"
+        exit 1
+    fi
+    log "$ACTION accepted; ending the compositor first"
+fi
+
+if [[ -z "$PID" ]]; then
+    log "no running compositor found for '${SIG:-no signature}'; the $ACTION proceeds without waiting"
+    exit 0
+fi
+if ! command -v hyprctl >/dev/null 2>&1; then
+    log "hyprctl is not installed; the $ACTION proceeds without waiting"
+    exit 0
+fi
+
+# Lua syntax: hyprctl wraps its argument as hl.dispatch(<arg>), so a bare
+# "exit" is nil and silently refused. Everything from here shares one
+# deadline of 4.5 s after the request, inside the 5 s delay logind grants:
+# the dispatch, the wait for the process (not only the lock file, which goes
+# before the DRM device is released) and the settle.
+if (( DRY_RUN )); then
+    log "dry run: compositor pid $PID at $LOCK; would dispatch hl.dsp.exit() and wait for it"
+    exit 0
+fi
+deadline=$(( $(now_ms) + 4500 ))
+remaining() { echo $(( deadline - $(now_ms) )); }
+if ! timeout 2 hyprctl dispatch 'hl.dsp.exit()' >/dev/null 2>&1; then
+    log "the compositor did not take the exit request; the $ACTION proceeds without waiting"
+    exit 0
+fi
+
+started=$(now_ms)
+while [[ -d "/proc/$PID" ]] && (( $(remaining) > 300 )); do
+    sleep 0.1
+done
+if [[ -d "/proc/$PID" ]]; then
+    log "the compositor (pid $PID) is still running at the deadline; letting the $ACTION proceed"
+    exit 0
+fi
+log "the compositor exited after $(( $(now_ms) - started )) ms; releasing the lock"
+# A moment for the driver to settle on the console, within what is left. For
+# a power-off up to 3.5 s: the clean path (sign-out, then power-off from the
+# greeter) leaves about four seconds between the compositor's exit and the
+# kernel shutting the GPU down, and the transaction after the release adds
+# about one. A restart never enters S5 and keeps half a second.
+cap=500
+[[ "$ACTION" == poweroff ]] && cap=3500
+left=$(remaining)
+if (( left > 0 )); then
+    (( left > cap )) && left=$cap
+    sleep "$(( left / 1000 )).$(printf '%03d' $(( left % 1000 )))" 2>/dev/null || true
+fi
+exit 0

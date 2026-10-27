@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# Front end to systemd/user/bar.service, which supervises the bar.
+#
+#   bar                 start it (no-op if running)
+#   bar --restart       restart it; picks up QML changes
+#   bar --stop          stop it
+#   bar --status        unit status and last log lines
+#   bar --log           follow its log
+#   bar --once          run quickshell in the foreground, outside the unit
+#
+# quickshell -n refuses a second copy of the same config: stop the unit before
+# `bar --once` on it, or point BAR_CONFIG_DIR elsewhere.
+
+set -uo pipefail
+
+CONFIG_DIR="${BAR_CONFIG_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar}"
+UNIT=bar.service
+LOG_RULES='quickshell.hyprland.ipc.events.debug=false;quickshell.wayland.toplevel.debug=false;quickshell.dbus.properties.debug=false'
+
+runner() {
+    if command -v qs >/dev/null 2>&1; then echo qs; else echo quickshell; fi
+}
+
+case "${1:-}" in
+    # reset-failed first: start-limit-hit refuses start and restart alike.
+    # Side effect: NRestarts is zeroed, so crash loops show only in --log.
+    "")         systemctl --user reset-failed "$UNIT" 2>/dev/null
+                exec systemctl --user start "$UNIT" ;;
+    --restart)  systemctl --user reset-failed "$UNIT" 2>/dev/null
+                exec systemctl --user restart "$UNIT" ;;
+    --stop)     exec systemctl --user stop "$UNIT" ;;
+    --status)   exec systemctl --user --no-pager status "$UNIT" ;;
+    --log)      exec journalctl --user -u "$UNIT" -f ;;
+    --once)
+        command -v "$(runner)" >/dev/null 2>&1 || { echo "bar: quickshell is not installed" >&2; exit 1; }
+        [[ -f "$CONFIG_DIR/shell.qml" ]] || { echo "bar: no shell.qml under $CONFIG_DIR" >&2; exit 1; }
+        cd "$HOME" 2>/dev/null || cd /
+        # The bar's own state (screensaver times, the key overlay switch)
+        # lives here; quickshell writes files but cannot make the directory.
+        mkdir -p -- "${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/bar" 2>/dev/null || true
+        # No core file. The bar's memory holds what passed through it
+        # (notification text, the key overlay's chords), and dropping a value
+        # does not clear the bytes it took: a crash would have
+        # systemd-coredump keep all of it on disk for two weeks. A soft limit
+        # of 0 makes it store none. Only the soft limit, and the old value is
+        # passed on, so app-scope.sh gives the programs the bar starts theirs
+        # back: a crash there is the user's to debug.
+        BAR_APP_CORE_LIMIT=$(ulimit -S -c)
+        export BAR_APP_CORE_LIMIT
+        ulimit -S -c 0
+        # No detailed log either: quickshell writes every debug message to
+        # one (log.qslog, for `qs log`), whatever the log rules show, and
+        # those carry each Hyprland event with its window title (a kitty's
+        # title is the command line being run) and every D-Bus property
+        # change (track titles), for as long as the bar runs, and copies it
+        # to ~/.cache/quickshell/crashes on a crash. BAR_DETAILED_LOGS=1 in
+        # the user manager's environment keeps it, for chasing a bar bug:
+        #   systemctl --user set-environment BAR_DETAILED_LOGS=1; bar --restart
+        local_log=(--no-detailed-logs)
+        [[ "${BAR_DETAILED_LOGS:-}" == 1 ]] && local_log=()
+        exec "$(runner)" -n "${local_log[@]}" --log-rules "$LOG_RULES" -p "$CONFIG_DIR"
+        ;;
+    *)
+        echo "usage: bar [--restart|--stop|--status|--log|--once]" >&2
+        exit 2
+        ;;
+esac

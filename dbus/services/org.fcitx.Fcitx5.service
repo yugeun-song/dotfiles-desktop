@@ -1,0 +1,6 @@
+# Shadows the packaged file from ~/.local/share/dbus-1/services. The only
+# change is SystemdService=: see systemd/user/fcitx5.service for why.
+[D-BUS Service]
+Name=org.fcitx.Fcitx5
+Exec=/usr/bin/fcitx5
+SystemdService=fcitx5.service

@@ -1,0 +1,27 @@
+# dotfiles-desktop
+# The input method. fcitx5 ships only D-Bus activation, which spawns it with
+# the bus's environment; one activated during logout outlived the session bound
+# to a dead display. dbus/services/org.fcitx.Fcitx5.service routes activation
+# here so fcitx5 always runs in the session's environment and ends with it.
+#
+# -r replaces a leftover instance that would otherwise hold the bus name and
+# make this unit fail into its start limit.
+[Unit]
+Description=Input method
+PartOf=hyprland-session.target
+After=hyprland-session.target
+Requisite=hyprland-session.target
+ConditionPathExists=/usr/bin/fcitx5
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=dbus
+BusName=org.fcitx.Fcitx5
+WorkingDirectory=%h
+ExecStart=/usr/bin/fcitx5 -r
+Restart=on-failure
+RestartSec=1
+Slice=session.slice
+# See bar.service.
+MemoryTHP=madvise

@@ -1,0 +1,25 @@
+# dotfiles-desktop
+# The wallpaper, separate from the bar so a bar restart keeps it. hyprpaper.conf
+# cannot name the image (see there); wallpaper.sh --reload sends it over IPC
+# after every start, crash restarts included. The dash keeps a missing image
+# from failing the unit.
+[Unit]
+Description=Wallpaper
+PartOf=hyprland-session.target
+After=hyprland-session.target
+Requisite=hyprland-session.target
+ConditionPathExists=/usr/bin/hyprpaper
+StartLimitIntervalSec=120
+StartLimitBurst=5
+
+[Service]
+Type=simple
+WorkingDirectory=%h
+ExecStart=/usr/bin/hyprpaper
+ExecStartPost=-%E/hypr/scripts/wallpaper.sh --reload
+# always, not on-failure: see bar.service.
+Restart=always
+RestartSec=1
+Slice=session.slice
+# See bar.service.
+MemoryTHP=madvise

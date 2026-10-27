@@ -1,0 +1,14 @@
+*.qmlc
+*.jsc
+.qmlls.ini
+.DS_Store
+
+# Temp files an interrupted fcitx5 save leaves beside its target.
+fcitx5/conf/*_??????
+fcitx5/*_??????
+
+__pycache__/
+*.pyc
+
+# Per-machine deviations from the tracked preset hypr/monitor_settings.lua.
+hypr/monitor_settings.local.lua
