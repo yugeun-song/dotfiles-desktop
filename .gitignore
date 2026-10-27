@@ -6,6 +6,8 @@
 # Temp files an interrupted fcitx5 save leaves beside its target.
 fcitx5/conf/*_??????
 fcitx5/*_??????
+# fcitx5's own list of the keyboard layouts, built from xkeyboard-config.
+fcitx5/conf/cached_layouts
 
 __pycache__/
 *.pyc
