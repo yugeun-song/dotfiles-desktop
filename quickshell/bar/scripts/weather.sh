@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
-# Weather from Open-Meteo (no API key) for fixed coordinates; no geolocation.
-# Edit the location block below, or set it in the environment:
+# Weather from Open-Meteo (no API key) for one place; no geolocation. The
+# place is the one the bar's place panel kept (modules/WeatherPanel.qml), in
+# the bar's state directory and never in the repository; else Seoul, the
+# default. WEATHER_LAT and WEATHER_LON in the environment override both:
 #   WEATHER_LAT=35.1796 WEATHER_LON=129.0756 WEATHER_NAME=Busan weather.sh
 #
 #   (default)  one-line summary
@@ -10,6 +12,11 @@
 #   --bar      one line of compact JSON, for the bar
 #   --refresh  ask the network even when the cache is fresh; a failed fetch
 #              still falls back to the cache
+#   --search NAME          the places by that name, one line of JSON
+#                          (Open-Meteo's geocoding, on GeoNames' data);
+#                          the bar gives NAME in WEATHER_QUERY instead
+#   --set NAME LAT LON TZ  keep that place for every later run
+#   --reset                forget it: Seoul again
 #
 # Requires: curl, jq
 
@@ -18,6 +25,79 @@ set -uo pipefail
 for dep in curl jq; do
     command -v "$dep" >/dev/null 2>&1 || { echo "weather.sh: $dep is required" >&2; exit 1; }
 done
+
+# The picked place, beside the bar's other choices (services/Paths.qml).
+PLACE_FILE="${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/bar/weather-place"
+GEOCODE="https://geocoding-api.open-meteo.com/v1/search"
+
+# A place from four strings, or nothing when they make none. The file is
+# checked on every read as well, since anything could have written it: the
+# name loses control characters and stays short, and the zone must look like
+# an IANA name, as it goes into the query string.
+place_of() {
+    jq -nc --arg name "$1" --arg lat "$2" --arg lon "$3" --arg tz "$4" '
+        ($lat | tonumber? // null) as $la | ($lon | tonumber? // null) as $lo
+        | ($name | gsub("[[:cntrl:]]"; "") | .[0:60]) as $n
+        | select($la != null and $lo != null and $la >= -90 and $la <= 90
+                 and $lo >= -180 and $lo <= 180 and ($n | length) > 0
+                 and ($tz | test("^[A-Za-z0-9_+/-]{1,64}$")))
+        | {name: $n, lat: $la, lon: $lo, tz: $tz}'
+}
+
+read_place() {
+    local fields name lat lon tz
+    [[ -s "$PLACE_FILE" ]] || return 1
+    fields=$(jq -r 'select(type == "object") | [.name, .lat, .lon, .tz] | map(tostring) | @tsv' \
+        "$PLACE_FILE" 2>/dev/null) || return 1
+    IFS=$'\t' read -r name lat lon tz <<<"$fields"
+    place_of "$name" "$lat" "$lon" "$tz"
+}
+
+# The places by that name as one line, {query, results: [{name, admin,
+# country, lat, lon, tz}]} or {query, error}. The query comes back with
+# them, so the bar can drop an answer to a name it no longer asks for. It
+# reaches curl on stdin, never in an argument list any local process could
+# read, and so does it come from the bar (WEATHER_QUERY).
+search_places() {
+    local query=${1:0:100} body
+    if (( ${#query} < 2 )); then
+        jq -nc --arg q "$1" '{query: $q, results: []}'
+        return
+    fi
+    if ! body=$(printf '%s' "$query" | curl -fsSL --proto '=https' --proto-redir '=https' --max-redirs 3 \
+            --max-time 10 --max-filesize 1048576 --get --data-urlencode "name@-" --data count=8 \
+            --data language=en --data format=json "$GEOCODE"); then
+        jq -nc --arg q "$1" '{query: $q, error: "unreachable"}'
+        return
+    fi
+    printf '%s' "$body" | jq -c --arg q "$1" '{query: $q, results: [.results[]? | {
+            name: (.name // ""), admin: (.admin1 // ""), country: (.country // ""),
+            lat: .latitude, lon: .longitude, tz: (.timezone // "auto")}
+        | select((.lat | type) == "number" and (.lon | type) == "number" and .name != "")]}' \
+        2>/dev/null || jq -nc --arg q "$1" '{query: $q, error: "unreadable"}'
+}
+
+case "${1:-}" in
+    --search)
+        search_places "${WEATHER_QUERY-${2:-}}"
+        exit 0
+        ;;
+    --set)
+        place=$(place_of "${2:-}" "${3:-}" "${4:-}" "${5:-}")
+        [[ -n "$place" ]] || { echo "weather.sh: not a place" >&2; exit 2; }
+        dir=${PLACE_FILE%/*}
+        mkdir -p "$dir" && tmp=$(mktemp "$dir/.weather-place.XXXXXX") || exit 1
+        if printf '%s\n' "$place" > "$tmp" && mv -f "$tmp" "$PLACE_FILE"; then
+            exit 0
+        fi
+        rm -f "$tmp"
+        exit 1
+        ;;
+    --reset)
+        rm -f -- "$PLACE_FILE"
+        exit 0
+        ;;
+esac
 
 MODE=""
 REFRESH=0
@@ -29,7 +109,16 @@ for arg in "$@"; do
     fi
 done
 
-# Location. Coordinates: https://open-meteo.com/en/docs (geocoding section).
+# Location: the environment's, else the saved place, else Seoul's centre as a
+# geocoder gives it (never a home's: the repository is public).
+PLACE_SOURCE="default"
+if [[ -n "${WEATHER_LAT:-}" && -n "${WEATHER_LON:-}" ]]; then
+    PLACE_SOURCE="env"
+elif place=$(read_place) && [[ -n "$place" ]]; then
+    IFS=$'\t' read -r WEATHER_NAME WEATHER_LAT WEATHER_LON WEATHER_TZ \
+        < <(printf '%s' "$place" | jq -r '[.name, .lat, .lon, .tz] | map(tostring) | @tsv')
+    PLACE_SOURCE="saved"
+fi
 WEATHER_LAT="${WEATHER_LAT:-37.5665}"
 WEATHER_LON="${WEATHER_LON:-126.9780}"
 WEATHER_NAME="${WEATHER_NAME:-Seoul}"
@@ -51,7 +140,7 @@ PARAMS+="&timezone=${WEATHER_TZ}&forecast_days=3"
 # https only, redirects included: the query string carries the coordinates.
 fetch() {
     curl -fsSL --proto '=https' --proto-redir '=https' --max-redirs 3 \
-        --max-time 10 "${API}?${PARAMS}"
+        --max-time 10 --max-filesize 1048576 "${API}?${PARAMS}"
 }
 
 cache_mtime() {
@@ -173,9 +262,13 @@ case "$MODE" in
         ;;
     --bar)
         # Single line for the bar's line parser.
-        printf '%s' "$json" | jq -c --arg place "$WEATHER_NAME" --argjson fetched "$FETCHED" \
+        printf '%s' "$json" | jq -c --arg place "$WEATHER_NAME" --arg source "$PLACE_SOURCE" \
+            --arg lat "$WEATHER_LAT" --arg lon "$WEATHER_LON" --argjson fetched "$FETCHED" \
             --argjson live "$( (( LIVE )) && echo true || echo false )" '{
             place:    $place,
+            source:   $source,
+            lat:      ($lat | tonumber? // null),
+            lon:      ($lon | tonumber? // null),
             fetched:  $fetched,
             live:     $live,
             code:     .current.weather_code,

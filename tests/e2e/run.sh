@@ -1544,11 +1544,62 @@ else
         quiet_since "$mark" '[@/](ScreenShare|MediaChip)\.qml'
 fi
 
-# 27. The unlock's sweep (modules/UnlockSweep.qml): told of a lock the
+# 27. The weather's place panel (modules/WeatherPanel.qml; the user,
+# 2026-10-27), laid out as the Displays panel: a click on the weather opens
+# it over that screen, the item lit and the field taking the keys; a name
+# typed is asked of weather.sh (defang.py's stand-in finds one place, named
+# as asked); Enter takes it, kept in the bar's state, and the bar shows it.
+# Opened again it offers Seoul back: Ctrl+N and Ctrl+P walk the rows as Down
+# and Up do, and Enter takes it. Esc closes it, and so does a click beside
+# the card.
+mark=$(output_mark)
+weather_is() { [[ "$(ipc e2e weather | jq -r "$1")" == "$2" ]]; }
+weather_x() { x=$(ipc e2e weather | jq -r .x 2>/dev/null); [[ $x =~ ^[0-9]+$ ]] && (( x > 0 )); }
+weather_click() { weather_x && input move 2000 600 sleep 100 move "$x" 16 sleep 200 click sleep 400; }
+panel_up() { weather_is .open true && has_layer quickshell:weather HEADLESS-2; }
+panel_gone() { weather_is .open false && lacks_layer quickshell:weather; }
+kept="$WORK/state/quickshell/bar/weather-place"
+
+if ! wait_for 5 weather_x; then
+    fail "the weather: not found on the bar"
+else
+    weather_click
+    check "a click on the weather opens its place panel over that screen" wait_for 3 panel_up
+    check "and the weather stays lit meanwhile" weather_is .lit true
+    input type Busan sleep 600
+    check "a name typed there is asked for" wait_for 3 weather_is '.places | join(",")' Busan
+    input key 28 sleep 300
+    check "Enter takes the place, kept in the bar's state" wait_for 3 file_is "$kept" Busan
+    check "and the bar shows it" wait_for 5 weather_is .place Busan
+    check "and the panel closes" wait_for 3 panel_gone
+    weather_click
+    check "opened again" wait_for 3 panel_up
+    input key ctrl 49 sleep 200
+    check "Ctrl+N walks down" wait_for 2 weather_is .row 1
+    input key ctrl 25 sleep 200
+    check "and Ctrl+P back up" wait_for 2 weather_is .row 0
+    input key 108 sleep 200
+    check "as Down does" wait_for 2 weather_is .row 1
+    input key 28 sleep 300
+    check "it offers Seoul back, and the kept place goes" wait_for 3 test ! -e "$kept"
+    check "and the bar is back on the default" wait_for 5 weather_is .place Test
+    weather_click
+    wait_for 3 panel_up
+    input key 1 sleep 300
+    check "Esc closes it" wait_for 3 panel_gone
+    weather_click
+    wait_for 3 panel_up
+    input move 120 1300 sleep 200 click sleep 300
+    check "and so does a click beside the card" wait_for 3 panel_gone
+    check "the panel raised no QML warning" \
+        quiet_since "$mark" '[@/](WeatherPanel|StatusItems?|Weather)\.qml'
+fi
+
+# 28. The unlock's sweep (modules/UnlockSweep.qml): told of a lock the
 # compositor confirms, each screen keeps a capture in an overlay the lock
 # hides, and at the unlock draws it up off the screen and lets it go. The
 # compositor's answer to `hyprctl locked` is a stand-in on the bar's PATH:
-# nothing unlocks a real lock here without a password (scenario 28 locks for
+# nothing unlocks a real lock here without a password (scenario 29 locks for
 # real, last).
 mark=$(output_mark)
 real_hyprctl=$(command -v hyprctl)
@@ -1569,7 +1620,7 @@ check "at the unlock the sheet is drawn up and goes" wait_for 3 lacks_layer quic
 check "the sweep raised no QML warning" quiet_since "$mark" '[@/]UnlockSweep\.qml'
 rm -f "$WORK/bin/hyprctl" "$WORK/fake-locked"
 
-# 28. The lock screen as the user's design has it (hyprlock.conf,
+# 29. The lock screen as the user's design has it (hyprlock.conf,
 # scripts/lock-media.py, scripts/lock-colours.py), on the nested compositor
 # only and last, since a lock that is killed rather than unlocked leaves that
 # compositor locked. Over a wallpaper light down to the field and dark under

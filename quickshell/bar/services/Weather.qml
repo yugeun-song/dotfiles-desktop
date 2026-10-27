@@ -8,7 +8,7 @@ import qs.services
 Singleton {
     id: root
 
-    // Location is configured in scripts/weather.sh (fixed coordinates).
+    // The place is weather.sh's: the one the place panel kept, else Seoul.
     property var data: null
 
     readonly property bool ready: root.data !== null
@@ -81,6 +81,78 @@ Singleton {
                 root.start();
             }
         }
+        // A place picked while that run was out: it was for the old one.
+        if (root.placeQueued) {
+            root.placeQueued = false;
+            retry.stop();
+            root.start();
+        }
+    }
+
+    // The place panel (modules/WeatherPanel.qml), opened by a click on the
+    // weather on the screen whose bar it was; the item stays lit meanwhile.
+    property bool panelOpen: false
+    property var panelScreen: null
+
+    function togglePanel(screen): void {
+        if (!root.panelOpen)
+            root.panelScreen = screen;
+        root.panelOpen = !root.panelOpen;
+    }
+
+    // The panel's search, through weather.sh: the name asked for last and
+    // the places found for it. A name typed while a search runs is asked
+    // for once that one ends, and an answer to an older name is dropped.
+    // Neither names nor places are logged.
+    property string query: ""
+    property var places: []
+    property string searchError: ""
+    // The name `places` answers, so the panel can tell "nothing found" from
+    // "not answered yet".
+    property string answered: ""
+    property bool searchAgain: false
+    property bool placeQueued: false
+    readonly property bool searching: placeSearch.running
+
+    function find(text: string): void {
+        root.query = text.trim();
+        if (root.query.length < 2) {
+            root.places = [];
+            root.searchError = "";
+            root.answered = root.query;
+            return;
+        }
+        if (placeSearch.running) {
+            root.searchAgain = true;
+            return;
+        }
+        // Answered already: no second request for the same name.
+        if (root.answered === root.query && root.searchError === "")
+            return;
+        // In the environment, not the argument list, which any local
+        // process can read while the search runs.
+        placeSearch.environment = { WEATHER_QUERY: root.query };
+        placeSearch.command = [Quickshell.shellPath("scripts/weather.sh"), "--search"];
+        placeSearch.running = true;
+    }
+
+    // A picked place, kept by weather.sh for every later run (the lock
+    // screen's too), and its weather fetched at once: its cache is another
+    // file, so nothing stale stands in.
+    function choose(place): void {
+        if (!place || placeSave.running)
+            return;
+        placeSave.command = [Quickshell.shellPath("scripts/weather.sh"), "--set",
+                             String(place.name), String(place.lat), String(place.lon), String(place.tz)];
+        placeSave.running = true;
+    }
+
+    // Back to the default, Seoul.
+    function forget(): void {
+        if (placeSave.running)
+            return;
+        placeSave.command = [Quickshell.shellPath("scripts/weather.sh"), "--reset"];
+        placeSave.running = true;
     }
 
     function start(): void {
@@ -146,6 +218,55 @@ Singleton {
         // quickshell closes stderr unless something reads it.
         stderr: SplitParser {
             onRead: line => console.warn("[weather]", line)
+        }
+    }
+
+    Process {
+        id: placeSearch
+
+        stdout: SplitParser {
+            onRead: line => {
+                let parsed = null;
+                try {
+                    parsed = JSON.parse(line);
+                } catch (error) {
+                    console.warn("[weather] a search printed a line that is not JSON");
+                    return;
+                }
+                if (parsed?.query !== root.query)
+                    return;
+                root.places = Array.isArray(parsed.results) ? parsed.results : [];
+                root.searchError = parsed.error ?? "";
+                root.answered = parsed.query;
+            }
+        }
+
+        stderr: SplitParser {
+            onRead: line => console.warn("[weather]", line)
+        }
+
+        onExited: {
+            if (root.searchAgain) {
+                root.searchAgain = false;
+                Qt.callLater(() => root.find(root.query));
+            }
+        }
+    }
+
+    Process {
+        id: placeSave
+
+        stderr: SplitParser {
+            onRead: line => console.warn("[weather]", line)
+        }
+
+        onExited: {
+            root.failures = 0;
+            retry.stop();
+            if (fetch.running)
+                root.placeQueued = true;
+            else
+                Qt.callLater(root.start);
         }
     }
 

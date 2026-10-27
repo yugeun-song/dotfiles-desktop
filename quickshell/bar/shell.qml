@@ -41,6 +41,10 @@ ShellRoot {
         id: displays
     }
 
+    WeatherPanel {
+        id: weatherPanel
+    }
+
     // Inert until a display is given a time in the Displays panel, and held
     // off while that panel is open.
     ScreensaverDpms {

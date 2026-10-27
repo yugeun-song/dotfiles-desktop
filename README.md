@@ -213,7 +213,9 @@ The bar is the notification server (`services/Notifications.qml`): a day's
 history (`Super+N` or the bell), drawn and moving as the toasts; a toast
 dwells 5 s, critical 20 s; images are declined. `Super+/` lists every
 binding. Weather refetches when a link comes up and when NetworkManager
-sees the internet answer, so it shows within seconds of connecting.
+sees the internet answer, so it shows within seconds of connecting. A click
+on it picks the place (`modules/WeatherPanel.qml`), searched by name and
+kept in the bar's state, not here; Seoul by default.
 
 The bar writes no core file when it crashes and keeps no detailed log
 (window titles, track titles); `systemctl --user set-environment
@@ -357,7 +359,8 @@ stands only for that distribution, as Font Logos asks; no endorsement is
 implied.
 
 Weather data comes from [Open-Meteo](https://open-meteo.com) under CC BY
-4.0, through its free API for non-commercial use.
+4.0, through its free API for non-commercial use; the place search is its
+geocoding, on [GeoNames](https://www.geonames.org) data (CC BY 4.0).
 
 `tests/e2e/vinput/` holds two Wayland protocol files (virtual keyboard,
 wlroots virtual pointer), each under its own MIT licence, notices intact.

@@ -34,6 +34,9 @@ Item {
     property string unknown: ""
 
     property bool interactive: root.command !== null || root.menuEntries.length > 0
+    // Lit as pressed while a panel of the caller's own is open (the weather's
+    // place panel), as the menu below keeps it lit.
+    property bool held: false
     // Something opens while the pointer is on the item (the clock's month).
     property bool hoverable: false
     // Lit and pointed at: a click or the pointer acts here.
@@ -63,7 +66,7 @@ Item {
         anchors.topMargin: Theme.barInset
         anchors.bottomMargin: Theme.barInset
         radius: root.filled ? height / 2 : Theme.menuItemRadius
-        color: (click.pressed && root.interactive) || menu.open
+        color: (click.pressed && root.interactive) || menu.open || root.held
                ? (root.filled ? Qt.darker(root.activeFill, 1.25)
                               : Qt.rgba(Theme.fg.r, Theme.fg.g, Theme.fg.b, 0.20))
                : root.filled ? root.activeFill

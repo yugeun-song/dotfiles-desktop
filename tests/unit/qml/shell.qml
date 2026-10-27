@@ -591,6 +591,21 @@ ShellRoot {
         onLoadFailed: root.weatherCallCount = 0
     }
 
+    // The place panel's asks of weather.sh, a line each.
+    property var weatherAsks: []
+
+    FileView {
+        id: weatherAskLog
+
+        path: root.weatherDir + "/asks"
+        watchChanges: true
+        printErrors: false
+
+        onFileChanged: weatherAskLog.reload()
+        onLoaded: root.weatherAsks = weatherAskLog.text().split("\n").filter(l => l !== "")
+        onLoadFailed: root.weatherAsks = []
+    }
+
     // A link or the internet coming up during a fetch (Weather.kick) is not
     // dropped: it fetches again at once if that fetch failed, and not at all
     // if it succeeded. The stand-in takes 0.4 s; the first fetch starts as
@@ -616,6 +631,36 @@ ShellRoot {
                 check("weather: after a live fetch the kick fetches nothing more", root.weatherCallCount, 3);
                 check("weather: live resets the failures", Weather.failures, 0);
                 check("weather: the reading is shown", Weather.ready, true);
+            } },
+            // The place panel's search: one letter asks nothing; a name
+            // typed while a search runs is asked after it, and the answer to
+            // the older name is dropped; a pick is kept by weather.sh and
+            // fetched at once; Seoul comes back through it too.
+            { wait: 0, run: () => {
+                Weather.find("B");
+                check("weather: one letter asks nothing", Weather.searching, false);
+                check("weather: and finds nothing", Weather.places.length, 0);
+                Weather.find("Bus");
+            } },
+            { wait: 100, run: () => {
+                check("weather: two letters ask", Weather.searching, true);
+                Weather.find(" Busan ");
+                check("weather: a name typed meanwhile waits for that ask", Weather.searchAgain, true);
+            } },
+            { wait: 1000, run: () => {
+                check("weather: the answer is the last name's", Weather.answered, "Busan");
+                check("weather: the older name's places are dropped", Weather.places.map(p => p.name).join(), "Busan");
+                check("weather: both names were asked, trimmed", root.weatherAsks.join("|"), "search Bus|search Busan");
+                Weather.choose(Weather.places[0]);
+            } },
+            { wait: 1300, run: () => {
+                check("weather: the pick goes to weather.sh", root.weatherAsks[root.weatherAsks.length - 1], "set Busan 35.1 129 Asia/Seoul");
+                check("weather: and its weather is fetched at once", root.weatherCallCount, 4);
+                Weather.forget();
+            } },
+            { wait: 500, run: () => {
+                check("weather: Seoul again through weather.sh", root.weatherAsks[root.weatherAsks.length - 1], "reset");
+                check("weather: and fetched again", root.weatherCallCount, 5);
             } }
         ];
     }

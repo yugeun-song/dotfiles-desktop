@@ -434,6 +434,9 @@ Singleton {
     // label; the card still fits the laptop panel's logical width.
     readonly property int displaysWidth:         root.px(880)
     readonly property int displaysPad:           root.px(26)
+    // The weather's place panel (WeatherPanel.qml), set as this one is but
+    // as wide as the launcher's card: a field and a list of names.
+    readonly property int weatherPanelWidth:     root.px(560)
     // Tall enough for a 16:10 panel beside a 16:9 desk monitor without
     // shrinking the numbers past legibility.
     readonly property int displaysCanvasHeight:  root.px(210)

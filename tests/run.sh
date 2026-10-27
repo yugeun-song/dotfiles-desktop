@@ -99,6 +99,7 @@ tests/unit/clipboard.sh || failed=1
 tests/unit/monitor-override.sh || failed=1
 tests/unit/recover.sh || failed=1
 tests/unit/alarm.sh || failed=1
+tests/unit/weather.sh || failed=1
 tests/unit/camera.sh || failed=1
 tests/unit/install.sh || failed=1
 for name in keyfeed keyfeed_hold inputstate camera_switch lock_media lock_colours share_apps polkit_tty obs_auth; do

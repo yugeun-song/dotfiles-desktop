@@ -63,6 +63,9 @@ edit(BAR / "services/Volume.qml", 'fallback.command = ["wpctl"', 'fallback.comma
 # through this id: the speaker's place depends on which readouts show.
 edit(BAR / "modules/StatusItems.qml", "        onActivated: Volume.toggleMute()",
      '        objectName: "e2e-sound"\n        onActivated: Volume.toggleMute()')
+# The weather, for the probe's weather(): it shows on every machine here.
+edit(BAR / "modules/StatusItems.qml", "        onActivated: Weather.togglePanel(",
+     '        objectName: "e2e-weather"\n        onActivated: Weather.togglePanel(')
 edit(BAR / "shell.qml", "    Variants {\n        model: Quickshell.screens\n",
      "    Variants {\n        id: e2eBars\n\n        model: Quickshell.screens\n")
 # The island on each bar, for the probe's island().
@@ -73,10 +76,21 @@ edit(BAR / "services/Alarms.qml",
      'command: ["true"]')
 
 (BAR / "scripts/app-scope.sh").write_text(f'#!/bin/sh\necho "app $*" >> {LOG}\n')
-(BAR / "scripts/weather.sh").write_text(
-    "#!/bin/sh\n"
-    "echo '{\"code\": 1, \"temp\": 18, \"feels\": 17, \"day\": 1, \"place\": \"Test\", "
-    "\"fetched\": '\"$(date +%s)\"', \"live\": true}'\n")
+# The weather, offline: a reading for "Test", or for the place the picker
+# kept; its search finds one place, named as asked.
+(BAR / "scripts/weather.sh").write_text(r'''#!/bin/sh
+kept="${XDG_STATE_HOME:-$HOME/.local/state}/quickshell/bar/weather-place"
+case "$1" in
+    --search)
+        printf '{"query": "%s", "results": [{"name": "%s", "admin": "", "country": "Testland", "lat": 1.5, "lon": 2.5, "tz": "UTC"}]}\n' "$WEATHER_QUERY" "$WEATHER_QUERY"
+        exit 0 ;;
+    --set) mkdir -p "${kept%/*}"; printf '%s\n' "$2" > "$kept"; exit 0 ;;
+    --reset) rm -f "$kept"; exit 0 ;;
+esac
+place=Test source=default
+if [ -s "$kept" ]; then place=$(cat "$kept"); source=saved; fi
+echo "{\"code\": 1, \"temp\": 18, \"feels\": 17, \"day\": 1, \"place\": \"$place\", \"source\": \"$source\", \"fetched\": $(date +%s), \"live\": true}"
+''')
 (WORK / "keyfeed-stub").write_text(f'''#!/usr/bin/env python3
 import json, os, sys, threading
 # Steered as the real reader is: paused until the bar says resume, and gone
@@ -170,6 +184,35 @@ probe = '''
             const p = speaker ? speaker.mapToItem(null, speaker.width / 2, speaker.height / 2) : null;
             return JSON.stringify({ x: p ? Math.round(p.x) : -1, y: p ? Math.round(p.y) : -1,
                                     known: Volume.known });
+        }
+        // The weather on HEADLESS-2's bar: its centre in that screen's
+        // pixels, whether its place panel is open, the row lit there, and
+        // what the panel has asked and found.
+        function weather(): string {
+            const find = item => {
+                if (!item)
+                    return null;
+                if (item.objectName === "e2e-weather")
+                    return item;
+                for (let i = 0; i < item.children.length; i++) {
+                    const hit = find(item.children[i]);
+                    if (hit)
+                        return hit;
+                }
+                return null;
+            };
+            let spot = null;
+            for (let i = 0; i < e2eBars.instances.length; i++) {
+                const bar = e2eBars.instances[i];
+                if (bar.screen && bar.screen.name === "HEADLESS-2")
+                    spot = find(bar.contentItem);
+            }
+            const p = spot && spot.visible ? spot.mapToItem(null, spot.width / 2, spot.height / 2) : null;
+            return JSON.stringify({ x: p ? Math.round(p.x) : -1, y: p ? Math.round(p.y) : -1,
+                                    open: Weather.panelOpen, lit: spot ? spot.held : false,
+                                    row: weatherPanel.highlighted,
+                                    place: Weather.place, query: Weather.query,
+                                    places: Weather.places.map(q => q.name) });
         }
         // The island on each screen: its width and the parts it holds.
         function island(): string {

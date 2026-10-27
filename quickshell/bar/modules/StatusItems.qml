@@ -222,10 +222,12 @@ Row {
 
     // A stale reading stays visible, marked unknown, so the failure reads as
     // the feed's rather than the bar's. 1 h = four missed 15 min polls. A
-    // plain readout, no click and so no hover (the user, 2026-10-26): what
-    // the click's refetch was for, a network up after the bar, Weather does
-    // by itself when a link comes up and the internet answers.
+    // click opens the place panel (WeatherPanel.qml; the user, 2026-10-27);
+    // a network up after the bar Weather handles by itself, when a link comes
+    // up and the internet answers.
     StatusItem {
+        id: weatherItem
+
         visible: Weather.ready
         unknown: Weather.unknown || Theme.stale(Weather.asOf, 3600000)
         icon: Theme.weatherIcon(Weather.code, Weather.day)
@@ -233,6 +235,9 @@ Row {
         // The place stays: unlike the machine readouts, the number needs it.
         label: Weather.place !== "" ? `${Weather.place}, ${Weather.temp}°`
                                     : `${Weather.temp}°`
+        interactive: true
+        held: Weather.panelOpen
+        onActivated: Weather.togglePanel(weatherItem.QsWindow.window?.screen ?? null)
     }
 
     // No glyph.

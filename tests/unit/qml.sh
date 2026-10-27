@@ -167,10 +167,23 @@ exec tail -n 0 -F --pid="$PPID" "$CAMERA_TEST_DIR/events"
 EOF
 chmod +x "$WORK/bin/camera-switch-stub" "$WORK/bin/udevadm"
 # The weather fetch, in the copy: each run is logged, takes 0.4 s like a
-# slow network, and reports live or not as $WORK/weather/live says.
+# slow network, and reports live or not as $WORK/weather/live says. The
+# place panel's asks are logged apart; a search takes 0.3 s and finds one
+# place named as asked, so an answer tells which ask it was for.
 mkdir -p "$WORK/weather"
 cat > "$WORK/bar/scripts/weather.sh" <<'EOF'
 #!/bin/sh
+case "$1" in
+    --search)
+        echo "search $WEATHER_QUERY" >> "$WEATHER_TEST_DIR/asks"
+        # The name comes in the environment; one in the arguments is a fault.
+        [ -z "${2:-}" ] || echo "search argument $2" >> "$WEATHER_TEST_DIR/asks"
+        sleep 0.3
+        printf '{"query": "%s", "results": [{"name": "%s", "admin": "Busan", "country": "South Korea", "lat": 35.1, "lon": 129.0, "tz": "Asia/Seoul"}]}\n' "$WEATHER_QUERY" "$WEATHER_QUERY"
+        exit 0 ;;
+    --set) echo "set $2 $3 $4 $5" >> "$WEATHER_TEST_DIR/asks"; exit 0 ;;
+    --reset) echo reset >> "$WEATHER_TEST_DIR/asks"; exit 0 ;;
+esac
 echo run >> "$WEATHER_TEST_DIR/calls"
 sleep 0.4
 live=$(cat "$WEATHER_TEST_DIR/live" 2>/dev/null || echo false)
