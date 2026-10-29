@@ -14,21 +14,27 @@ Row {
     property real level: -1
     property real battery: -1
     property color tone: Theme.islandText
-    // Its width, the island's for it (as wide as it holds; the user,
-    // 2026-10-26), summed from the parts, since the row's own width loops
-    // through the room. By what each part is given, not by `visible`, which
-    // turns false with the island's part while that is shut and went round
-    // through its width.
-    readonly property int natural: {
-        const widths = [Math.ceil(glyphText.width), Math.ceil(words.width), Theme.shareGap - root.spacing];
+    // The most the island gives it (MediaChip.eventRoom), -1 for no bound:
+    // past it the words are cut short, never the value at the right end,
+    // which the island's clip took instead.
+    property int room: -1
+    // Everything but the words, each part with the spacing beside it. By
+    // what each part is given, not by `visible`, which turns false with the
+    // island's part while that is shut and went round through its width.
+    readonly property int others: {
+        const widths = [Math.ceil(glyphText.width), Theme.shareGap - root.spacing];
         if (root.level >= 0)
             widths.push(levelBar.width);
         if (root.value !== "")
             widths.push(Math.ceil(valueText.width));
         if (root.battery >= 0)
             widths.push(cellBox.width);
-        return widths.reduce((sum, w) => sum + w, 0) + root.spacing * (widths.length - 1);
+        return widths.reduce((sum, w) => sum + w, 0) + root.spacing * widths.length;
     }
+    // Its width, the island's for it (as wide as it holds; the user,
+    // 2026-10-26), summed from the parts, since the row's own width loops
+    // through the room.
+    readonly property int natural: root.others + Math.ceil(words.width)
 
     spacing: Theme.px(8)
 
@@ -48,7 +54,8 @@ Row {
         id: words
 
         anchors.verticalCenter: parent.verticalCenter
-        width: Math.min(implicitWidth, Theme.islandEventTextMax)
+        width: Math.max(0, Math.min(implicitWidth, Theme.islandEventTextMax,
+                                    root.room >= 0 ? root.room - root.others : implicitWidth))
         height: Theme.barLineHeight
         verticalAlignment: Text.AlignVCenter
         elide: Text.ElideRight

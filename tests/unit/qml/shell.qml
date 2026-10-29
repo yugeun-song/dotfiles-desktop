@@ -1039,6 +1039,32 @@ ShellRoot {
         check("obs: a failed request changes nothing", Obs.streaming, true);
         Obs.lost();
         check("obs: the connection gone, nothing shows", [Obs.identified, Obs.active], [false, false]);
+
+        check("event: unbounded, as wide as it holds", freeEvent.natural > tightEvent.room, true);
+        check("event: held to its room", tightEvent.natural, tightEvent.room);
+        check("event: the words give way, not the level or the value", tightEvent.others, freeEvent.others);
+    }
+
+    // One readout twice: free, and given less room than it holds.
+    IslandEvent {
+        id: freeEvent
+
+        visible: false
+        glyph: Theme.iconVolume
+        text: "Brightness"
+        value: "75%"
+        level: 0.75
+    }
+
+    IslandEvent {
+        id: tightEvent
+
+        visible: false
+        room: freeEvent.natural - Theme.px(30)
+        glyph: Theme.iconVolume
+        text: "Brightness"
+        value: "75%"
+        level: 0.75
     }
 
     function testBrightness() {

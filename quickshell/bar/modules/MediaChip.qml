@@ -43,7 +43,7 @@ Item {
     // (the user, 2026-10-26).
     readonly property bool eventShown: Media.islandOn && Island.kind !== "" && Island.screen === root.screenName
         && !card.shown && !card.holding
-    readonly property bool eventWanted: root.eventShown && root.rowRoom >= Theme.islandArtSize
+    readonly property bool eventWanted: root.eventShown && root.eventRoom >= Theme.islandArtSize
 
     // Each part only where it fits: an event alone; then the share, OBS and
     // a call, what goes out before what is heard; what plays in what is left.
@@ -296,6 +296,11 @@ Item {
     // plays' width, then the one width, was too wide).
     readonly property int widest: root.musicShown ? root.musicWidest : root.otherWidest
     readonly property int rowRoom: Math.max(0, root.widest - Theme.islandPadX * 2)
+    // An event shows alone, so it is held to the row it has with nothing
+    // playing: the music island's most is a share of the idle width, under
+    // that row on the laptop panel, and cut the brightness value off with
+    // room to spare (the user, 2026-10-29).
+    readonly property int eventRoom: Math.max(0, root.otherWidest - Theme.islandPadX * 2)
     readonly property int musicLeastRow: Math.max(0, root.musicLeast - Theme.islandPadX * 2)
     readonly property int oneRow: Math.max(0, Math.min(root.otherWidest, Theme.islandMinWidth) - Theme.islandPadX * 2)
 
@@ -894,7 +899,7 @@ Item {
                     IslandPart {
                         id: eventPart
 
-                        readonly property int natural: Math.min(eventLoader.item?.natural ?? 0, root.rowRoom)
+                        readonly property int natural: Math.min(eventLoader.item?.natural ?? 0, root.eventRoom)
 
                         wanted: root.eventWanted
                         full: eventPart.natural
@@ -907,6 +912,7 @@ Item {
                             active: root.eventWanted || eventPart.open > 0
 
                             sourceComponent: IslandEvent {
+                                room: root.eventRoom
                                 glyph: root.eventGlyph
                                 text: root.eventText
                                 value: root.eventValue
