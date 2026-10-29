@@ -475,12 +475,12 @@ Singleton {
 
     // The unlock's sweep (UnlockSweep.qml): how often the compositor is asked
     // whether the lock is up, how often the lock screen is captured meanwhile,
-    // and how long the lock screen takes to leave by the top: a swipe let go
-    // (the user, 2026-10-26: a phone's), at the island's pace since the
-    // user found 420 ms slow (2026-10-27).
+    // and how long the lock screen takes to leave by the top: as a toast
+    // leaves (the user, 2026-10-29: the toasts' pace and smoothness), after a
+    // swipe let go at the island's pace (2026-10-27) still read abrupt.
     readonly property int unlockConfirmMs: 500
     readonly property int unlockCaptureMs: 1000
-    readonly property int unlockSweepMs:   root.notifEnterMs
+    readonly property int unlockSweepMs:   root.notifLeaveMs
 
     // ---------------------------------------------------------------------
     // spaceduck palette, matching the kitty theme

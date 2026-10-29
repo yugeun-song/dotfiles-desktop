@@ -116,6 +116,9 @@ Scope {
                 captureSource: root.screen
                 live: false
                 paintCursor: false
+                // Fades as it goes, gone seven tenths of the way up, as a
+                // toast fades by its width (NotificationToasts.qml).
+                opacity: Math.max(0, 1 + shot.y / (sheet.height * 0.7))
             }
 
             // The capture is a second old at most when the unlock comes. Not
@@ -127,8 +130,12 @@ Scope {
                 onTriggered: shot.captureFrame()
             }
 
-            // Quick from the first frame and easing off, as a swipe let go:
-            // the lock screen moves the moment the unlock lands.
+            // A toast's exit: from rest, then away. Easing off from a fast
+            // first frame moved the whole screen half its height in 50 ms,
+            // and a frame the unlock's own redraw held back showed as a jump.
+            // Quartic, not the toast's cubic, at the same length: held a
+            // moment longer, then pulled harder (the user, 2026-10-29: the
+            // pace was right, the pull wanted more).
             NumberAnimation {
                 id: sweepUp
 
@@ -137,7 +144,7 @@ Scope {
                 from: 0
                 to: -sheet.height
                 duration: Theme.unlockSweepMs
-                easing.type: Easing.OutCubic
+                easing.type: Easing.InQuart
                 onFinished: root.sweeping = false
             }
         }

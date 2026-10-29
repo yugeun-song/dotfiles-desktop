@@ -1651,7 +1651,7 @@ clock_box = (1110, 505, 1450, 572)
 clock = count(clock_box, lambda c: max(c) < 120)
 # The cover scenario 25 made: magenta, as the island's check reads it.
 cover = count((1009, 705, 1057, 752), lambda c: c[0] > 180 and c[1] < 90 and c[2] > 110)
-unlock = count((1130, 890, 1430, 935), beige)
+unlock = count((1130, 917, 1430, 962), beige)
 # The play-pause disc in the clock's dark, not washed by the card's pane.
 ink = min(pixels(clock_box), key=sum)
 toggle = min(pixels((1260, 772, 1300, 812)), key=sum)
