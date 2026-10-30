@@ -114,6 +114,14 @@ hl.config({
         -- 2 would also require a game content type. Explicit sync is no
         -- longer an option (mesa/DRM own it).
         direct_scanout = 1,
+        -- Off: since 0.57 a fullscreen window is offered the HDR description,
+        -- and the monitor switches to HDR once the window draws HDR, back to
+        -- SDR on leaving. aquamarine commits each switch as a modeset, and
+        -- the HDMI Philips went black for about ten seconds entering
+        -- fullscreen video. Its 8-bit link would only band HDR anyway
+        -- (Hyprland's "not in 10-bit mode" warning). HDR video is tone-mapped
+        -- to SDR instead. Revisit on DisplayPort at 10 bits.
+        cm_auto_hdr = 0,
     },
 
     cursor = {
