@@ -1007,6 +1007,126 @@ ShellRoot {
         const bt2 = Island.btStep(bt1.state, [{ address: "B", name: "Mouse", battery: -1 }]);
         check("bluetooth: a device gone is said too", bt2.alerts.map(a => [a.text, a.value]), [["Earbuds", "Disconnected"]]);
 
+        // Wired outputs, as AudioDevices.islandView hands them over: USB devices by
+        // card, the jack's verdict from AudioPolicy.
+        const view = (outs, jack, jackLabel) => ({ outs: outs, jack: jack ?? "", jackLabel: jackLabel ?? "" });
+        const told = step => step.alerts.map(a => [a.text, a.value]);
+        const usbOut = { label: "USB Earphones", kind: "usb" };
+        const out0 = Island.outputsStep(null, view({ "87": usbOut }));
+        check("outputs: the first look is the state", out0.alerts, []);
+        const outIn = Island.outputsStep(view({}), view({ "87": usbOut }));
+        check("outputs: a USB output plugged in", told(outIn), [["USB Earphones", "Connected"]]);
+        check("outputs: drawn as the Bluetooth pair is",
+              [outIn.alerts[0].glyph, String(outIn.alerts[0].tone)], [Theme.iconHeadphones, String(Theme.islandBlue)]);
+        check("outputs: and pulled out", told(Island.outputsStep(outIn.state, view({}))), [["USB Earphones", "Disconnected"]]);
+        check("outputs: plugged in again within one settle reads as plugged in",
+              told(Island.outputsStep(outIn.state, view({ "93": usbOut }))),
+              [["USB Earphones", "Disconnected"], ["USB Earphones", "Connected"]]);
+        check("outputs: the same card, nothing to tell", told(Island.outputsStep(outIn.state, view({ "87": usbOut }))), []);
+        check("outputs: the jack as AudioPolicy tells it",
+              [told(Island.outputsStep(view({}), view({}, "plugged", "Headphones"))),
+               told(Island.outputsStep(view({}), view({}, "pulled", "Headphones")))],
+              [[["Headphones", "Connected"]], [["Headphones", "Disconnected"]]]);
+
+        // The policy, on snapshots as AudioDevices.snapshot() makes them: the
+        // laptop's card 45 and what is plugged in; `at` in ms.
+        const dev = (dir, name, kind, priority, serial, more) => Object.assign(
+            { dir: dir, name: name, label: name, kind: kind, card: "45", priority: priority, serial: serial, webcam: false }, more ?? {});
+        const card = {
+            "spk#52": dev("sink", "spk", "fallback", 712, 52), "hp#53": dev("sink", "hp", "jack", 1000, 53),
+            "hdmi#54": dev("sink", "hdmi", "", 664, 54),
+            "mic#57": dev("source", "mic", "fallback", 1584, 57), "hs#58": dev("source", "hs", "jack", 1728, 58)
+        };
+        const usbPair = {
+            "usbOut#161": dev("sink", "usbOut", "usb", 1109, 161, { card: "87" }),
+            "usbIn#162": dev("source", "usbIn", "usb", 2109, 162, { card: "87" })
+        };
+        const shot = (at, extra, sink, source, more) => Object.assign({
+            at: at, nodes: Object.assign({}, card, extra),
+            sink: { def: sink[0], conf: sink[1] }, source: { def: source[0], conf: source[1] }
+        }, more ?? {});
+        // What AudioDevices carries over: the step's jackIn and cardSince on the snapshot.
+        const carried = (snap, step) => Object.assign({}, snap, { jackIn: step.jackIn, cardSince: step.cardSince });
+        const run = (was, now, quiet) => {
+            const step = AudioPolicy.step(was, now, quiet ?? false);
+            return { step: step, state: carried(now, step) };
+        };
+        const wants = r => r.step.intents.map(i => [i.dir, i.name, i.why]);
+        const calm = run(null, shot(0, {}, ["hp", "hp"], ["hs", "hs"]));
+        check("policy: nothing plugged in from the first snapshot",
+              wants(run(null, shot(0, usbPair, ["hp", "hp"], ["hs", "hs"]))), []);
+        check("policy: but the speaker as the choice gives way to the jack at once",
+              wants(run(null, shot(0, {}, ["spk", "spk"], ["hs", "hs"]))), [["sink", "hp", "jack first"]]);
+        check("policy: and the built-in microphone to the headset jack",
+              wants(run(null, shot(0, {}, ["hp", "hp"], ["mic", "mic"]))), [["source", "hs", "jack first"]]);
+        const plugIn = run(calm.state, shot(10000, usbPair, ["hp", "hp"], ["hs", "hs"]));
+        check("policy: a USB headset plugged in takes output and microphone",
+              wants(plugIn), [["sink", "usbOut", "plugged"], ["source", "usbIn", "plugged"]]);
+        check("policy: nothing to write when it is the choice already",
+              wants(run(calm.state, shot(10000, usbPair, ["usbOut", "usbOut"], ["usbIn", "usbIn"]))), []);
+        const outOnly = run(calm.state, shot(10000, { "usbOut#161": usbPair["usbOut#161"] }, ["hp", "hp"], ["hs", "hs"]));
+        check("policy: its microphone a settle later still follows it",
+              wants(run(outOnly.state, shot(10300, usbPair, ["usbOut", "usbOut"], ["hs", "hs"]))), [["source", "usbIn", "plugged"]]);
+        const settled = run(plugIn.state, shot(20000, usbPair, ["usbOut", "usbOut"], ["usbIn", "usbIn"]));
+        check("policy: a new node of a card seen for long is a change of profile, not a plug",
+              wants(run(settled.state, shot(30000, { "usbOut#170": usbPair["usbOut#161"], "usbIn#162": usbPair["usbIn#162"] },
+                                         ["hp", "hp"], ["usbIn", "usbIn"]))), []);
+        check("policy: plugged in wins over the jack rule in the same settle",
+              wants(run(run(null, shot(0, {}, ["spk", "spk"], ["hs", "hs"])).state, shot(10000, usbPair, ["spk", "spk"], ["hs", "hs"]))),
+              [["sink", "usbOut", "plugged"], ["source", "usbIn", "plugged"]]);
+        check("policy: pulled out writes nothing; WirePlumber falls back",
+              wants(run(settled.state, shot(30000, {}, ["spk", ""], ["mic", ""]))), []);
+        check("policy: a webcam's microphone is not taken",
+              wants(run(calm.state, shot(10000, { "cam#200": dev("source", "cam", "usb", 2109, 200, { card: "90", webcam: true }) },
+                                          ["hp", "hp"], ["hs", "hs"]))), []);
+        const btPair = { "btOut#300": dev("sink", "btOut", "bluetooth", 1010, 300, { card: "95" }),
+                         "btIn#301": dev("source", "btIn", "bluetooth", 2010, 301, { card: "95" }) };
+        check("policy: Bluetooth takes both, its microphone being WirePlumber's loopback",
+              wants(run(calm.state, shot(10000, btPair, ["hp", "hp"], ["hs", "hs"]))),
+              [["sink", "btOut", "plugged"], ["source", "btIn", "plugged"]]);
+        check("policy: of two outputs arriving at once, the higher ranked",
+              wants(run(calm.state, shot(10000, { "a#400": dev("sink", "a", "bluetooth", 1010, 401, { card: "96" }),
+                                                   "b#401": dev("sink", "b", "bluetooth", 1020, 400, { card: "97" }) },
+                                          ["hp", "hp"], ["hs", "hs"]))),
+              [["sink", "b", "plugged"]]);
+        check("policy: the configured device among those arriving stays the choice",
+              wants(run(calm.state, shot(10000, Object.assign({}, usbPair, btPair), ["hp", "btOut"], ["hs", "btIn"]))), []);
+        check("policy: held back while quiet",
+              wants(run(calm.state, shot(1000, usbPair, ["hp", "hp"], ["hs", "hs"]), true)), []);
+        const noCard = run(null, shot(0, {}, ["", ""], ["", ""], { nodes: {} }));
+        check("policy: the built-in card coming anew is a restart, its company no plug",
+              [run(noCard.state, shot(1000, usbPair, ["usbOut", ""], ["usbIn", ""])).step.restarted,
+               wants(run(noCard.state, shot(1000, usbPair, ["usbOut", ""], ["usbIn", ""])))], [true, []]);
+        check("policy: an application's own sink as the choice is left alone",
+              wants(run(calm.state, shot(10000, {}, ["hp", "zoomcombine"], ["hs", "hs"]))), []);
+        check("policy: so is a monitor's speakers",
+              wants(run(calm.state, shot(10000, {}, ["hdmi", "hdmi"], ["hs", "hs"]))), []);
+        check("policy: the jack rule keeps to one card",
+              wants(run(null, shot(0, { "spk2#90": dev("sink", "spk2", "fallback", 700, 90, { card: "99" }) },
+                                   ["spk2", "spk2"], ["hs", "hs"]))), []);
+
+        // The jack, read off the default.
+        const onSpk = run(null, shot(0, {}, ["spk", "hp"], ["mic", "mic"]));
+        check("policy: nothing known of the jack until the default has been on it", onSpk.step.jackIn, null);
+        const jackIn = run(onSpk.state, shot(5000, {}, ["hp", "hp"], ["mic", "mic"]));
+        check("policy: the default onto the jack is a plug", [jackIn.step.jack, jackIn.step.jackLabel, jackIn.step.jackIn], ["plugged", "hp", true]);
+        const jackOut = run(jackIn.state, shot(9000, {}, ["spk", "hp"], ["mic", "mic"]));
+        check("policy: and off it, still there, with nothing else chosen, a pull that pauses",
+              [jackOut.step.jack, jackOut.step.pause, jackOut.step.jackIn], ["pulled", true, false]);
+        check("policy: a pull too when the choice is a USB device that is gone",
+              run(jackIn.state, shot(9000, {}, ["spk", ""], ["mic", "mic"])).step.jack, "pulled");
+        const picked = run(jackIn.state, shot(9000, {}, ["spk", "spk"], ["mic", "mic"]));
+        check("policy: the speaker picked by hand is no pull", [picked.step.jack, picked.step.pause], ["", false]);
+        check("policy: and the jack coming back after it is no plug",
+              run(picked.state, shot(9300, {}, ["hp", "hp"], ["mic", "mic"])).step.jack, "");
+        check("policy: falling back onto the jack from a device that went away is no plug",
+              run(settled.state, shot(30000, {}, ["hp", ""], ["mic", ""])).step.jack, "");
+        check("policy: a USB device taking over from the jack is no pull",
+              run(jackIn.state, shot(9000, usbPair, ["usbOut", "usbOut"], ["mic", "mic"])).step.jack, "");
+        check("policy: a default not read yet is no move",
+              run(jackIn.state, shot(9000, {}, ["", "hp"], ["mic", "mic"])).step.jack, "");
+        check("policy: no pull from the first snapshot", run(null, shot(0, {}, ["spk", "hp"], ["mic", "mic"])).step.pause, false);
+
         check("meter: an island colour stays itself", String(Media.vivid([Theme.islandBlue])), String(Theme.islandBlue));
         check("meter: a grey cover gives white", String(Media.vivid([Qt.rgba(0.5, 0.5, 0.5, 1)])), String(Theme.islandText));
         const island = Theme.islandColor;

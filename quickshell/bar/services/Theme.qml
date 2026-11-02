@@ -601,6 +601,10 @@ Singleton {
     readonly property string iconBt:        String.fromCodePoint(0xF00AF)
     readonly property string iconBtOff:     String.fromCodePoint(0xF00B2)
     readonly property string iconBtLinked:  String.fromCodePoint(0xF00B1)
+    // The island's wired outputs (services/AudioDevices.qml), a pair as the
+    // Bluetooth ones are: plugged in, and struck through once pulled out.
+    readonly property string iconHeadphones:    String.fromCodePoint(0xF02CB)
+    readonly property string iconHeadphonesOff: String.fromCodePoint(0xF07CE)
     // Picked for silhouette: fa-memory is a DIMM, so it does not read as a
     // second CPU die at bar size.
     readonly property string iconCpu:       String.fromCodePoint(0xF4BC)

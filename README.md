@@ -209,6 +209,14 @@ system's events in `services/Island.qml`, shown on the screen in use. Its
 colours, `Theme.island*`, are measured off the user's mockups; cover art
 loads only from local files and `Theme.artHosts`.
 
+An audio device plugged in (USB, the headphone jack, Bluetooth) takes over
+output and microphone, and pulling it out hands sound back to what was in
+use before, the built-in ones unless another device is still in
+(`services/AudioPolicy.qml`); one plugged in while the screen is locked
+waits for the unlock. The bar only sets the configured default, as a
+mixer's click does, and leaves the fallback to WirePlumber; the island
+tells of the wired ones (`services/AudioDevices.qml`).
+
 The bar is the notification server (`services/Notifications.qml`): a day's
 history (`Super+N` or the bell), drawn and moving as the toasts; a toast
 dwells 5 s, critical 20 s; images are declined. `Super+/` lists every

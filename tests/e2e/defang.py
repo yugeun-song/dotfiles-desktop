@@ -5,7 +5,8 @@ Usage: defang.py WORK     (WORK holds bar/, config/hypr/ and the log apps.log)
 
 Every action that would leave the nested session is replaced with a line in
 WORK/apps.log: the session dialog's lock, sleep, sign-out, restart and power-off,
-programs started from the bar, brightness and volume writes, the alarm chime.
+programs started from the bar, brightness and volume writes, the default audio
+devices and the pause the bar would set, the alarm chime.
 The key reader (KEYFEED_SYSTEM, which run.sh points here) becomes a reader
 of WORK/keyfifo, never of /dev/input. The
 weather script prints a fixed reading instead of going to the network. Then
@@ -59,6 +60,14 @@ edit(BAR / "services/Brightness.qml",
 edit(BAR / "services/Volume.qml", "root.audio.volume = clamped / 100;", "console.warn('[e2e] volume write refused');")
 edit(BAR / "services/Volume.qml", "root.audio.muted = !root.audio.muted;", "console.warn('[e2e] mute refused');")
 edit(BAR / "services/Volume.qml", 'fallback.command = ["wpctl"', 'fallback.command = ["true", "wpctl"', count=3)
+# The copy reads this machine's PipeWire: it must not choose the machine's
+# default output and input (AudioDevices.qml), nor pause the suite's player
+# because a plug on the real machine left the jack.
+edit(BAR / "services/AudioDevices.qml", "Pipewire.preferredDefaultAudioSink = node;",
+     "console.warn('[e2e] default sink refused');")
+edit(BAR / "services/AudioDevices.qml", "Pipewire.preferredDefaultAudioSource = node;",
+     "console.warn('[e2e] default source refused');")
+edit(BAR / "services/AudioDevices.qml", "player.pause();", "console.warn('[e2e] pause refused');")
 # The probe below finds the speaker on a bar by this name, and the bars
 # through this id: the speaker's place depends on which readouts show.
 edit(BAR / "modules/StatusItems.qml", "        onActivated: Volume.toggleMute()",

@@ -80,6 +80,17 @@ ShellRoot {
         }
     }
 
+    // Audio devices plugged in and pulled out: the default output and input
+    // follow them (services/AudioPolicy.qml), and the island tells of the
+    // wired ones.
+    Connections {
+        target: AudioDevices
+
+        function onSettled(state) {
+            Island.outputsSettle(state);
+        }
+    }
+
     // Here, not in the bar: one per screen would register the name twice.
     GlobalShortcut {
         name: "island"

@@ -16,8 +16,8 @@ Singleton {
     readonly property bool present: root.audio !== null
 
     // present = a sink exists; known = it has been read. Until the node binds,
-    // volume reads a default 0, which would consume `seeded` and make the
-    // first real value raise the island's readout (services/Island.qml).
+    // volume reads a default 0, which would be seen as the sink's first value
+    // and make the real one raise the island's readout (services/Island.qml).
     readonly property bool known: root.present && (root.sink?.ready ?? false)
 
     // -1 until read. Capped at 100 although Pipewire allows more; the keys
@@ -34,22 +34,33 @@ Singleton {
         objects: root.sink ? [root.sink] : []
     }
 
-    // The first value is state, not a change; no readout at login.
-    property bool seeded: false
+    // Each sink's first values are state, not a change: no readout at login,
+    // nor when the output moves to a device plugged in or back from one
+    // pulled out (services/AudioDevices.qml), where the new sink brings its
+    // own level. The sink counts as seen only once the batch that switched
+    // it is over, since its level and its mute land one signal after the
+    // other; seen on the switch itself, not on its first change, so the
+    // first key after a switch still shows.
+    property var seededSink: null
 
-    onPercentChanged: {
-        if (root.percent < 0)
-            return;
-        if (!root.seeded) {
-            root.seeded = true;
-            return;
-        }
-        root.changed();
+    function seedLater(): void {
+        const sink = root.sink;
+        Qt.callLater(() => {
+            if (root.sink === sink && root.known)
+                root.seededSink = sink;
+        });
     }
 
-    // muted has no sentinel and reads false while unbound, so also require known.
+    onSinkChanged: root.seedLater()
+    onKnownChanged: root.seedLater()
+
+    // muted has no sentinel and reads false while unbound, hence known.
+    onPercentChanged: {
+        if (root.known && root.seededSink === root.sink)
+            root.changed();
+    }
     onMutedChanged: {
-        if (root.seeded && root.known)
+        if (root.known && root.seededSink === root.sink)
             root.changed();
     }
 

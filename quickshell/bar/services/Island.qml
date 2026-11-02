@@ -6,14 +6,15 @@ import qs.services
 
 // The system's events on the island (MediaChip.qml, IslandEvent.qml), as the
 // user asked (2026-10-26): volume and brightness, in place of an OSD, and
-// what changes by itself (power, Bluetooth).
+// what changes by itself (power, Bluetooth, and since 2026-11-02 wired
+// audio outputs plugged in and pulled out).
 //
 // One event at a time, on the screen in use only, leaving the others alone:
 //   readouts (volume, brightness) answer a key: shown at once over anything,
 //     until Theme.islandReadoutMs after the last change;
-//   alerts (power, Bluetooth) come unasked: they wait while a readout is up,
-//     come back after one that came over them while time is left, and a
-//     newer one replaces an older one;
+//   alerts (power, Bluetooth, outputs) come unasked: they wait while a
+//     readout is up, come back after one that came over them while time is
+//     left, and a newer one replaces an older one;
 //   what goes on (what plays, a call, OBS, a share) is MediaChip's own and
 //     comes back once the event has gone.
 // The fields are plain properties set together by show(): a held key
@@ -211,6 +212,51 @@ Singleton {
             }
         }
         return { state: state, alerts: alerts };
+    }
+
+    // Wired audio outputs, from AudioDevices.qml's snapshots, which
+    // shell.qml hands over so that this file brings no PipeWire up.
+    property var outputsSeen: null
+
+    function outputsSettle(state: var): void {
+        const step = root.outputsStep(root.outputsSeen, state);
+        root.outputsSeen = step.state;
+        for (const a of step.alerts)
+            root.alert("output", a.glyph, a.text, a.value, a.battery, a.tone);
+    }
+
+    // What one view says against the one before; nothing from the first,
+    // the state found. A USB device with an output is there or not, by its
+    // card, so a change of profile tells nothing. The jack's sense never
+    // reaches the bar: AudioPolicy.qml reads it off the default and hands
+    // its verdict over (jack: "plugged", "pulled" or ""), the same one that
+    // pauses the players. Gone before come, as a newer alert replaces an
+    // older one: unplugged and plugged in within one settle reads as
+    // plugged in.
+    function outputsStep(was: var, now: var): var {
+        const alerts = [];
+        if (was === null)
+            return { state: now, alerts: alerts };
+        const told = (label, plugged) => ({
+            glyph: plugged ? Theme.iconHeadphones : Theme.iconHeadphonesOff,
+            text: label,
+            value: plugged ? "Connected" : "Disconnected",
+            battery: -1,
+            tone: plugged ? Theme.islandBlue : Theme.islandSubtext
+        });
+        for (const key in was.outs) {
+            if (!(key in now.outs))
+                alerts.push(told(was.outs[key].label, false));
+        }
+        if (now.jack === "pulled")
+            alerts.push(told(now.jackLabel, false));
+        for (const key in now.outs) {
+            if (!(key in was.outs))
+                alerts.push(told(now.outs[key].label, true));
+        }
+        if (now.jack === "plugged")
+            alerts.push(told(now.jackLabel, true));
+        return { state: now, alerts: alerts };
     }
 
     Component.onCompleted: {
