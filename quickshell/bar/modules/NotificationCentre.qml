@@ -183,7 +183,10 @@ Scope {
                     height: panel.pad + header.height
                             + (list.visible ? Math.min(panel.pad, list.height) + list.height : 0) + panel.pad
                     radius: Theme.notifRadius + panel.pad
-                    color: Theme.surfaceBg
+                    // A well for the cards, so that they keep the toasts'
+                    // colour and need no line of their own; the panel
+                    // floats, and so keeps its edge (Theme.surfaceWell).
+                    color: Theme.surfaceWell
                     border.width: Theme.surfaceBorder
                     border.color: Theme.surfaceLine
 
@@ -455,7 +458,10 @@ Scope {
                                 easing.type: Easing.OutCubic
                             }
 
-                            // The toast's card, as it is drawn there.
+                            // The toast's card, as it is drawn there, but for
+                            // the edge a toast has only because it floats: on
+                            // the panel's well a card needs none. A critical
+                            // one keeps its red, its only mark.
                             Rectangle {
                                 id: card
 
@@ -464,10 +470,8 @@ Scope {
                                 height: implicitHeight
                                 radius: Theme.notifRadius
                                 color: Theme.surfaceBg
-                                border.width: slot.modelData.critical ? Theme.notifBorder
-                                                                      : Theme.surfaceBorder
-                                border.color: slot.modelData.critical ? Theme.accentRed
-                                                                      : Theme.surfaceLine
+                                border.width: slot.modelData.critical ? Theme.notifBorder : 0
+                                border.color: Theme.accentRed
 
                                 opacity: Math.max(0, 1 - card.x / (card.width * 0.7))
 

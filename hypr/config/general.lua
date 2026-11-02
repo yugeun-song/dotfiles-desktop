@@ -16,7 +16,11 @@ hl.config({
     general = {
         gaps_in = 4,
         gaps_out = 8,
-        border_size = 3,
+        -- The focused window's outline is a state, drawn at the 2 px every
+        -- state line has (Theme.qml, by surfaceBorder): at 3 it had been the
+        -- heaviest line on the screen, beside the gaps that already part the
+        -- windows (the user's border pass, 2026-11-02).
+        border_size = 2,
         resize_on_border = true,
         allow_tearing = false,
         layout = "dwindle",

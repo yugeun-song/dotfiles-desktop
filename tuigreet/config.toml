@@ -38,8 +38,12 @@ enabled = true
 # White for input and its prompts, the palette's green and yellow for the rest.
 # Ratios are contrast against black.
 container = "reset"     # terminal default; "black" is a hole on any other bg
-border    = "green"     # slot 2,  #5CCC96  10.53:1
-title     = "green"     # slot 2,  #5CCC96  10.53:1  one object with the frame
+# The box's edge in the palette's grey, the role every edge here takes
+# (theme/DESIGN.md `border`; the user's border pass, 2026-11-02): an accent
+# is kept for what asks for attention, and the green title now heads the box
+# on its own.
+border    = "darkgray"  # slot 8,  #686F9A  4.33:1, above 3:1 for a frame
+title     = "green"     # slot 2,  #5CCC96  10.53:1
 time      = "white"     # slot 15, #F0F1CE  18.18:1
 text      = "white"     # slot 15, #F0F1CE  18.18:1
 prompt    = "white"     # slot 15, #F0F1CE  18.18:1  Username: and Password:

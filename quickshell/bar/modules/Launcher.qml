@@ -285,10 +285,12 @@ Scope {
                         }
                     }
 
+                    // Between the query and the list: a rule inside the card,
+                    // in the theme's own separator rather than a white.
                     Rectangle {
                         width: parent.width
-                        height: 1
-                        color: Qt.rgba(1, 1, 1, 0.08)
+                        height: Theme.surfaceBorder
+                        color: Theme.surfaceSeparator
                     }
 
                     // Say why the list is empty; the two causes differ.

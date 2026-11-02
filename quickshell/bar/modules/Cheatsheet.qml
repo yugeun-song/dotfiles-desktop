@@ -211,7 +211,7 @@ Scope {
                     height: Math.min(parent.height - Theme.px(64), Theme.px(960))
                     radius: Theme.px(18)
                     color: Theme.surfaceBg
-                    border.width: 1
+                    border.width: Theme.surfaceBorder
                     border.color: Theme.surfaceLine
 
                     // Swallow clicks so they do not reach the backdrop.
@@ -293,11 +293,14 @@ Scope {
                             }
                         }
 
+                        // Under the column heads: the strongest rule inside
+                        // the card, yet no stronger than its edge; at 78% it
+                        // had been the brightest line on the screen.
                         Rectangle {
                             anchors.bottom: parent.bottom
                             width: parent.width
-                            height: 1
-                            color: Theme.surfaceDim
+                            height: Theme.surfaceBorder
+                            color: Theme.surfaceLine
                         }
                     }
 
@@ -351,12 +354,16 @@ Scope {
                                             width: column.width
                                             height: card.rowHeight
 
-                                            // Stripe on every other row.
+                                            // Stripe on every other row, the rows'
+                                            // only divide (Theme.surfaceSeparator's
+                                            // note). In the card's own colour it
+                                            // had not shown, and a hairline under
+                                            // every row did the work instead.
                                             Rectangle {
                                                 anchors.fill: parent
                                                 visible: row.index % 2 === 0
-                                                color: Theme.bg
-                                                opacity: 0.55
+                                                color: Theme.surfaceRaised
+                                                opacity: 0.8
                                             }
 
                                             Text {
@@ -384,15 +391,6 @@ Scope {
                                                 font.pixelSize: Theme.px(15)
                                                 color: Theme.fg
                                                 elide: Text.ElideRight
-                                            }
-
-                                            // Hairline under every row.
-                                            Rectangle {
-                                                anchors.bottom: parent.bottom
-                                                width: parent.width
-                                                height: 1
-                                                color: Theme.surfaceFaint
-                                                opacity: 0.28
                                             }
                                         }
                                     }

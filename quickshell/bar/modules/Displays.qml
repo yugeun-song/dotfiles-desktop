@@ -1373,15 +1373,16 @@ Scope {
                         }
 
                         // -- layout canvas --
+                        // A well under the screens rather than a box drawn
+                        // round them (Theme.surfaceWell): the panel already
+                        // has the only line.
                         Rectangle {
                             id: canvas
 
                             width: parent.width
                             height: Theme.displaysCanvasHeight
                             radius: Theme.px(12)
-                            color: Theme.bg
-                            border.width: 1
-                            border.color: Theme.surfaceLine
+                            color: Theme.surfaceWell
 
                             WheelHandler {
                                 onWheel: event => root.wheelSide(event.angleDelta.y)
@@ -1516,10 +1517,11 @@ Scope {
                                                 easing.type: Easing.OutCubic
                                             }
                                         }
+                                        // Told apart by their fill on the
+                                        // well; one turned off by its
+                                        // opacity and its "off".
                                         color: box.active ? Theme.accentIndigo
                                                           : (boxHover.hovered ? Theme.surfaceRaisedHover : Theme.surfaceRaised)
-                                        border.width: 1
-                                        border.color: box.modelData.disabled ? Theme.surfaceFaint : Theme.surfaceLine
                                         opacity: box.modelData.disabled ? 0.55 : 1
 
                                         Column {

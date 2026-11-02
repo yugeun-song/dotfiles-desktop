@@ -40,7 +40,7 @@ Item {
         anchors.verticalCenter: parent.verticalCenter
         width: parent.width - 2 * x
         height: Theme.surfaceBorder
-        color: Theme.surfaceLine
+        color: Theme.surfaceSeparator
     }
 
     // A check stands in for the icon, so a checked row keeps its place.

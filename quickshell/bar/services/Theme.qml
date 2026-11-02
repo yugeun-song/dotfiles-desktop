@@ -150,7 +150,23 @@ Singleton {
     readonly property color surfaceRaised: Qt.lighter(root.bg, 1.45)
     readonly property color surfaceRaisedHover: Qt.lighter(root.bg, 1.9)
     readonly property int surfaceRadius:  root.px(16)
+
+    // Where a line goes, after the user's call (2026-11-02: not fewer
+    // borders as such, but a sense of where and in what colour). A surface
+    // that floats over whatever lies behind it (a menu, a panel, a toast)
+    // has one round its edge: surfaceLine at surfaceBorder, lighter than
+    // the surface, as a darker line vanishes on dark. A state has the
+    // accent or the alert colour at about 2 px, one sign each: a ring on a
+    // large tile, a fill on a small chip. Inside a surface nothing is boxed
+    // by a line, which had drawn boxes in boxes: a group sits in the well,
+    // a step darker, and what it holds is the surface's own colour or a
+    // step lighter (surfaceRaised). A rule between rows of a menu or a list
+    // is surfaceSeparator, fainter than the edge, so the edge still reads
+    // as the outermost line. Rows repeated down a list are told apart by a
+    // fill, never by a line under each. Drawings keep their strokes.
     readonly property int surfaceBorder:  Math.max(1, root.px(1))
+    readonly property color surfaceWell:  Qt.darker(root.bg, 1.8)
+    readonly property color surfaceSeparator: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.07)
 
     // ---------------------------------------------------------------------
     // The media chip in the bar, the island, and the player it grows into.

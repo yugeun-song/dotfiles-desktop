@@ -1238,9 +1238,13 @@ else
         check "its right edge is under the bar's last glyph" layout_is .right 0 3
         # The history draws it as the same card, in one panel whose right
         # edge is the toast's (the user's calls, 2026-10-25): under the
-        # count, the newest entry's card is the toast's, pixel for pixel.
-        # Borders are found by their runs down the screen: the panel's two,
-        # then the cards' two inside, each card's broken at its corners.
+        # count, the newest entry's card is the toast's, pixel for pixel,
+        # but for the edge a toast has only because it floats (Theme.qml's
+        # border note, 2026-11-02): on the panel's well a card has none.
+        # Borders are found by their runs down the screen: the toast's two
+        # and the panel's two, nothing between; the card by its colour, the
+        # bar's ground on the darker well; the two compared away from the
+        # corners and the toast's edge.
         n dispatch 'hl.dsp.global("quickshell:notifications")' >/dev/null
         sleep 1
         shot -g "0,0 2560x400" "$WORK/centre.png" 2>/dev/null
@@ -1279,21 +1283,58 @@ def read(path):
             elif not border(x, y) and start is not None:
                 out.append((start, y - 1)); start = None
         return [r for r in out if r[1] - r[0] >= 17]
-    return im, groups, runs
-toast, tg, truns = read(sys.argv[1])
-centre, cg, cruns = read(sys.argv[2])
-if len(tg) != 2 or len(cg) != 4:
+    return im, groups, runs, bar
+toast, tg, truns, tbar = read(sys.argv[1])
+centre, cg, cruns, cbar = read(sys.argv[2])
+if len(tg) != 2 or len(cg) != 2:
     print("borders", len(tg), len(cg)); sys.exit()
 tl, tr = tg[0][0], tg[1][-1]
-cl, cr = cg[1][0], cg[2][-1]
-if cg[3][-1] != tr:
-    print("panel edge", cg[3][-1], "toast edge", tr); sys.exit()
-(t0, t1), (c0, c1) = truns(tl)[0], cruns(cl)[0]
-a = toast.crop((tl, t0, tr + 1, t1 + 1)); b = centre.crop((cl, c0, cr + 1, c1 + 1))
-worst = max(ImageChops.difference(a, b).getdata()) if a.size == b.size else 255
+if cg[1][-1] != tr:
+    print("panel edge", cg[1][-1], "toast edge", tr); sys.exit()
+def ground_of(path):
+    rgb = Image.open(path).convert("RGB").load()
+    return lambda x, y: max(abs(a - b) for a, b in zip(rgb[x, y], (15, 17, 27))) <= 3
+def card(img, ground, x0, x1, bar):
+    """The first card of the bar's ground between x0 and x1 below the bar:
+    the first row mostly of it, its height down a column of its padding
+    (clear of any text), its width the widest of its rows."""
+    below = [y for y in range(bar + 2, img.size[1]) if sum(ground(x, y) for x in range(x0, x1 + 1)) > (x1 - x0) // 2]
+    if not below:
+        return None
+    # The card's left end as its straight side has it, past the rounded
+    # corner, then a column just inside it, left of the text.
+    window = range(below[0], min(below[0] + 60, img.size[1]))
+    lefts = [next((x for x in range(x0, x1 + 1) if ground(x, y)), x1) for y in window]
+    seed = min(lefts) + 2
+    start = next((y for y in window if ground(seed, y)), None)
+    if start is None:
+        return None
+    c0 = c1 = start
+    while c0 - 1 > bar and ground(seed, c0 - 1):
+        c0 -= 1
+    while c1 + 1 < img.size[1] and ground(seed, c1 + 1):
+        c1 += 1
+    spans = [[x for x in range(x0, x1 + 1) if ground(x, y)] for y in range(c0, c1 + 1)]
+    return c0, c1, min(r[0] for r in spans if r), max(r[-1] for r in spans if r)
+# Measured alike, by their fill: the toast's inside its edge, the history's
+# card whole, as it has none.
+tc = card(toast, ground_of(sys.argv[1]), tl, tr, tbar)
+cc = card(centre, ground_of(sys.argv[2]), cg[0][-1] + 1, cg[1][0] - 1, cbar)
+if tc is None or cc is None:
+    print("no card", tc, cc); sys.exit()
+(t0, t1, tl2, tr2), (c0, c1, cl, cr) = tc, cc
+if abs((cr - cl) - (tr2 - tl2)) > 4 or abs((c1 - c0) - (t1 - t0)) > 4:
+    print("size", cr - cl, tr2 - tl2, c1 - c0, t1 - t0); sys.exit()
+m, e = 3, 4
+h, w = min(t1 - t0, c1 - c0) - 2 * m, min(tr2 - tl2, cr - cl) - 2 * e
+tx, ty = (tl2 + tr2) // 2 - w // 2, (t0 + t1) // 2 - h // 2
+cx, cy = (cl + cr) // 2 - w // 2, (c0 + c1) // 2 - h // 2
+a = toast.crop((tx, ty, tx + w, ty + h)); b = centre.crop((cx, cy, cx + w, cy + h))
+worst = max(ImageChops.difference(a, b).get_flattened_data())
 print("same" if worst <= 8 else f"differ {a.size} {b.size} {worst}")
 EOF
 )
+        [[ "$same" == same ]] || echo "e2e: history card: ${same:-no answer}"
         check "the history draws it as the same card, in a panel at the toasts' edge" test "$same" = same
         [[ "$same" == same ]] || echo "e2e: toast against history: $same"
     else
