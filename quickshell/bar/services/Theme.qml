@@ -605,6 +605,10 @@ Singleton {
     // Bluetooth ones are: plugged in, and struck through once pulled out.
     readonly property string iconHeadphones:    String.fromCodePoint(0xF02CB)
     readonly property string iconHeadphonesOff: String.fromCodePoint(0xF07CE)
+    // The lock screen island's trailing mark for a device come or gone
+    // (Island.lockCompact), filled as the glyphs beside it are.
+    readonly property string iconCheckCircle:   String.fromCodePoint(0xF05E0)
+    readonly property string iconCloseCircle:   String.fromCodePoint(0xF0159)
     // Picked for silhouette: fa-memory is a DIMM, so it does not read as a
     // second CPU die at bar size.
     readonly property string iconCpu:       String.fromCodePoint(0xF4BC)

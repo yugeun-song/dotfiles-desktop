@@ -1023,6 +1023,32 @@ ShellRoot {
               told(Island.outputsStep(outIn.state, view({ "93": usbOut }))),
               [["USB Earphones", "Disconnected"], ["USB Earphones", "Connected"]]);
         check("outputs: the same card, nothing to tell", told(Island.outputsStep(outIn.state, view({ "87": usbOut }))), []);
+        // The lock screen's island: one glyph leading, one number or mark trailing.
+        const lockRest = Island.lockCompact("", "", "", Theme.islandText);
+        check("lock island: the lock alone between events", [lockRest.lead, lockRest.trail, lockRest.mark], [Theme.iconLock, "", ""]);
+        const lockLevel = Island.lockCompact("volume", Theme.iconVolume, "45", Theme.islandBlue);
+        check("lock island: the event's glyph in its colour",
+              lockLevel.lead, `<span foreground="${Island.hexOf(Theme.islandBlue)}">${Theme.iconVolume}</span>`);
+        check("lock island: a level padded to one width, a clear % in front so it ends at the right",
+              [lockLevel.trail, lockLevel.mark],
+              [`<span font_features="tnum"><span alpha="1">%</span><span foreground="${Island.hexOf(Theme.islandBlue)}"> 45</span></span>`, ""]);
+        check("lock island: a percentage padded the same, a full one not",
+              [Island.lockCompact("power", Theme.iconBolt, "70%", Theme.islandGreen).trail,
+               Island.lockCompact("power", Theme.iconBolt, "100%", Theme.islandGreen).trail,
+               Island.lockCompact("power", Theme.iconBolt, "5%", Theme.islandGreen).trail],
+              [" 70%", "100%", "  5%"].map(v => `<span font_features="tnum" foreground="${Island.hexOf(Theme.islandGreen)}">${v}</span>`));
+        check("lock island: a device come gets the tick, gone the cross, no number",
+              [Island.lockCompact("output", Theme.iconHeadphones, "Connected", Theme.islandBlue).mark,
+               Island.lockCompact("output", Theme.iconHeadphonesOff, "Disconnected", Theme.islandSubtext).mark,
+               Island.lockCompact("output", Theme.iconHeadphones, "Connected", Theme.islandBlue).trail],
+              [`<span foreground="${Island.hexOf(Theme.islandBlue)}">${Theme.iconCheckCircle}</span>`,
+               `<span foreground="${Island.hexOf(Theme.islandSubtext)}">${Theme.iconCloseCircle}</span>`, ""]);
+        check("lock island: any other word is left out, the glyph alone",
+              [Island.lockCompact("bluetooth", Theme.iconBtLinked, "Pairing", Theme.islandBlue).trail,
+               Island.lockCompact("bluetooth", Theme.iconBtLinked, "Pairing", Theme.islandBlue).mark], ["", ""]);
+        check("lock island: markup in a glyph is escaped", Island.lockCompact("x", "<b>&", "1", Theme.islandText).lead,
+              `<span foreground="${Island.hexOf(Theme.islandText)}">&lt;b&gt;&amp;</span>`);
+        check("lock island: colours as hyprlock's markup reads them", Island.hexOf(Qt.rgba(55 / 255, 163 / 255, 222 / 255, 1)), "#37a3de");
         check("outputs: the jack as AudioPolicy tells it",
               [told(Island.outputsStep(view({}), view({}, "plugged", "Headphones"))),
                told(Island.outputsStep(view({}), view({}, "pulled", "Headphones")))],

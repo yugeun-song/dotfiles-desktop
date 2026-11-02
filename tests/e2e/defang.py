@@ -6,7 +6,8 @@ Usage: defang.py WORK     (WORK holds bar/, config/hypr/ and the log apps.log)
 Every action that would leave the nested session is replaced with a line in
 WORK/apps.log: the session dialog's lock, sleep, sign-out, restart and power-off,
 programs started from the bar, brightness and volume writes, the default audio
-devices and the pause the bar would set, the alarm chime.
+devices and the pause the bar would set, the lock screen island's signal,
+the alarm chime.
 The key reader (KEYFEED_SYSTEM, which run.sh points here) becomes a reader
 of WORK/keyfifo, never of /dev/input. The
 weather script prints a fixed reading instead of going to the network. Then
@@ -68,6 +69,17 @@ edit(BAR / "services/AudioDevices.qml", "Pipewire.preferredDefaultAudioSink = no
 edit(BAR / "services/AudioDevices.qml", "Pipewire.preferredDefaultAudioSource = node;",
      "console.warn('[e2e] default source refused');")
 edit(BAR / "services/AudioDevices.qml", "player.pause();", "console.warn('[e2e] pause refused');")
+# The lock screen's island (LockIsland.qml): its files go to the run's own
+# directory, and the signal that would make the machine's hyprlock read them
+# is a line in the log, named so that run.sh's no_writes, which reads a line
+# starting "lock" as the session's lock, does not take it for one. Matched
+# to the letter, so a signal other than SIGUSR2 (SIGUSR1 unlocks) fails here
+# first.
+(WORK / "lockisland").mkdir(exist_ok=True)
+edit(BAR / "services/LockIsland.qml", "readonly property string dir: Paths.runtimeDir",
+     f'readonly property string dir: "{WORK / "lockisland"}"')
+edit(BAR / "services/LockIsland.qml", 'command: ["pkill", "--older", "2", "-USR2", "-x", "hyprlock"]',
+     f"command: {logger('hyprlock-refresh')}")
 # The probe below finds the speaker on a bar by this name, and the bars
 # through this id: the speaker's place depends on which readouts show.
 edit(BAR / "modules/StatusItems.qml", "        onActivated: Volume.toggleMute()",

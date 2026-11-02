@@ -29,6 +29,13 @@ if [[ "$was" == "2" ]]; then
     fi
 fi
 
+RT="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+# The island's labels as the bar wrote them during an earlier lock
+# (LockIsland.qml): gone, so this lock starts on the plain lock glyph.
+island_files=("$RT/hyprlock-island-lead" "$RT/hyprlock-island-trail" "$RT/hyprlock-island-mark")
+rm -f -- "${island_files[@]}"
+
 # Sizes and colours per screen: see lock-fit.sh. Without its copy hyprlock
 # reads hyprlock.conf, which draws the design's sizes and the beige on every
 # screen.
@@ -42,8 +49,16 @@ fi
 # background, so the lock never waits on the bar.
 qs -p "${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar" ipc call keys lock >/dev/null 2>&1 &
 
+# hyprlock starts with SIGUSR2 ignored, as a child inherits that: the bar
+# sends SIGUSR2 for the island's labels (LockIsland.qml), and until hyprlock
+# has set its own handler the signal's default action ends the process. One
+# that came that early killed the locker as it started, and the lock key
+# locked nothing (2026-11-02). Ignored, an early one is dropped; the labels
+# read the bar's files when hyprlock draws them anyway.
+trap '' USR2
 hyprlock "${fitted[@]}" "$@"
 rc=$?
+trap - USR2
 
 # The unlock told to the bar at once, for its sweep of the lock screen
 # (UnlockSweep.qml), which shows the last of it until then. hypridle tells it
@@ -55,8 +70,9 @@ if [[ "$(hyprctl locked 2>/dev/null)" == "false" ]]; then
 fi
 
 # The lock screen's card and the covers it fetched (lock-media.py) go with
-# the lock: they name what was playing.
-rm -rf -- "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/hyprlock"
+# the lock: they name what was playing. The island's labels too.
+rm -rf -- "$RT/hyprlock"
+rm -f -- "${island_files[@]}"
 
 [[ "$was" == "2" ]] && fcitx5-remote -o >/dev/null 2>&1
 

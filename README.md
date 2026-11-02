@@ -164,10 +164,13 @@ for the design. `scripts/lock-media.py` draws the track's card, the bar's
 grown island scaled up, kept with its covers in `$XDG_RUNTIME_DIR/hyprlock`
 until the unlock; `scripts/lock-colours.py` picks the text's colours from
 the wallpaper, and `scripts/lock-fit.sh` keeps the panel's proportions on
-every screen. It fades in, and at the unlock the bar sweeps it up off the
-desktop (`modules/UnlockSweep.qml`). `Ctrl+Alt+Shift+U` on it starts a new
-locker when hyprlock has crashed: the way out is the password, never an
-unlock without one.
+every screen. Its island takes the bar's island events, one at a time, a
+glyph at its left end and a number or mark at its right
+(`services/LockIsland.qml`, `scripts/lock-island.sh`; hyprlock reads them
+again only at the bar's SIGUSR2). It fades in, and at the unlock the bar
+sweeps it up off the desktop (`modules/UnlockSweep.qml`). `Ctrl+Alt+Shift+U`
+on it starts a new locker when hyprlock has crashed: the way out is the
+password, never an unlock without one.
 
 The clipboard history (`Super+V`, cliphist) lives in `$XDG_RUNTIME_DIR`, a
 tmpfs gone at logout, and `cliphist-expire.timer` drops entries after half

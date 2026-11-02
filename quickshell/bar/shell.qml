@@ -80,6 +80,10 @@ ShellRoot {
         }
     }
 
+    // The island's event on the lock screen as well (services/LockIsland.qml):
+    // a singleton exists only once something names it.
+    readonly property bool lockIsland: LockIsland.active
+
     // Audio devices plugged in and pulled out: the default output and input
     // follow them (services/AudioPolicy.qml), and the island tells of the
     // wired ones.

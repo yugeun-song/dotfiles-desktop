@@ -1613,6 +1613,15 @@ echo true > "$WORK/fake-locked"
 ipc keys lock >/dev/null
 check "a confirmed lock leaves a sheet on each screen, under the lock" \
     wait_for 5 has_layer quickshell:unlock HEADLESS-2
+# Locked, the island's events go to the lock screen's labels as well
+# (LockIsland.qml, Island.lockCompact): its glyph leading, a level padded to
+# one width trailing, and the signal that has hyprlock read them (here a
+# line in the log; scenario 29 has a real hyprlock take such files).
+ipc e2e islandReadout Volume 40 0.4 >/dev/null
+check "locked, the island's event is written for the lock screen's island" \
+    wait_for 3 grep -qs $' 40' "$WORK/lockisland/hyprlock-island-trail"
+check "its glyph leading, in its colour" grep -qs 'foreground="#37a3de"' "$WORK/lockisland/hyprlock-island-lead"
+check "and the lock screen is told to read it" wait_for 3 grep -qs hyprlock-refresh "$WORK/apps.log"
 sleep 1.5
 echo false > "$WORK/fake-locked"
 ipc keys unlock >/dev/null
@@ -1628,7 +1637,9 @@ rm -f "$WORK/bin/hyprctl" "$WORK/fake-locked"
 # track's card (the bar's grown island at 1.6 times) with its cover and its
 # play-pause disc in that dark, "Press to unlock" in the bar's beige, and a
 # click on the disc reaching the player, the card then drawing play. The
-# card and the covers go to the run's own directory, not the session's.
+# island takes an event as the bar writes it (a glyph and a mark, then a
+# number, then the lock again) at each SIGUSR2. The card, the covers and the
+# island's files go to the run's own directory, not the session's.
 # Positions are HEADLESS-2's at the panel's proportions (lock-fit.sh): 0.683
 # times the design's heights, 0.759 its widths, but the card's and its
 # controls' 0.683 too (fit: even).
@@ -1664,6 +1675,54 @@ lock_shows() {
 }
 # The card drawn for the paused player: its state names the status.
 paused_card() { grep -qs $'\tPaused\t' "$WORK"/lockrun/card-????????; }
+# The island's event while locked (Island.lockCompact, LockIsland.qml): the
+# bar writes the three labels' markup where the lock reads it and sends
+# SIGUSR2; here the suite writes them, into the run's own directory, and
+# signals this run's hyprlock alone (SIGUSR1 would unlock it). An empty
+# argument removes that label's file.
+island_write() {
+    python3 - "$WORK/island" "$@" <<'EOF'
+import pathlib
+import sys
+d = pathlib.Path(sys.argv[1])
+d.mkdir(exist_ok=True)
+for part, text in zip(("lead", "trail", "mark"), sys.argv[2:]):
+    f = d / f"hyprlock-island-{part}"
+    if text:
+        f.write_text(text)
+    elif f.exists():
+        f.unlink()
+EOF
+}
+# Beige and blue in the leading place, blue in the mark's, green in the
+# number's: HEADLESS-2's island, the lock 97 left of the middle at 0.759,
+# the mark as far right, the number ending where the mark does.
+island_pixels() {
+    shot -o HEADLESS-2 "$WORK/island.png" 2>/dev/null || return 1
+    python3 - "$WORK/island.png" <<'EOF'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert("RGB")
+def count(box, test):
+    data = im.crop(box).tobytes()
+    return sum(1 for i in range(0, len(data), 3) if test(data[i:i + 3]))
+def near(rgb):
+    return lambda c: all(abs(a - b) <= 40 for a, b in zip(c, rgb))
+beige = lambda c: c[0] > 200 and c[1] > 200 and 150 < c[2] < 215
+lead, trail, mark = (1188, 16, 1226, 50), (1298, 16, 1368, 50), (1334, 16, 1374, 50)
+print(count(lead, beige), count(lead, near((55, 163, 222))),
+      count(mark, near((55, 163, 222))), count(trail, near((55, 192, 88))))
+EOF
+}
+island_is() {
+    local beige blue mark number
+    read -r beige blue mark number < <(island_pixels) || return 1
+    case $1 in
+        device) (( beige < 10 && blue > 20 && mark > 20 )) ;;
+        number) (( number > 40 && mark < 5 )) ;;
+        rest) (( beige > 40 && blue < 5 && mark < 5 && number < 5 )) ;;
+    esac
+}
 
 if (( ! PIL )); then
     skip "lock screen: python3-pillow is not installed"
@@ -1679,16 +1738,29 @@ im.paste((24, 26, 32), (0, 868, 2560, 1440))
 im.save(sys.argv[1])' "$WORK/wall.png"
     sleep 1
     lockconf="$WORK/config/hypr/hyprlock.conf"
-    sed -i "s#^\$media = .*#\$media = python3 $WORK/config/hypr/scripts/lock-media.py#; s#~/.config/hypr/lock-blank.png#$WORK/config/hypr/lock-blank.png#; s#~/Pictures/Wallpapers/current.png#$WORK/wall.png#" "$lockconf"
+    sed -i "s#^\$media = .*#\$media = python3 $WORK/config/hypr/scripts/lock-media.py#; s#^\$island = .*#\$island = sh $WORK/config/hypr/scripts/lock-island.sh#; s#~/.config/hypr/lock-blank.png#$WORK/config/hypr/lock-blank.png#; s#~/Pictures/Wallpapers/current.png#$WORK/wall.png#" "$lockconf"
     if fitted=$(HYPRLAND_INSTANCE_SIGNATURE="$SIG" "$WORK/config/hypr/scripts/lock-fit.sh" "$lockconf" "$WORK/hyprlock-fit.conf"); then
         WAYLAND_DISPLAY="$WL" HYPRLAND_INSTANCE_SIGNATURE="$SIG" DBUS_SESSION_BUS_ADDRESS="$BUS" \
-            LOCK_MEDIA_RUN="$WORK/lockrun" LOCK_WEATHER="$WORK/bar/scripts/weather.sh" \
+            LOCK_MEDIA_RUN="$WORK/lockrun" LOCK_WEATHER="$WORK/bar/scripts/weather.sh" LOCK_ISLAND_RUN="$WORK/island" \
             hyprlock -c "$fitted" >"$WORK/hyprlock.out" 2>&1 &
         LOCK_PID=$!
         check "the lock shows its island and lock, a dark clock, the card with its dark disc and a beige Press to unlock" \
             wait_for 10 lock_shows
         read -r b l c v u o < <(lock_pixels)
         echo "e2e: lock pixels: island ${b:-?}, lock ${l:-?}, clock ${c:-?}, cover ${v:-?}, unlock ${u:-?}, toggle off the clock's ink by ${o:-?}"
+        island_write "<span foreground=\"#37a3de\">$(printf '\U000F02CB')</span>" "" \
+            "<span foreground=\"#37a3de\">$(printf '\U000F05E0')</span>"
+        kill -USR2 "$LOCK_PID"
+        check "an event on the lock's island: its glyph leading, its mark trailing" wait_for 5 island_is device
+        island_write "<span foreground=\"#37c058\">$(printf '\U000F140B')</span>" \
+            "<span font_features=\"tnum\" foreground=\"#37c058\">100%</span>" ""
+        kill -USR2 "$LOCK_PID"
+        check "a percentage at its trailing end instead" wait_for 5 island_is number
+        island_write "" "" ""
+        kill -USR2 "$LOCK_PID"
+        check "and the lock again once the event has gone" wait_for 5 island_is rest
+        read -r ib il im in < <(island_pixels)
+        echo "e2e: lock island pixels at rest: beige ${ib:-?}, blue ${il:-?}, mark ${im:-?}, number ${in:-?}"
         : > "$WORK/mpris.log"
         input move 1280 792 sleep 300 click sleep 300
         check "a click on the lock's play-pause reaches the player" wait_for 4 logged "$WORK/mpris.log" Pause

@@ -259,6 +259,45 @@ Singleton {
         return { state: now, alerts: alerts };
     }
 
+    // The lock screen's island (hypr/hyprlock.conf, LockIsland.qml) holds
+    // the event as a phone's narrow pill does, as the user asked
+    // (2026-11-02): one mark at each end and nothing between, the island no
+    // larger, never two events at once. Leading, the event's glyph in its
+    // colour, or the lock when there is none; trailing, a number (a level,
+    // or a percentage) or, for a device come or gone, a tick or a cross.
+    // hyprlock places a label by its middle, so a number is always one
+    // width: tabular figures, figure spaces before short ones, and for a
+    // level a transparent "%" in front, so that it ends at the island's
+    // right end whatever its digits. Pango markup for hyprlock's three
+    // labels; nothing a device names reaches it, only glyphs, digits and
+    // the two marks.
+    function lockCompact(kind: string, glyph: string, value: string, tone: color): var {
+        if (kind === "")
+            return { lead: Theme.iconLock, trail: "", mark: "" };
+        const hex = root.hexOf(tone);
+        const lead = `<span foreground="${hex}">${root.escaped(glyph)}</span>`;
+        const number = /^(\d{1,3})(%?)$/.exec(value);
+        if (number !== null) {
+            const pad = " ".repeat(3 - number[1].length);
+            const trail = number[2] === "%"
+                ? `<span font_features="tnum" foreground="${hex}">${pad}${number[1]}%</span>`
+                : `<span font_features="tnum"><span alpha="1">%</span><span foreground="${hex}">${pad}${number[1]}</span></span>`;
+            return { lead: lead, trail: trail, mark: "" };
+        }
+        const mark = value === "Connected" ? Theme.iconCheckCircle
+                   : value === "Disconnected" ? Theme.iconCloseCircle : "";
+        return { lead: lead, trail: "", mark: mark === "" ? "" : `<span foreground="${hex}">${mark}</span>` };
+    }
+
+    function hexOf(c: color): string {
+        const part = v => Math.round(v * 255).toString(16).padStart(2, "0");
+        return `#${part(c.r)}${part(c.g)}${part(c.b)}`;
+    }
+
+    function escaped(text: string): string {
+        return text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
     Component.onCompleted: {
         root.powerSettle();
         root.btSettle();

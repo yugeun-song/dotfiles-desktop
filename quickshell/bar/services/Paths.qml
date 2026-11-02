@@ -21,6 +21,10 @@ Singleton {
     }
 
     readonly property string hyprScripts: root.configHome + "/hypr/scripts"
+    // The session's tmpfs, for what the lock screen reads from the bar
+    // (LockIsland.qml); "" without one, which leaves that off rather than
+    // guessing a path.
+    readonly property string runtimeDir: Quickshell.env("XDG_RUNTIME_DIR") ?? ""
 
     // The bar's own state (the screensaver times, the key overlay switch):
     // what the user chose on this machine, so neither installed nor tracked.
