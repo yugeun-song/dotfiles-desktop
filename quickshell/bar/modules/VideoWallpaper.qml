@@ -92,9 +92,12 @@ Scope {
         onTriggered: Hyprland.refreshToplevels()
     }
 
+    // The player is told here too: with the same screens in play nothing else
+    // would, and it went on playing the old video over the new one's first frame.
     onVideoChanged: {
         if (root.video !== "")
             Hyprland.refreshToplevels();
+        root.publish();
     }
 
     // ---- each screen's word ------------------------------------------------
@@ -121,9 +124,20 @@ Scope {
             required property ShellScreen modelData
 
             screen: modelData
-            onModeChanged: root.setMode(seat.modelData.name, seat.mode)
-            Component.onCompleted: root.setMode(seat.modelData.name, seat.mode)
-            Component.onDestruction: root.setMode(seat.modelData.name, "")
+
+            // Kept: a screen pulled out is null here by the time this goes, and
+            // its word left behind would keep the player running for no screen.
+            property string name: ""
+
+            onModeChanged: {
+                if (seat.name !== "")
+                    root.setMode(seat.name, seat.mode);
+            }
+            Component.onCompleted: {
+                seat.name = seat.modelData.name;
+                root.setMode(seat.name, seat.mode);
+            }
+            Component.onDestruction: root.setMode(seat.name, "")
         }
     }
 

@@ -52,6 +52,8 @@ Scope {
                 loops: MediaPlayer.Infinite
                 videoOutput: output
 
+                // A new source stops a playing player.
+                onSourceChanged: win.follow()
                 onErrorOccurred: (error, message) => console.warn("[videowall]", root.screen?.name ?? "", message)
             }
 
