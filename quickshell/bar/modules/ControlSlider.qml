@@ -33,6 +33,25 @@ Item {
         root.moved(root.dragValue);
     }
 
+    // A wheel notch is a key's step, 5%, and a touchpad's small deltas add up to
+    // one (as in Workspaces.qml): taken one event a step, a single swipe ran the
+    // volume from nothing to full in a third of a second, and a sideways one
+    // lowered it (found 2026-11-07).
+    property real notch: 0
+
+    function wheelBy(delta: real): void {
+        root.notch += delta;
+        const steps = Math.trunc(root.notch / 120);
+        if (steps === 0)
+            return;
+        root.notch -= steps * 120;
+        settle.stop();
+        const from = root.dragging ? root.dragValue : root.shown;
+        root.dragging = true;
+        root.take(from + steps * 0.05);
+        settle.restart();
+    }
+
     // The knob holds where it was let go until the service has caught up.
     Timer {
         id: settle
@@ -187,13 +206,6 @@ Item {
         }
         onReleased: settle.restart()
         onCanceled: settle.restart()
-        // A wheel notch is a key's step, 5%.
-        onWheel: wheel => {
-            settle.stop();
-            const from = root.dragging ? root.dragValue : root.shown;
-            root.dragging = true;
-            root.take(from + (wheel.angleDelta.y > 0 ? 0.05 : -0.05));
-            settle.restart();
-        }
+        onWheel: wheel => root.wheelBy(wheel.angleDelta.y)
     }
 }

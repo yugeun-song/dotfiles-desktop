@@ -1618,7 +1618,7 @@ ShellRoot {
                             root.testApps, root.testTray, root.testBarOptions,
                             root.testScreenShare, root.testIsland];
             if (modules.item)
-                suites.push(() => modules.item.testLauncher(root.check), () => modules.item.testDisplays(root.check));
+                suites.push(() => modules.item.testSlider(root.check), () => modules.item.testLauncher(root.check), () => modules.item.testDisplays(root.check));
             else
                 console.log("[test] SKIP Launcher and Displays: no Wayland display");
             for (const suite of suites) {

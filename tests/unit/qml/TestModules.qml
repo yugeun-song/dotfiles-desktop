@@ -20,6 +20,29 @@ Scope {
         id: sessionMenu
     }
 
+    ControlSlider {
+        id: slider
+
+        value: 0.5
+    }
+
+    // Wheel events add up to notches: one a step ran the volume to full in a swipe.
+    function testSlider(check) {
+        let moved = 0;
+        const count = () => moved += 1;
+        slider.moved.connect(count);
+        for (let i = 0; i < 3; i++)
+            slider.wheelBy(30);
+        check("slider: a touchpad's small deltas are not a step each", moved, 0);
+        slider.wheelBy(30);
+        check("slider: four of them make a notch of 5%", Math.round(slider.dragValue * 100), 55);
+        slider.wheelBy(0);
+        check("slider: a sideways swipe moves nothing", moved, 1);
+        slider.wheelBy(-240);
+        check("slider: two notches down at once", Math.round(slider.dragValue * 100), 45);
+        slider.moved.disconnect(count);
+    }
+
     // Every entry offered, Lock among them: it went missing unnoticed once,
     // told as not installed by a list its probe was not on (2026-11-06).
     function testSessionMenu(check) {
