@@ -168,14 +168,17 @@ loose = [s for s in selectors if re.search(r"(^|\s)window\b|selection", s) and "
 check("gtk-3.0.css recolours windows and selections only in the browsers",
       not loose and any(".chromium" in s for s in selectors) and any("#MozillaGtkWidget" in s for s in selectors), " | ".join(loose))
 # Firefox mixes its toolbar from its window's colour, 85 parts to 15 of white:
-# the window's colour is chosen to come out as Chrome's toolbar.
+# the window's colour is chosen to come out as this dark grey. Only Chrome's toolbar
+# went lighter (2026-11-07), for a selected tab it cannot light alone.
 def css_colour(selector):
     m = re.search(re.escape(selector) + r"\s*\{[^}]*?background-color:\s*#([0-9a-f]{6})", css3)
     return tuple(int(m.group(1)[i:i + 2], 16) for i in (0, 2, 4)) if m else None
-chrome_bar = css_colour("window.background.chromium")
 firefox_bar = css_colour("window#MozillaGtkWidget.background")
 mixed = tuple(round(c * 0.85 + 255 * 0.15) for c in firefox_bar) if firefox_bar else None
-check("Firefox's toolbar comes out as Chrome's", mixed == chrome_bar, f"{mixed} against {chrome_bar}")
+check("Firefox's toolbar stays its dark grey", mixed == (0x2c, 0x2c, 0x2f), f"{mixed}")
+check("Firefox's selected tab alone takes its colour, not the toolbar",
+      "--tab-background-color-selected: #2563eb" in (repo / "firefox/userChrome.css").read_text()
+      and "#nav-bar" not in (repo / "firefox/userChrome.css").read_text())
 
 # Dolphin's places panel padding: one style sheet, handed over the same way
 # by every start (install.sh's entry, the Super+E binding, the unit drop-in).

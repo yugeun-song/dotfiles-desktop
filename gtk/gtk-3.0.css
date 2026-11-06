@@ -73,13 +73,16 @@ headerbar button.titlebutton:active,
  * has to change). Neutral, every one of them.
  *
  * So the selected tab cannot take a colour of its own here, as Firefox's does
- * (firefox/userChrome.css; the user asked for cream on it alone, 2026-11-07).
- * Tried that day: no GTK colour feeds it but this window's (the kColorNative*
- * names in the binary); a cream window paints the toolbar and every bubble too,
- * and Chrome's bubble icons wash out on it; side tabs draw no stroke, even with
- * this window a shade off the frame, whatever colour the header's borders are. */
+ * (firefox/userChrome.css; the user asked for that first, 2026-11-07). Tried that
+ * day: no GTK colour feeds it but this window's (the kColorNative* names in the
+ * binary), and side tabs draw no stroke, whatever the header's borders are. A
+ * theme's toolbar image can paint the tab alone, but only for one sidebar width
+ * and one screen scale, and it gives up GTK's x: the user tried it and dropped it.
+ * So this one colour is the tab's and the toolbar's and the bubbles', blue as
+ * Firefox's tab, the user's call, accepting the rest. The new tab page's search
+ * box stays white: #ffffff with or without GTK, whatever colour here changed. */
 window.background.chromium {
-  background-color: #2c2c2f;
+  background-color: #2563eb;
   color: #f2f2f2;
 }
 
@@ -130,7 +133,9 @@ menu.chromium menuitem:hover {
 /* Firefox in Chrome's black and white above (the user, 2026-11-06: match
  * Chrome's colours and feel). Firefox paints its toolbar and selected tab one
  * surface, as Chrome does, but mixes it from this window's colour, 85 parts
- * to 15 of white: #07070a comes out as Chrome's #2c2c2f. Its own findbar and
+ * to 15 of white: #07070a comes out as #2c2c2f, and stays there: Firefox can light
+ * its selected tab alone (firefox/userChrome.css), so its toolbar has no reason to
+ * follow Chrome's, which went lighter only because that tab could not. Its own findbar and
  * notices take the same mix. The tab strip is its title bar's colour, the
  * tabs behind in that bar's words; the address field sits a shade darker over
  * the toolbar by itself and takes the entry's colour once focused. */

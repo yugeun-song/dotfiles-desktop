@@ -42,20 +42,21 @@
   list-style-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='1' y='6.8' width='14' height='2.4' rx='1.2' fill='%23ffffff' transform='rotate(45 8 8)'/%3E%3Crect x='1' y='6.8' width='14' height='2.4' rx='1.2' fill='%23ffffff' transform='rotate(-45 8 8)'/%3E%3C/svg%3E") !important;
 }
 
-/* The selected tab in a plain cream, its words dark on it, so that it stands
- * apart from the browser's black and white at a glance (the user, 2026-11-07:
- * the grey it takes from the toolbar is faint; a white with a clear yellow in it,
- * on that tab and not on the words). Square, not a pill or, with the side tabs
- * collapsed, a disc (the same day), and the hover's the same shape. Chrome cannot
- * have either: gtk/gtk-3.0.css. */
+/* The selected tab apart from the rest at a glance, and only it: the toolbar
+ * stays as it is (the user, 2026-11-07: the grey it takes from the toolbar is
+ * faint; blue, their pick of grey, yellow and blue seen on the screen). Chrome
+ * cannot colour its selected tab apart from its toolbar (gtk/gtk-3.0.css). Light
+ * words, not dark ones on a pale ground: a site's favicon drawn for dark toolbars
+ * is white, and vanished on cream, as GitHub's did. Square, not a
+ * pill or, with the side tabs collapsed, a disc (the same day), and the hover's
+ * the same shape. */
 .tabbrowser-tab {
-  --tab-background-color-selected: #fff0b8 !important;
-  --tab-text-color-selected: #141416 !important;
-  --tab-selected-color-scheme: light !important;
+  --tab-background-color-selected: #2563eb !important;
+  --tab-text-color-selected: #f2f2f2 !important;
 }
 
 .tabbrowser-tab[selected] > .tab-stack > .tab-background {
-  background-color: #fff0b8 !important;
+  background-color: #2563eb !important;
   background-image: none !important;
 }
 
