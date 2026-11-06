@@ -41,12 +41,17 @@ ShellRoot {
         id: displays
     }
 
+    WallpaperPicker {
+        id: wallpaperPicker
+    }
+
     // The power button's panel; its buttons open the two panels above,
     // which it cannot reach itself.
     ControlCentre {
         id: controlCentre
 
         onDisplaysAsked: displays.show()
+        onWallpaperAsked: wallpaperPicker.show()
     }
 
     WeatherPanel {

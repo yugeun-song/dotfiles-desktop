@@ -378,6 +378,15 @@ hl.bind("XF86Display", hl.dsp.global("quickshell:displays"),
     { description = "Display settings" })
 hl.bind("SUPER + O", hl.dsp.global("quickshell:displays"),
     { description = "Display settings" })
+-- W for the wallpaper, as Super+W is the browser.
+hl.bind("SUPER + SHIFT + W", hl.dsp.global("quickshell:wallpaper"),
+    { description = "Pick the wallpaper" })
+-- The desktop widgets: moved and resized only in the edit mode this turns
+-- on (the user, 2026-11-04), their settings and resets apart.
+hl.bind("SUPER + ALT + W", hl.dsp.global("quickshell:widgetEdit"),
+    { description = "Edit the desktop widgets" })
+hl.bind("SUPER + CTRL + W", hl.dsp.global("quickshell:widgetSettings"),
+    { description = "Desktop widget settings" })
 
 --##! Capture
 hl.bind("Print", hl.dsp.exec_cmd(capture .. " screen"),

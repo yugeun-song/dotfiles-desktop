@@ -1090,6 +1090,7 @@ doctor() {
         "kitty:terminal" "inotifywait:session watch (polls every 5 s without it)"
         "rsvg-convert:the drawn arrow in the cursor theme"
         "pw-dump:the program sharing the screen or in a call, on the island"
+        "magick:wallpapers other than PNG, from the picker and wallpaper.sh"
         "kcmshell6:the control centre's network and Bluetooth settings (a terminal program without it)"
         "powerprofilesctl:the control centre's power mode"
     )

@@ -520,6 +520,29 @@ Singleton {
     readonly property string iconHeadset:    String.fromCodePoint(0xF02CE)  // md-headset
 
     // ---------------------------------------------------------------------
+    // The wallpaper picker (modules/WallpaperPicker.qml), a card set as the
+    // weather and display panels are: as wide as four thumbnails of a 16:10
+    // screen with their gaps.
+    // ---------------------------------------------------------------------
+    // Larger than the first cut, as the user asked (2026-11-04): five
+    // thumbnails a row, four rows in view where the screen has the room.
+    readonly property int wallpaperWidth:   root.px(1000)
+    readonly property int wallpaperColumns: 5
+    readonly property int wallpaperGap:     root.px(12)
+    readonly property int wallpaperRadius:  root.px(10)
+    // Rows of thumbnails before the grid scrolls.
+    readonly property int wallpaperRows:    4
+    // The pictures now, the desktop's and the lock screen's, side by side.
+    readonly property int wallpaperNowHeight: root.px(170)
+    // What the card holds besides the grid, so the grid takes the rest of a
+    // short screen and no more.
+    readonly property int wallpaperChrome:  root.px(420)
+    // A state on a large tile is a ring in the accent (the line roles above).
+    readonly property int wallpaperRing:    Math.max(2, root.px(2))
+    readonly property string iconWallpaper:  String.fromCodePoint(0xF0E09)  // md-wallpaper
+    readonly property string iconFolderOpen: String.fromCodePoint(0xF0770)  // md-folder_open
+
+    // ---------------------------------------------------------------------
     // The key overlay (modules/KeyOverlay.qml): a strip of fixed size.
     // ---------------------------------------------------------------------
     // Five caps of ordinary width with their gaps; a wider chord clips the
