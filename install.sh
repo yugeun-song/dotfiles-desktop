@@ -1179,6 +1179,52 @@ file_icons() {
 # What opens text, once Neovim is there: kde/default-editor.py says why each type
 # is named, and leaves one anybody has named. Nothing to ask of the network, and
 # no rebuild of KDE's service cache: it looks at this file itself.
+default_editor() {
+    local out added=0
+    [[ -e /usr/share/applications/nvim.desktop || -e "$DATA/applications/nvim.desktop" ]] || return 0
+    if (( CHECK )); then
+        out=$(python3 -I "$SRC/kde/default-editor.py" "$CONFIG/mimeapps.list" --check) || return 0
+        if [[ "$out" != 0 ]]; then
+            todo "${YELLOW}$out text types do not open in Neovim yet ($(tilde "$CONFIG/mimeapps.list"))$RESET"
+        else
+            same
+        fi
+        return 0
+    fi
+    out=$(python3 -I "$SRC/kde/default-editor.py" "$CONFIG/mimeapps.list") || stop "could not write $(tilde "$CONFIG/mimeapps.list")"
+    added=${out:-0}
+    if [[ "$added" != 0 ]]; then
+        wrote "$(tilde "$CONFIG/mimeapps.list"): $added text types open in Neovim"
+    else
+        same
+    fi
+}
+
+# Types for the files the system knows none for, as icons go by type alone
+# (kde/mime/code-files.xml). The database is rebuilt only when the package is
+# newer than it.
+mime_package() {
+    local to="$DATA/mime/packages/code-files.xml"
+    mirror_file "$SRC/kde/mime/code-files.xml" "$to"
+    (( CHECK )) && return 0
+    command -v update-mime-database >/dev/null 2>&1 || return 0
+    if [[ ! -e "$DATA/mime/mime.cache" || "$to" -nt "$DATA/mime/mime.cache" ]]; then
+        if update-mime-database "$DATA/mime" >/dev/null 2>&1; then
+            wrote "$(tilde "$DATA/mime") rebuilt for the code file types"
+        else
+            branch "${YELLOW}could not rebuild $(tilde "$DATA/mime")$RESET"
+        fi
+    fi
+}
+
+# Dolphin in the dark look the user chose (2026-11-06): the list (details)
+# view by default with Name, Modified, Size, Type (kde/dolphin/global.directory,
+# Dolphin's common view properties), its rows and icons a size smaller and
+# its words 13 px; the icons view at 64 with two lines of name;
+# the status across the foot; the sidebar's icons small;
+# the toolbar's buttons without words, and without the split view's two
+# (kde/dolphin-toolbar.py); the sidebar's face is kde/dolphin.qss's. Each a
+# seed: a change made in Dolphin afterwards stays.
 dolphin_look() {
     local rc="$CONFIG/dolphinrc" font="Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" bar
     command -v dolphin >/dev/null 2>&1 || return 0
@@ -1607,13 +1653,14 @@ _bar_launcher=0
 cmp -s -- "$SRC/bin/bar" "$HOME/.local/bin/bar" 2>/dev/null || _bar_launcher=1
 mirror_file "$SRC/bin/bar" "$HOME/.local/bin/bar"
 mirror_file "$SRC/bin/unlock" "$HOME/.local/bin/unlock"
+mirror_file "$SRC/bin/xdg-terminal-exec" "$HOME/.local/bin/xdg-terminal-exec"
 # In ~ on purpose: typed from a text console where PATH may not be set up.
 mirror_file "$SRC/bin/recover-desktop" "$HOME/recover-desktop"
 # The camera switch's user copy: `camera-switch` from a terminal, and what
 # the camera keys fall back to until the sudo step has installed the
 # root-owned one; it works, but asks for an administrator password each time.
 mirror_file "$SRC/camera/camera-switch.py" "$HOME/.local/bin/camera-switch"
-ensure_exec "$HOME/.local/bin/bar" "$HOME/.local/bin/unlock" "$HOME/.local/bin/camera-switch" "$HOME/recover-desktop"
+ensure_exec "$HOME/.local/bin/bar" "$HOME/.local/bin/unlock" "$HOME/.local/bin/xdg-terminal-exec" "$HOME/.local/bin/camera-switch" "$HOME/recover-desktop"
 if (( ! CHECK && _bar_launcher )) && systemctl --user is-active --quiet bar.service 2>/dev/null; then
     if systemctl --user try-restart bar.service 2>/dev/null; then
         branch "$GREEN✓$RESET restarted the bar, whose launcher changed"
@@ -1709,6 +1756,11 @@ seed "$SRC/gtk/gtk-3.0-settings.ini" "$CONFIG/gtk-3.0/settings.ini"
 seed "$SRC/gtk/gtk-4.0-settings.ini" "$CONFIG/gtk-4.0/settings.ini"
 seed "$SRC/kde/kdeglobals" "$CONFIG/kdeglobals"
 kde_style
+if command -v kreadconfig6 >/dev/null 2>&1 && command -v kwriteconfig6 >/dev/null 2>&1; then
+    seed_key "$CONFIG/kdeglobals" General TerminalApplication kitty
+    seed_key "$CONFIG/kdeglobals" General TerminalService kitty.desktop
+fi
+default_editor
 # KDE's icon theme: the file icons over the line icons, over the Breeze an older
 # seed named; the next one down when one is not there (not verified, or removed
 # above). A theme the user chose in KDE's settings is left alone.

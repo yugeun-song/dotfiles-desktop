@@ -1,0 +1,8 @@
+#!/bin/sh
+# The terminal for a program whose entry says Terminal=true, Neovim above all (the
+# user, 2026-11-06: neovim is the default for text). KIO reads its choice from
+# kdeglobals; GLib, and xdg-open through it, ask for this command instead, and with
+# none on the path they fail ("Unable to find terminal required for application"),
+# so a browser's "open this file" did nothing. The package of this name does the
+# same through a configuration of its own, for one answer on this desktop.
+exec kitty "$@"

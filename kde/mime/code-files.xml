@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- The files KDE's icons cannot tell apart without help. Dolphin takes a file's
+     icon from its MIME type alone (kde/icons/files.py), and shared-mime-info has
+     no type for these, so they all read as plain text.
+
+     Each is text underneath: a program that opens text still opens them, and
+     nothing here changes what opens what. Weights above the default 50 are
+     where a name collides with something rarer (a .tsx is a Tiled tileset to
+     the system, a .lock nothing at all). -->
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="text/x-kconfig">
+    <comment>Kernel configuration source</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="Kconfig" case-sensitive="true"/>
+    <glob pattern="Kconfig.*" case-sensitive="true"/>
+  </mime-type>
+  <mime-type type="text/x-kbuild">
+    <comment>Kernel build file</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="Kbuild" case-sensitive="true"/>
+    <glob pattern="Kbuild.*" case-sensitive="true"/>
+  </mime-type>
+  <mime-type type="text/x-linker-script">
+    <comment>Linker script</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.lds"/>
+    <glob pattern="*.ld"/>
+  </mime-type>
+  <mime-type type="text/x-conf">
+    <comment>Configuration file</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.conf"/>
+    <glob pattern="*.cfg"/>
+    <glob pattern="*.ini"/>
+    <glob pattern=".env"/>
+    <glob pattern=".env.*"/>
+  </mime-type>
+  <mime-type type="text/x-jsx">
+    <comment>JavaScript with JSX</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.jsx"/>
+  </mime-type>
+  <mime-type type="text/x-tsx">
+    <comment>TypeScript with JSX</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.tsx" weight="60"/>
+  </mime-type>
+  <mime-type type="text/x-swift">
+    <comment>Swift source</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.swift"/>
+  </mime-type>
+  <mime-type type="text/x-zig">
+    <comment>Zig source</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.zig"/>
+  </mime-type>
+  <mime-type type="text/x-vim">
+    <comment>Vim script</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.vim"/>
+    <glob pattern=".vimrc"/>
+    <glob pattern=".gvimrc"/>
+  </mime-type>
+  <mime-type type="text/x-less">
+    <comment>Less style sheet</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.less"/>
+  </mime-type>
+  <mime-type type="text/x-vue">
+    <comment>Vue component</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.vue"/>
+  </mime-type>
+  <mime-type type="text/x-svelte">
+    <comment>Svelte component</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.svelte"/>
+  </mime-type>
+  <mime-type type="text/x-lockfile">
+    <comment>Dependency lock file</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="*.lock" weight="60"/>
+  </mime-type>
+  <mime-type type="text/x-git">
+    <comment>Git configuration</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern=".gitignore"/>
+    <glob pattern=".gitattributes"/>
+    <glob pattern=".gitmodules"/>
+    <glob pattern=".gitconfig"/>
+    <glob pattern=".mailmap"/>
+  </mime-type>
+  <mime-type type="text/x-editorconfig">
+    <comment>EditorConfig settings</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern=".editorconfig"/>
+  </mime-type>
+  <mime-type type="text/x-license">
+    <comment>Licence text</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="LICENSE" weight="60"/>
+    <glob pattern="LICENSE.*" weight="60"/>
+    <glob pattern="LICENCE" weight="60"/>
+    <glob pattern="LICENCE.*" weight="60"/>
+  </mime-type>
+  <mime-type type="text/x-pkgbuild">
+    <comment>Arch package build script</comment>
+    <sub-class-of type="text/plain"/>
+    <glob pattern="PKGBUILD" case-sensitive="true"/>
+  </mime-type>
+  <!-- The shell's own file types, which the system knows only by a first line. -->
+  <mime-type type="text/x-shellscript">
+    <glob pattern="*.bash"/>
+    <glob pattern="*.zsh"/>
+  </mime-type>
+</mime-info>
