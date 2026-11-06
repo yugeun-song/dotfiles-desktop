@@ -509,13 +509,17 @@ hl.bind("CTRL + SHIFT + ALT + SUPER + Delete", hl.dsp.exec_cmd(scripts .. "/sess
     { description = "Shut down" })
 
 --##! Lid
--- Panel off, and a lock when no other display is lit (monitors.lua); no
--- suspend. Requires logind to ignore the lid (/etc/systemd/logind.conf.d,
--- see README).
-hl.bind("switch:on:Lid Switch", function() MONITORS.lid_close() end,
-    { locked = true, description = "Lid: internal panel off, lock if alone" })
-hl.bind("switch:off:Lid Switch", function() MONITORS.lid_open() end,
-    { locked = true, description = "Lid: internal panel on" })
+-- Only with follow_lid (monitor_settings.lua), off by default: the lid then
+-- changes nothing, so no bind is made and the cheatsheet lists none (the
+-- user, 2026-11-05). With it, the panel goes off and a lid shut with no other
+-- display lit locks (monitors.lua). Never a suspend either way: logind
+-- ignores the lid (/etc/systemd/logind.conf.d, see README).
+if MONITORS.follows_lid() then
+    hl.bind("switch:on:Lid Switch", function() MONITORS.lid_close() end,
+        { locked = true, description = "Lid: internal panel off, lock if alone" })
+    hl.bind("switch:off:Lid Switch", function() MONITORS.lid_open() end,
+        { locked = true, description = "Lid: internal panel on" })
+end
 
 --##! Virtual machines
 -- Passes Super through to a VM guest. The toggle is submap_universal, so it

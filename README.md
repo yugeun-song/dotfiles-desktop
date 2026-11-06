@@ -110,15 +110,16 @@ file is installed by both repositories.
 ## Outputs
 
 `config/monitors.lua` decides which screens are on, inside the compositor:
-with an external attached both are on, the lid turns the panel off, alone
-the panel is the desktop, and the lid shut with no other display lit locks
-the session (`lock_on_lid` in the preset). It follows hotplug and the lid,
-re-applies on every reload, lights the panel when nothing is lit, and never
-lights and darkens outputs in one commit (that once wedged the compositor).
+with an external attached both are on, and alone the panel is the desktop.
+The lid changes nothing (`follow_lid = false` in the preset): shut, the
+laptop stays as it is open; `true` turns the panel off while it is shut and
+locks a laptop left alone (`lock_on_lid`). It follows hotplug, re-applies on
+every reload, lights the panel when nothing is lit, and never lights and
+darkens outputs in one commit (that once wedged the compositor).
 
 `hypr/monitor_settings.lua` holds the preset (scales per display
 description, `auto_scale`, `main`, `workspaces`, `keep_internal`,
-`lock_on_lid`);
+`follow_lid`, `lock_on_lid`);
 `monitor_settings.local.lua` overrides it per field on another machine. A
 display the preset does not name gets its highest refresh rate and the scale
 step that lands its logical width nearest 1920 (panel) or 2560 (external).

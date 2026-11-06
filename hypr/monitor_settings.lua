@@ -36,14 +36,20 @@ return {
     -- The Displays panel (Super+O) overrides it until set back to the preset.
     workspaces = "panel-first",
 
-    -- The panel stays on beside an external until the lid shuts. false turns
-    -- it off beside any external; a keep-internal file beside this one
-    -- overrides that without an edit.
+    -- The panel stays on beside an external. false turns it off beside any
+    -- external; a keep-internal file beside this one overrides that without
+    -- an edit.
     keep_internal = true,
 
-    -- Shutting the lid with no other display lit locks the session (it is
-    -- leaving the laptop); beside a lit external it only darkens the panel.
-    -- false: the lid never locks.
+    -- The lid changes nothing: shut, the laptop stays as it is open, panel
+    -- lit and session unlocked, never asleep (the user, 2026-11-05). true
+    -- brings the lid's rules back: the panel off while it is shut, and the
+    -- lock below.
+    follow_lid = false,
+
+    -- With follow_lid: shutting the lid with no other display lit locks the
+    -- session (it is leaving the laptop); beside a lit external it only
+    -- darkens the panel. false: the lid never locks.
     lock_on_lid = true,
 
     -- Hotplug settle windows. Removal is answered fast (the desktop is dark

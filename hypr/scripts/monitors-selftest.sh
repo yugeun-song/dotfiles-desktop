@@ -54,7 +54,7 @@ lid open
 # The lid's lock goes to a file: loginctl from the nested compositor would
 # lock the session it runs in.
 locks() { if [[ -f "$WORK/locks" ]]; then wc -l < "$WORK/locks"; else echo 0; fi; }
-override=$(printf 'MONITOR_POLICY_OVERRIDE = { internal = { "^WAYLAND%%-", "^WL%%-" }, synthetic = { "^FALLBACK$" }, sysfs = false, auto_scale = false, workspaces = "panel-first", acpi_lid = "%s", lid_lock_cmd = "echo lock >> %s/locks", settle_removed_ms = 300, settle_added_ms = 300, verify_ms = 1500, panel_off_delay_ms = 200, panel_off_verify_ms = 400 }' "$WORK/acpi-lid" "$WORK")
+override=$(printf 'MONITOR_POLICY_OVERRIDE = { internal = { "^WAYLAND%%-", "^WL%%-" }, synthetic = { "^FALLBACK$" }, sysfs = false, auto_scale = false, workspaces = "panel-first", follow_lid = true, acpi_lid = "%s", lid_lock_cmd = "echo lock >> %s/locks", settle_removed_ms = 300, settle_added_ms = 300, verify_ms = 1500, panel_off_delay_ms = 200, panel_off_verify_ms = 400 }' "$WORK/acpi-lid" "$WORK")
 { printf '%s\n' "$override"; cat "$WORK/hyprland.lua"; } > "$WORK/hyprland.lua.new"
 mv "$WORK/hyprland.lua.new" "$WORK/hyprland.lua"
 # The log file is written through a stream nobody flushes, so a line can

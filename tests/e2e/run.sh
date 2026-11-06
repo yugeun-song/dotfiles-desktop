@@ -297,7 +297,7 @@ EOF
 printf 'name:HEADLESS-1\tmode\t2880x1800@60\nname:HEADLESS-1\tscale\t1.5\nname:HEADLESS-2\tmode\t2560x1440@60\nname:HEADLESS-2\tscale\t1\n' \
     > "$WORK/state/hypr/monitor-overrides"
 {
-    printf 'MONITOR_POLICY_OVERRIDE = { internal = { "^HEADLESS%%-1$" }, synthetic = { "^FALLBACK$", "^WAYLAND%%-" }, sysfs = false, auto_scale = false, acpi_lid = "%s", lid_lock_cmd = "echo lock >> %s/locks", settle_removed_ms = 300, settle_added_ms = 300, verify_ms = 1500, panel_off_delay_ms = 200, panel_off_verify_ms = 400 }\n' "$WORK/acpi" "$WORK"
+    printf 'MONITOR_POLICY_OVERRIDE = { internal = { "^HEADLESS%%-1$" }, synthetic = { "^FALLBACK$", "^WAYLAND%%-" }, sysfs = false, auto_scale = false, follow_lid = true, acpi_lid = "%s", lid_lock_cmd = "echo lock >> %s/locks", settle_removed_ms = 300, settle_added_ms = 300, verify_ms = 1500, panel_off_delay_ms = 200, panel_off_verify_ms = 400 }\n' "$WORK/acpi" "$WORK"
     cat "$REPO/hypr/hyprland.lua"
     printf 'hl.monitor({ output = "WAYLAND-1", disabled = true })\nhl.config({ xwayland = { enabled = false } })\n'
 } > "$WORK/config/hypr/hyprland.lua"

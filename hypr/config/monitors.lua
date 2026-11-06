@@ -1,14 +1,19 @@
 -- Output policy, run inside the compositor as hl.on handlers emitting
 -- hl.monitor and hl.workspace_rule rules (no process, no polling):
 --
---   external, lid open   -> panel and externals both on
---   external, lid shut   -> externals only, built-in panel off
+--   external             -> panel and externals both on
 --   no external output   -> built-in panel is the desktop
+--
+-- The lid changes nothing by default (follow_lid = false; the user,
+-- 2026-11-05: shut, the laptop stays exactly as it is open, no panel off, no
+-- lock, no sleep). follow_lid = true brings the lid's rules back:
+--   external, lid shut   -> externals only, built-in panel off
+--   alone, lid shut      -> the session locks (lock_on_lid)
 --
 -- Workspaces follow a scheme, "dynamic", "panel-first" or "blocks" (see
 -- bindings_for), from the settings or the override file's "*" line.
--- keep_internal = false turns the panel off beside an external with the lid
--- open too; a keep-internal marker file undoes that without an edit.
+-- keep_internal = false turns the panel off beside any external; a
+-- keep-internal marker file undoes that without an edit.
 --
 -- Settings are a preset, not one machine's description: monitor_settings.lua
 -- (tracked) holds what this desktop wants everywhere, monitor_settings.local
@@ -26,8 +31,9 @@
 -- load and on request (MONITORS.reload_overrides), never on the event path.
 -- An override narrows the policy but cannot leave the desktop dark:
 --   - the panel off counts only while a desired external is lit, as with
---     keep_internal = false, and the lid still wins over enabled = true;
---   - an external off is suspended while the lid is shut;
+--     keep_internal = false, and with follow_lid the lid still wins over
+--     enabled = true;
+--   - with follow_lid, an external off is suspended while the lid is shut;
 --   - a mode the output does not list falls back to highrr with one warning;
 --   - every disabling is stage two (see Stage two), skipped if nothing would
 --     stay lit.
@@ -127,7 +133,11 @@ local policy = {
     -- See bindings_for; the override file's "*" line replaces it.
     workspaces = "dynamic",
     keep_internal = true,
-    -- The lid shut with no other display lit locks the session (see Lid).
+    -- Whether the lid counts at all; false, the user's call, leaves the
+    -- panel, the workspaces and the session as they are with it open.
+    follow_lid = false,
+    -- With follow_lid: the lid shut with no other display lit locks the
+    -- session (see Lid).
     lock_on_lid = true,
     -- How it locks: as Ctrl+Alt+L does. Not settable from the settings file;
     -- the tests point it at a file, since a nested session's loginctl would
@@ -217,6 +227,7 @@ local function load_settings(path, local_file)
     take("internal", is_pattern_list, "a non-empty list of valid Lua patterns")
     take("synthetic", is_pattern_list, "a non-empty list of valid Lua patterns")
     take("keep_internal", function(v) return type(v) == "boolean" end, "true or false")
+    take("follow_lid", function(v) return type(v) == "boolean" end, "true or false")
     take("lock_on_lid", function(v) return type(v) == "boolean" end, "true or false")
     take("settle_removed_ms", positive, "a number of milliseconds")
     take("settle_added_ms", positive, "a number of milliseconds")
@@ -1623,6 +1634,12 @@ schedule_lid_lock = function()
     end, { timeout = LID_LOCK_AFTER_MS, type = "oneshot" })
 end
 
+-- Whether the lid binds are made at all (keybinds.lua): without follow_lid
+-- nothing calls these, and a lid read at load or after a sleep is open.
+function M.follows_lid()
+    return policy.follow_lid == true
+end
+
 function M.lid_close()
     lid_closed = true
     dpms_internal("disable")
@@ -1642,7 +1659,7 @@ end
 local LID_DEVICES = { "LID", "LID0", "LID1", "LID_" }
 
 local function lid_shut_now()
-    if not policy.acpi_lid then
+    if not policy.follow_lid or not policy.acpi_lid then
         return false
     end
     for _, device in ipairs(LID_DEVICES) do
