@@ -103,6 +103,7 @@ tests/unit/weather.sh || failed=1
 tests/unit/camera.sh || failed=1
 tests/unit/lock.sh || failed=1
 tests/unit/wallpaper.sh || failed=1
+tests/unit/mirror.sh || failed=1
 tests/unit/install.sh || failed=1
 tests/unit/kvantum.sh || failed=1
 tests/unit/icons.sh || failed=1

@@ -34,6 +34,7 @@ ShellRoot {
         notifications: () => notificationCentre.toggle(),
         weather: () => Weather.togglePanel(Screens.focused),
         displays: () => displays.show(),
+        mirror: () => Mirror.togglePanel(Screens.focused),
         wallpaper: () => wallpaperPicker.show(),
         widgetEdit: () => Widgets.toggleEditing(),
         widgetSettings: () => Widgets.toggleSettings(),
@@ -104,6 +105,9 @@ ShellRoot {
     // Instantiating these starts the notification daemon: a singleton is only
     // created on first reference, otherwise the bus name stays unowned.
     NotificationToasts {}
+
+    // Only a Scope until it is asked for.
+    MirrorPanel {}
 
     NotificationCentre {
         id: notificationCentre

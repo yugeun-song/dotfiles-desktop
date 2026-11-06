@@ -521,6 +521,7 @@ Singleton {
     readonly property string iconMic:        String.fromCodePoint(0xF036C)  // md-microphone
     readonly property string iconMicOff:     String.fromCodePoint(0xF036D)  // md-microphone_off
     readonly property string iconCamera:     String.fromCodePoint(0xF0100)  // md-camera
+    readonly property string iconTablet:     String.fromCodePoint(0xF04F6)  // md-tablet
     readonly property string iconMonitor:    String.fromCodePoint(0xF0379)  // md-monitor
     readonly property string iconScreenshot: String.fromCodePoint(0xF0E51)  // md-monitor_screenshot
     readonly property string iconChevron:    String.fromCodePoint(0xF0142)  // md-chevron_right

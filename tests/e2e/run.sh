@@ -2156,9 +2156,9 @@ else
     rows_of_bar_menu() { menu_rows 900 700 640 && [[ $(wc -w <<<"$rows") == "$1" ]]; }
     bar_row() { awk -v at="$1" '{print $at}' <<<"$rows"; }
     bar_is() { [[ "$(ipc e2e "$1")" == "$2" ]]; }
-    bar_menu_gone() { ! rows_of_bar_menu 14; }
+    bar_menu_gone() { ! rows_of_bar_menu 15; }
     right_click 900
-    if wait_for 5 rows_of_bar_menu 14; then
+    if wait_for 5 rows_of_bar_menu 15; then
         pass "a right click on the bar opens its menu, all its rows"
         y=$(bar_row 2)
         input move 910 "$y" sleep 200 click sleep 100
@@ -2167,8 +2167,8 @@ else
         input key 1 sleep 100
         wait_for 3 bar_is controls false
         right_click 900
-        if wait_for 5 rows_of_bar_menu 14; then
-            y=$(bar_row 14)
+        if wait_for 5 rows_of_bar_menu 15; then
+            y=$(bar_row 15)
             input move 910 "$y" sleep 200 click sleep 100
             check "its Session opens the session dialog, and only that" wait_for 3 bar_is session true
             input key 1 sleep 100
@@ -2180,6 +2180,90 @@ else
         fail "a right click on the bar opens its menu, all its rows"
     fi
 fi
+
+# 33. The tablet mirror (modules/MirrorPanel.qml, MirrorWidget.qml, services/Mirror.qml;
+# the user, 2026-11-07), its script a stand-in (defang.py) reading its state from a file
+# of the run's: it says what is missing, starts only what can start, with the words the
+# settings make, and listens for USB devices only while someone looks.
+mirror_status() { printf '{"usb":"%s","name":"Test Tablet","running":%s,"error":""}\n' "$1" "$2" > "$WORK/mirror-status"; }
+mirror_is() { [[ "$(ipc mirror state)" == "$1" ]]; }
+mirror_open() { ipc mirror panel >/dev/null; wait_for 3 has_layer quickshell:mirror; }
+mirror_close() { input key 1 sleep 200; wait_for 2 lacks_layer quickshell:mirror; }
+# This run's udevadm is a tail (above), the camera's among them: counted against
+# the number with nobody looking.
+mirror_tails() {
+    local p n=0
+    for p in $(descendants "$QS_PID"); do
+        [[ "$(cat "/proc/$p/comm" 2>/dev/null)" == tail ]] && n=$((n + 1))
+    done
+    echo "$n"
+}
+mirror_listens() { (( $(mirror_tails) > mirror_base )); }
+mirror_quiet() { (( $(mirror_tails) == mirror_base )); }
+mirror_not_started() { ! logged "$WORK/apps.log" "mirror start"; }
+mirror_not_listed_yet() { ! logged "$WORK/apps.log" "mirror devices"; }
+input move 2000 1200 sleep 200
+focus_external
+mark=$(output_mark)
+mirror_base=$(mirror_tails)
+mirror_status off false
+if mirror_open; then
+    check "its panel opens, saying USB debugging is off" wait_for 3 mirror_is debugging
+    check "and listens for USB devices while it is up" wait_for 3 mirror_listens
+    ipc mirror toggle >/dev/null
+    sleep 0.5
+    check "it does not start what cannot start" mirror_not_started
+    check "Esc closes it" mirror_close
+    check "and it stops listening" wait_for 3 mirror_quiet
+    mirror_status on false
+    mirror_open
+    check "a tablet with debugging on is ready" wait_for 3 mirror_is ready
+    ipc mirror toggle >/dev/null
+    check "it starts with the words the settings make" wait_for 3 logged "$WORK/apps.log" \
+        "mirror start --select-usb --window-title=Tablet --video-bit-rate=16M --max-fps=30 --max-size=1920 --no-control --no-audio"
+    mirror_status on true
+    mirror_close
+    mirror_open
+    check "a running mirror shows when the panel comes back" wait_for 3 mirror_is running
+    ipc mirror toggle >/dev/null
+    check "and stops" wait_for 3 logged "$WORK/apps.log" "mirror stop"
+    mirror_status on false
+    mirror_close
+else
+    fail "the tablet mirror's panel: it did not open"
+fi
+# The control centre's tile: its list looks for tablets only while it is open, and a
+# row taken starts the mirror by that route, keeping the address for next time.
+mirror_listed() { [[ "$(ipc mirror list | jq 'length')" == "$1" ]]; }
+printf '{"devices":[{"id":"usb","name":"SM X620","via":"usb","state":"ready","address":""},{"id":"wifi:10.0.0.7:5555","name":"SM X620","via":"wifi","state":"offered","address":"10.0.0.7:5555"}]}\n' > "$WORK/mirror-devices"
+: > "$WORK/mirror-mark"
+check "nothing looks for tablets before the list opens" mirror_not_listed_yet
+n dispatch 'hl.dsp.global("quickshell:controlCentre")' >/dev/null
+if wait_for 3 has_layer quickshell:control-centre; then
+    ipc e2e expandControls tablet >/dev/null
+    check "the tile's list finds the tablets" wait_for 5 mirror_listed 2
+    ipc mirror connect 1 >/dev/null
+    check "a Wi-Fi row starts the mirror over Wi-Fi" wait_for 3 logged "$WORK/apps.log" "mirror start-wifi 10.0.0.7:5555 --window-title=Tablet"
+    ipc e2e expandControls "" >/dev/null
+    check "and the list closing lets adb go" wait_for 3 logged "$WORK/apps.log" "mirror release"
+    input key 1 sleep 200
+    wait_for 2 lacks_layer quickshell:control-centre
+else
+    fail "the control centre: it did not open for the tablet's tile"
+fi
+# Its widget, only while it runs: the running state read when something looks.
+mirror_card() { [[ "$(ipc e2e mirrorCard)" == "$1" ]]; }
+mirror_status on false
+mirror_open; mirror_close
+check "no mirror, no card" wait_for 3 mirror_card false
+mirror_status on true
+mirror_open; mirror_close
+check "a running mirror has its card on the desktop" wait_for 3 mirror_card true
+check "which asks after it, listening while it stands" wait_for 3 mirror_listens
+mirror_status on false
+check "and goes by itself when the mirror has ended" wait_for 8 mirror_card false
+check "taking the listening with it" wait_for 3 mirror_quiet
+check "the mirror's files raised no QML warning" quiet_since "$mark" '[@/](Mirror|MirrorPanel|MirrorWidget|MirrorChoice)[.]qml.*(WARN|ERROR)|(WARN|ERROR).*[@/](Mirror|MirrorPanel|MirrorWidget|MirrorChoice)[.]qml'
 
 check "no session action or hardware write was even attempted" no_writes
 

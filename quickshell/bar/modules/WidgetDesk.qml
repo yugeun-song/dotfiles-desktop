@@ -29,7 +29,7 @@ Scope {
 
     WidgetOptions {}
 
-    readonly property bool anyPlaced: Widgets.layout.length > 0 || Object.keys(Widgets.screens).length > 0
+    readonly property bool anyPlaced: Mirror.running || Widgets.layout.length > 0 || Object.keys(Widgets.screens).length > 0
 
     Component.onCompleted: {
         if (root.anyPlaced)

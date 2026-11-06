@@ -15,7 +15,7 @@ Singleton {
     property bool open: false
     // The screen whose bar was clicked; null opens it on the focused one.
     property var screen: null
-    // "wifi", "bluetooth", "sound", "power" or "": one section at a time, as
+    // "wifi", "bluetooth", "sound", "power", "tablet" or "": one section at a time, as
     // GNOME's quick settings open one menu at a time (the user's reference,
     // 2026-11-04).
     property string expanded: ""

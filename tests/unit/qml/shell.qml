@@ -1072,6 +1072,54 @@ ShellRoot {
         check("apps: and nothing with neither", Apps.argvOf({ command: [], execString: " %f " }), []);
     }
 
+    // The tablet mirror's words for scrcpy and for the user.
+    function testMirror() {
+        const plain = Mirror.args(Mirror.defaults);
+        check("mirror: by default the laptop only shows, without the tablet's sound",
+              ["--no-control", "--no-audio"].every(a => plain.includes(a)), true);
+        check("mirror: the window has the name the panel tells to share", plain.includes("--window-title=Tablet"), true);
+        check("mirror: its rates and size",
+              ["--video-bit-rate=16M", "--max-fps=30", "--max-size=1920"].every(a => plain.includes(a)), true);
+        const all = Mirror.args({ maxSize: 0, bitRate: 4, fps: 60, control: true, audio: true, fullscreen: true });
+        check("mirror: full size asks for no limit", all.some(a => a.startsWith("--max-size")), false);
+        check("mirror: control keeps the tablet awake, which scrcpy refuses without it",
+              [all.includes("--stay-awake"), all.includes("--no-control"), plain.includes("--stay-awake")], [true, false, false]);
+        check("mirror: sound and full screen", [all.includes("--no-audio"), all.includes("--fullscreen")], [false, true]);
+        check("mirror: H.265 only when asked", [plain.some(a => a.startsWith("--video-codec")), Mirror.args(Object.assign({}, Mirror.defaults, { codec: "h265" })).includes("--video-codec=h265")], [false, true]);
+        check("mirror: its shortcuts leave Super to Hyprland", plain.includes("--shortcut-mod=lalt"), true);
+        const layout = Widgets.itemsFor("X").length;
+        check("mirror: no widget while it does not run", Widgets.drawnFor("X").some(i => i.kind === "mirror"), false);
+        Mirror.adopt('{"usb":"on","name":"T","running":true,"via":"usb","error":""}');
+        check("mirror: a card beside the layout while it runs", Widgets.drawnFor("X").filter(i => i.kind === "mirror").length, 1);
+        check("mirror: under the lowest widget",
+              Widgets.drawnFor("X").find(i => i.kind === "mirror").row >= Widgets.itemsFor("X").reduce((low, it) => Math.max(low, it.row + Widgets.spanOf(it.size)[1]), 0), true);
+        check("mirror: in no layout, so the edit mode and the file never hold it", [Widgets.itemsFor("X").length, Widgets.placed("mirror")], [layout, false]);
+        check("mirror: and in no gallery", Widgets.kinds.some(k => k.kind === "mirror"), false);
+        Mirror.adopt('{"usb":"none","name":"","running":false,"via":"","error":""}');
+        check("mirror: every state has a word", ["running", "ready", "debugging", "absent"].filter(s => Mirror.title(s) === ""), []);
+        check("mirror: debugging off says where to turn it on", /USB debugging/.test(Mirror.hint("debugging", "", "")), true);
+        check("mirror: ready names the tablet", Mirror.hint("ready", "", "SAMSUNG Android"), "SAMSUNG Android");
+        check("mirror: an unallowed tablet says what to do", /Allow/.test(Mirror.hint("ready", "Device is unauthorized", "x")), true);
+        check("mirror: scrcpy's other words are passed on", Mirror.hint("ready", "Something else", "x"), "Something else");
+        Mirror.adopt('{"usb":"off","name":"T","running":false,"error":""}');
+        check("mirror: a tablet with debugging off cannot start", [Mirror.state, Mirror.canStart], ["debugging", false]);
+        Mirror.adopt('{"usb":"on","name":"T","running":false,"error":""}');
+        check("mirror: with it on it can", [Mirror.state, Mirror.canStart], ["ready", true]);
+        Mirror.adopt('{"usb":"on","name":"T","running":true,"error":""}');
+        check("mirror: running is running", Mirror.state, "running");
+        Mirror.adopt('{"usb":"none","name":"","running":false,"error":""}');
+        check("mirror: listens to nothing with nobody looking", Mirror.watchers, 0);
+        const usbRow = { via: "usb", state: "ready", address: "" };
+        const wifiRow = { via: "wifi", state: "offered", address: "10.0.0.7:5555" };
+        check("mirror: a row says its route", [Mirror.deviceDetail(usbRow), Mirror.deviceDetail(wifiRow)], ["USB", "Wi-Fi 10.0.0.7"]);
+        check("mirror: a row that cannot start says what to do",
+              [Mirror.deviceDetail({ via: "usb", state: "debugging", address: "" }), Mirror.deviceDetail({ via: "usb", state: "unauthorized", address: "" })],
+              ["Turn on USB debugging", "Allow it on the tablet"]);
+        check("mirror: only ready and offered rows can start",
+              ["ready", "offered", "debugging", "unauthorized"].map(s => Mirror.usable({ state: s })), [true, true, false, false]);
+        check("mirror: looks for nothing with no list open", Mirror.scanners, 0);
+    }
+
     function testBarOptions() {
         const keys = BarOptions.keysOf([
             { description: "Display settings", modmask: 0, key: "XF86Display" },
@@ -1615,7 +1663,7 @@ ShellRoot {
             const suites = [root.testTheme, root.testNotifications, root.testScreensaver, root.testKeyFeed,
                             root.testBrightness, root.testCamera, root.testBadge, root.testControls, root.testSurfaces,
                             root.testShortcuts, root.testWidgets, root.testLockout,
-                            root.testApps, root.testTray, root.testBarOptions,
+                            root.testApps, root.testTray, root.testBarOptions, root.testMirror,
                             root.testScreenShare, root.testIsland];
             if (modules.item)
                 suites.push(() => modules.item.testSlider(root.check), () => modules.item.testLauncher(root.check), () => modules.item.testDisplays(root.check));

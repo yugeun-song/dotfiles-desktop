@@ -75,6 +75,15 @@ Item {
         }
     }
 
+    Component {
+        id: mirrorView
+
+        MirrorWidget {
+            size: card.rect.size
+            options: card.rect.options
+        }
+    }
+
     // The card's own size in reference pixels, so the content fills it to
     // the pixel whatever the grid's rounding.
     Loader {
@@ -83,7 +92,7 @@ Item {
         scale: card.k
         transformOrigin: Item.TopLeft
         sourceComponent: ({ clock: clockView, calendar: calendarView, weather: weatherView,
-                            system: systemView })[card.rect.kind] ?? null
+                            system: systemView, mirror: mirrorView })[card.rect.kind] ?? null
     }
 
     // Over the content, which takes no click.
@@ -97,6 +106,8 @@ Item {
         onClicked: {
             if (card.rect.kind === "weather")
                 Weather.togglePanel(card.screen);
+            else if (card.rect.kind === "mirror")
+                Mirror.togglePanel(card.screen);
             else
                 Widgets.openOptions(card.screen?.name ?? "", card.rect.id);
         }

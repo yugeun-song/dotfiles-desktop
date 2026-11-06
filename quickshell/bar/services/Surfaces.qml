@@ -14,7 +14,7 @@ import Quickshell
 //     change not yet kept still reverts at its deadline.
 //   widgetEditor, the widgets' edit mode: a window as displays is, so its
 //     settings can open over it and give it the keys back.
-//   launcher, controls, notifications, weather, cheatsheet, wallpaper,
+//   launcher, controls, notifications, weather, cheatsheet, wallpaper, mirror,
 //   widgetSettings, widgetOptions: transient, as a menu bar's menus and a
 //     search overlay are: one at a time, each opening shuts whichever of
 //     them was up.

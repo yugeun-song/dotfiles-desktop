@@ -47,7 +47,7 @@ Scope {
     // Under the bar, which is scaled by the screen's fit as every panel is.
     readonly property real top: Math.ceil(Theme.barHeight * Theme.fit(root.screen))
     readonly property var rects: Widgets.loaded && root.screen
-        ? Widgets.rects(Widgets.itemsFor(root.screen.name), root.screen.width, root.screen.height, root.top) : []
+        ? Widgets.rects(Widgets.drawnFor(root.screen.name), root.screen.width, root.screen.height, root.top) : []
     readonly property var bounds: {
         if (root.rects.length === 0)
             return { x: 0, y: 0, w: 1, h: 1 };

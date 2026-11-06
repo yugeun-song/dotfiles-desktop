@@ -106,6 +106,15 @@ edit(BAR / "services/Alarms.qml",
      'command: ["true"]')
 
 (BAR / "scripts/app-scope.sh").write_text(f'#!/bin/sh\necho "app $*" >> {LOG}\n')
+# The tablet mirror's script: its status from a file of the run's, its start and stop
+# in the log, so that no device, unit or adb of the machine's is touched.
+(BAR / "scripts/mirror.sh").write_text(f'''#!/bin/sh
+case "$1" in
+    status) cat "{WORK / "mirror-status"}" 2>/dev/null || echo '{{"usb":"none","name":"","running":false,"error":""}}' ;;
+    devices) echo "mirror devices" >> {LOG}; cat "{WORK / "mirror-devices"}" 2>/dev/null || echo '{{"devices":[]}}' ;;
+    *) echo "mirror $*" >> {LOG} ;;
+esac
+''')
 # The weather, offline: a reading for "Test", or for the place the picker
 # kept; its search finds one place, named as asked.
 (BAR / "scripts/weather.sh").write_text(r'''#!/bin/sh
@@ -190,6 +199,12 @@ probe = '''
         }
         function session(): bool {
             return Session.menuOpen;
+        }
+        function mirrorCard(): bool {
+            return Widgets.drawnFor("HEADLESS-2").some(i => i.kind === "mirror");
+        }
+        function expandControls(section: string): void {
+            Controls.expanded = section;
         }
         function controls(): bool {
             return Controls.open;

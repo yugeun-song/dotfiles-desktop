@@ -66,7 +66,7 @@ Singleton {
     readonly property var keyboardPanels: ["quickshell:launcher", "quickshell:powermenu",
         "quickshell:notification-centre", "quickshell:cheatsheet", "quickshell:displays",
         "quickshell:control-centre", "quickshell:wallpaper", "quickshell:widget-editor",
-        "quickshell:widget-settings", "quickshell:widget-options"]
+        "quickshell:widget-settings", "quickshell:widget-options", "quickshell:mirror"]
 
     // The screen the keys go to.
     readonly property var keyboard: focus.panelsOpen > 0 ? root.focused : root.windowScreen

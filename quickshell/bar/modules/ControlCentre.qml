@@ -247,7 +247,9 @@ Scope {
             Component.onCompleted: {
                 if (Brightness.available)
                     Brightness.read();
+                Mirror.watchers += 1;
             }
+            Component.onDestruction: Mirror.watchers -= 1
 
             // The toggles in GNOME's order, each only where its device or
             // service is there; the rest close up, two to a row.
@@ -256,7 +258,8 @@ Scope {
                 Bt.present ? "bluetooth" : "",
                 win.source !== null ? "mic" : "",
                 Camera.installed && Camera.state !== "none" && Camera.state !== "unknown" ? "camera" : "",
-                Controls.profilesAnswered ? "power" : ""
+                Controls.profilesAnswered ? "power" : "",
+                "tablet"
             ].filter(t => t !== "")
             readonly property var rows: {
                 const out = [];
@@ -326,6 +329,15 @@ Scope {
                         title: "Cameras",
                         detail: ({ on: "On", off: "Off", stuck: "On, one held off", leak: "Off, one still on" })[Camera.state] ?? "",
                         active: Camera.state === "on"
+                    };
+                case "tablet":
+                    return {
+                        icon: Theme.iconTablet,
+                        title: "Tablet",
+                        detail: Mirror.running ? (Mirror.via === "wifi" ? "Mirroring · Wi-Fi" : "Mirroring · USB") : Mirror.title(Mirror.state),
+                        active: Mirror.running,
+                        expandable: true,
+                        opensOnly: true
                     };
                 case "power":
                     return {
@@ -465,6 +477,67 @@ Scope {
                                                ? "Held back on a lap"
                                                : PowerProfiles.degradationReason === PerformanceDegradationReason.HighTemperature
                                                ? "Held back, too hot" : ""
+
+            // What can be mirrored, found while this is open (services/Mirror.qml),
+            // the settings a row behind.
+            Component {
+                id: tabletRows
+
+                Column {
+                    Component.onCompleted: {
+                        Mirror.watchers += 1;
+                        Mirror.scanners += 1;
+                    }
+                    Component.onDestruction: {
+                        Mirror.scanners -= 1;
+                        Mirror.watchers -= 1;
+                    }
+
+                    Repeater {
+                        model: Mirror.devices
+
+                        ControlRow {
+                            id: tabletRow
+
+                            required property var modelData
+
+                            width: parent.width
+                            icon: tabletRow.modelData.via === "wifi" ? Theme.iconWifi4 : Theme.iconTablet
+                            label: tabletRow.modelData.name
+                            detail: Mirror.deviceDetail(tabletRow.modelData)
+                            checked: Mirror.isCurrent(tabletRow.modelData)
+                            quiet: !Mirror.usable(tabletRow.modelData)
+                            onActivated: Mirror.connect(tabletRow.modelData)
+                        }
+                    }
+
+                    ControlRow {
+                        width: parent.width
+                        visible: Mirror.devices.length === 0
+                        quiet: true
+                        label: Mirror.searched ? "No tablet found" : "Searching…"
+                        detail: Mirror.searched ? "Plug it in by USB" : ""
+                    }
+
+                    Rule {}
+
+                    ControlRow {
+                        width: parent.width
+                        visible: (Mirror.options.wifi ?? "") !== ""
+                        icon: Theme.iconWifiOff
+                        label: "Close Wi-Fi access"
+                        detail: (Mirror.options.wifi ?? "").split(":")[0]
+                        onActivated: Mirror.forget()
+                    }
+
+                    ControlRow {
+                        width: parent.width
+                        icon: Theme.iconSettings
+                        label: "Mirror settings"
+                        onActivated: Mirror.togglePanel(win.screen)
+                    }
+                }
+            }
 
             Component {
                 id: wifiRows
@@ -623,6 +696,8 @@ Scope {
                     return bluetoothRows;
                 case "power":
                     return powerRows;
+                case "tablet":
+                    return tabletRows;
                 }
                 return null;
             }

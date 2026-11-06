@@ -61,6 +61,7 @@ Singleton {
         clock: { hours24: true },
         calendar: { mondayFirst: true },
         weather: {},
+        mirror: {},
         system: { cpu: true, memory: true, network: true, gpu: true, vram: true, battery: true, disk: true, tmpfs: true }
     })
 
@@ -213,6 +214,19 @@ Singleton {
         if (root.mode === "screens" && Array.isArray(root.screens[name]))
             return root.screens[name];
         return root.layout;
+    }
+
+    // What a screen draws: its layout, and while the tablet mirror runs that one's
+    // card beside it, temporary (the user, 2026-11-07: only while mirroring). So it is
+    // in no layout, in no gallery and in no saved file, and the edit mode, which reads
+    // itemsFor, never sees it. Under the lowest of them (the same day: at the very
+    // bottom), and on a screen with no room there, in the nearest free place.
+    function drawnFor(name: string): var {
+        const items = root.itemsFor(name);
+        if (!Mirror.running)
+            return items;
+        const lowest = items.reduce((low, it) => it.row >= 0 ? Math.max(low, it.row + root.spanOf(it.size)[1]) : low, 0);
+        return items.concat([{ id: "mirror-live", kind: "mirror", size: "medium", col: 0, row: lowest }]);
     }
 
     // Every list a present screen shows; the shared one when none is known.

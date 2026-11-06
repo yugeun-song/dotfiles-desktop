@@ -1483,6 +1483,8 @@ doctor() {
         "kcmshell6:the control centre's network and Bluetooth settings (a terminal program without it)"
         "powerprofilesctl:the control centre's power mode"
         "kvantummanager:the Qt widget style (Breeze stands in without it)"
+        "scrcpy:the tablet mirror panel"
+        "adb:the tablet mirror panel"
     )
     for tool in "${tools[@]}"; do
         command -v "${tool%%:*}" >/dev/null 2>&1 || missing+=("${tool%%:*} (${tool#*:})")

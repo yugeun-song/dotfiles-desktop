@@ -16,6 +16,13 @@ hl.window_rule({ match = { title = "^(Open File|Save File|Save As|Open Folder)" 
 
 hl.window_rule({ match = { title = "^(Picture-in-Picture)$" }, float = true, pin = true })
 
+-- The tablet mirror keeps Hyprland's keys: with control of the tablet on, or full
+-- screen, it may ask to have them all and pass Super+Q to the tablet (the user,
+-- 2026-11-07). And it stays where it opened: asking for full screen, SDL names the
+-- first output, and the window went there, to that screen's workspace, whichever was
+-- in use. The later rule wins, so this repeats the first rule's maximize.
+hl.window_rule({ match = { class = "^(scrcpy)$" }, no_shortcuts_inhibit = true, suppress_event = "maximize fullscreenoutput" })
+
 -- A pinned window keeps its border when unfocused, in the palette's cream/grey.
 hl.window_rule({ match = { pin = true }, border_color = "rgba(ecf0c1ff) rgba(686f9aff)" })
 

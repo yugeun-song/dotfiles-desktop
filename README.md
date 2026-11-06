@@ -290,6 +290,11 @@ session dialog, the Displays panel and the wallpaper picker
 set through `hypr/scripts/wallpaper.sh`). Only the session dialog dims the
 screen; which panels may stand together is `services/Surfaces.qml`.
 
+The tablet mirror (the control centre's Tablet tile, which finds what can be reached
+and connects, `modules/MirrorPanel.qml` for its settings, or its desktop widget) shows an
+Android tablet in a window by scrcpy, to share in a call; USB debugging on the tablet is
+the one step it needs, and Wi-Fi starts through USB, since the firewall takes no mDNS.
+
 Desktop widgets (`modules/WidgetDesk.qml`, rules in `services/Widgets.qml`):
 a clock, a calendar, the weather and the machine, drawn only on a screen
 whose desktop is in view and holding nothing while hidden. `Super+Alt+W`
