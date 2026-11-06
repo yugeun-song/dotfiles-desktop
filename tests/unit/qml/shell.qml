@@ -154,7 +154,7 @@ ShellRoot {
         const dialogs = ["org.kde.polkit-kde-authentication-agent-1", "hyprpolkitagent", "lxqt-policykit-agent",
                          "org.gnupg.pinentry-qt", "org.kde.ksshaskpass", "gcr-prompter", "org.kde.kwalletd6",
                          "org.kde.kded6", "kcmshell6", "systemsettings", "org.kde.bluedevilwizard",
-                         "nm-connection-editor"];
+                         "nm-connection-editor", "org.kde.kiod6", "org.kde.ksecretd", "blueman-manager"];
         check("secret: password windows are known", dialogs.filter(c => !KeyFeed.secretWindows.test(c)), []);
         check("secret: other windows are not", ["kitty", "firefox", "org.kde.dolphin", "code-oss"]
               .filter(c => KeyFeed.secretWindows.test(c)), []);

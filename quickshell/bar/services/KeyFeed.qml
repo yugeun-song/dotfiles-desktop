@@ -86,8 +86,10 @@ Singleton {
     // the control centre hands networks and Bluetooth to windows (2026-11-04)
     // those count too: kded6 draws NetworkManager's and BlueZ's prompts,
     // kcmshell6 and systemsettings the pages with Wi-Fi keys, bluedevil's
-    // wizard pairing PINs, nm-connection-editor the fallback's keys.
-    readonly property var secretWindows: /polkit|policykit|pinentry|askpass|gcr-prompter|kwalletd|kded6|kcmshell|systemsettings|bluedevil|nm-connection-editor|nm-applet/i
+    // wizard pairing PINs, nm-connection-editor the fallback's keys, blueman
+    // the other fallback's PINs. kiod draws the file manager's prompts for a
+    // remote share, ksecretd the wallet's where kwalletd does not.
+    readonly property var secretWindows: /polkit|policykit|pinentry|askpass|gcr-prompter|kwalletd|ksecretd|kiod|kded6|kcmshell|systemsettings|bluedevil|blueman|nm-connection-editor|nm-applet/i
 
     readonly property var focusedWindow: Screens.focusedWindow
 
