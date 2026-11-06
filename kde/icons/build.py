@@ -134,8 +134,17 @@ MAP = {
 # Each size range its stroke, in Lucide's 24 units: 2.5 at 18 px and 2.05 at 22 px
 # are both about 1.9 px. The ranges are what is asked for, so the 18 drawn from 36
 # has 2.5 and the 22 drawn from 33 or 44 has 2.05.
-RANGES = [("scalable-small", 18, 8, 20, 2.5), ("scalable", 24, 21, 35, 2.05), ("scalable-small-2x", 36, 36, 40, 2.5),
-          ("scalable-2x", 44, 41, 48, 2.05), ("scalable-large", 64, 49, 512, 1.0)]
+RANGES = [("scalable-small", 18, 8, 20, 2.5), ("scalable-sidebar", 21, 21, 21, 2.8), ("scalable", 24, 22, 35, 2.05),
+          ("scalable-small-2x", 36, 36, 40, 2.5), ("scalable-sidebar-2x", 42, 42, 42, 2.8), ("scalable-2x", 44, 43, 48, 2.05),
+          ("scalable-large", 64, 49, 512, 1.0)]
+# Dolphin's places panel asks for 21 (42 twice over), a size nothing else asks for, and
+# draws its text 4 px after the box of the icon, which nothing can change
+# (s_lateralMargin, kfileplacesview.cpp). So at that size the glyph stands in a box with
+# room to its right and a little to its left: the words move away from the icons and the
+# icons in from the lit row's edge, as in the sidebars the user sent (2026-11-07), the
+# glyph still about 16 px. The box's height makes the rows taller too (dolphinrc's
+# [PlacesPanel] IconSize, install.sh; kde/dolphin.qss has the rest).
+VIEWS = {"scalable-sidebar": "-1.5 -3.5 31 31", "scalable-sidebar-2x": "-1.5 -3.5 31 31"}
 CONTEXTS = {"places": "Places", "mimetypes": "MimeTypes", "devices": "Devices", "actions": "Actions"}
 
 
@@ -148,7 +157,7 @@ GEOMETRY = {"d", "cx", "cy", "r", "rx", "ry", "x", "y", "width", "height", "x1",
 VALUE = re.compile(r"^[0-9eE.,\- +A-Za-z]*$")
 
 
-def drawn(source, stroke):
+def drawn(source, stroke, view="0 0 24 24"):
     """Lucide's shapes inside one group in the colour scheme's ink."""
     root = ET.parse(source).getroot()
     shapes = []
@@ -164,7 +173,7 @@ def drawn(source, stroke):
         attrs = "".join(f' {k}="{v}"' for k, v in child.attrib.items())
         shapes.append(f"    <{tag}{attrs}/>")
     return (
-        f'<svg xmlns="{SVG_NS}" width="24" height="24" viewBox="0 0 24 24">\n'
+        f'<svg xmlns="{SVG_NS}" width="24" height="24" viewBox="{view}">\n'
         "  <!-- From Lucide (ISC License; LICENSE beside this theme), recoloured for KDE. -->\n"
         f'  <defs><style type="text/css" id="current-color-scheme">.ColorScheme-Text {{ color:{INK}; }}</style></defs>\n'
         f'  <g class="ColorScheme-Text" style="fill:none;stroke:currentColor" stroke-width="{stroke}"'
@@ -202,7 +211,7 @@ def write_theme(source, out):
     used = set()
     for name, targets in MAP.items():
         for rng, _, _, _, stroke in RANGES:
-            text = drawn(icons / f"{name}.svg", stroke)
+            text = drawn(icons / f"{name}.svg", stroke, VIEWS.get(rng, "0 0 24 24"))
             for ctx, fdo in targets:
                 path = out / rng / ctx / f"{fdo}.svg"
                 path.parent.mkdir(parents=True, exist_ok=True)

@@ -202,6 +202,8 @@ check("Dolphin opens folders in the list view with its four columns",
       and props.get("Dolphin", "VisibleRoles", fallback="").split(",")
       == ["Details_text", "Details_modificationtime", "Details_size", "Details_type"])
 qss = (repo / "kde/dolphin.qss").read_text()
+check("the sidebar's words are heavier and its rows apart",
+      re.search(r"KFilePlacesView\s*\{[^}]*font-weight:\s*500[^}]*qproperty-spacing:\s*[1-9]", qss) is not None)
 check("the sidebar has a face and padding of its own",
       re.search(r"KFilePlacesView\s*\{[^}]*background-color:[^}]*padding|KFilePlacesView\s*\{[^}]*padding:[^}]*background-color", qss, re.S) is not None)
 import shutil, subprocess
@@ -253,6 +255,8 @@ check("every line icon is plain shapes in the colour scheme's ink", not bad, "; 
 lacking = [f"{rng}/{ctx}/{name}" for targets in icons_build.MAP.values() for ctx, name in targets
            for rng, *_ in icons_build.RANGES if not (theme_dir / rng / ctx / f"{name}.svg").is_file()]
 check("every name build.py maps is drawn, at both sizes", not lacking, " ".join(lacking[:5]))
+check("the sidebar's icons alone have room beside them",
+      sorted(icons_build.VIEWS) == ["scalable-sidebar", "scalable-sidebar-2x"] and all(r[0] in icons_build.VIEWS for r in icons_build.RANGES if r[2] in (21, 42)))
 check("Lucide's licence is kept beside its icons", "ISC License" in (theme_dir / "LICENSE").read_text())
 lock = (repo / "kde/icons/upstream.lock").read_text()
 check("the lock names Lucide's official repository, one tag and one commit",

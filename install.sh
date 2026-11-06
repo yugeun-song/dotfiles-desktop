@@ -1248,9 +1248,11 @@ dolphin_look() {
     seed_key "$rc" IconsMode MaximumTextLines 2
     seed_key "$rc" IconsMode UseSystemFont false
     seed_key "$rc" IconsMode ViewFont "$font"
-    # The sidebar's rows, as the pictures the user sent (2026-11-06): the row is
-    # this and the style's 5 px above and below, so 28 px beside 13 px words.
-    seed_key "$rc" PlacesPanel IconSize 18
+    # The sidebar's rows, as the pictures the user sent (2026-11-06, airier and with
+    # the words further from the icons 2026-11-07): the row is this and the style's
+    # 5 px above and below, so 31 px beside 13 px words. A size of its own, whose
+    # icons have room beside them (kde/icons/build.py's VIEWS).
+    seed_key "$rc" PlacesPanel IconSize 21 18
     seed_key "$rc" "KFileDialog Settings" "Places Icons Auto-resize" false
     seed_key "$rc" "KFileDialog Settings" "Places Icons Static Size" 16
     seed_key "$rc" "MainWindow/Toolbar mainToolBar" ToolButtonStyle IconOnly

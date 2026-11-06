@@ -660,7 +660,7 @@ run
 if command -v kreadconfig6 >/dev/null 2>&1; then
     is "programs in a terminal run in kitty" "$(kreadconfig6 --file "$T/home/.config/kdeglobals" --group General --key TerminalApplication)" kitty
     is "by its entry too" "$(kreadconfig6 --file "$T/home/.config/kdeglobals" --group General --key TerminalService)" kitty.desktop
-    is "the sidebar's icons are small" "$(kreadconfig6 --file "$T/home/.config/dolphinrc" --group PlacesPanel --key IconSize)" 18
+    is "the sidebar's rows have their own icon size" "$(kreadconfig6 --file "$T/home/.config/dolphinrc" --group PlacesPanel --key IconSize)" 21
 fi
 
 # ---- the file icons: built at install, from what passed against upstream ----

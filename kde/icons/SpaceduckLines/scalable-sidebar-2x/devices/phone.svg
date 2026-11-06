@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="-1.5 -3.5 31 31">
+  <!-- From Lucide (ISC License; LICENSE beside this theme), recoloured for KDE. -->
+  <defs><style type="text/css" id="current-color-scheme">.ColorScheme-Text { color:#ecf0c1; }</style></defs>
+  <g class="ColorScheme-Text" style="fill:none;stroke:currentColor" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round">
+    <rect width="14" height="20" x="5" y="2" rx="2" ry="2"/>
+    <path d="M12 18h.01"/>
+  </g>
+</svg>

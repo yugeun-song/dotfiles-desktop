@@ -2,7 +2,7 @@
 Name=SpaceduckLines
 Comment=Line icons from Lucide for places, files and common actions; Breeze for the rest
 Inherits=breeze-dark,hicolor
-Directories=scalable-small/actions,scalable-small/devices,scalable-small/mimetypes,scalable-small/places,scalable/actions,scalable/devices,scalable/mimetypes,scalable/places,scalable-small-2x/actions,scalable-small-2x/devices,scalable-small-2x/mimetypes,scalable-small-2x/places,scalable-2x/actions,scalable-2x/devices,scalable-2x/mimetypes,scalable-2x/places,scalable-large/actions,scalable-large/devices,scalable-large/mimetypes,scalable-large/places
+Directories=scalable-small/actions,scalable-small/devices,scalable-small/mimetypes,scalable-small/places,scalable-sidebar/actions,scalable-sidebar/devices,scalable-sidebar/mimetypes,scalable-sidebar/places,scalable/actions,scalable/devices,scalable/mimetypes,scalable/places,scalable-small-2x/actions,scalable-small-2x/devices,scalable-small-2x/mimetypes,scalable-small-2x/places,scalable-sidebar-2x/actions,scalable-sidebar-2x/devices,scalable-sidebar-2x/mimetypes,scalable-sidebar-2x/places,scalable-2x/actions,scalable-2x/devices,scalable-2x/mimetypes,scalable-2x/places,scalable-large/actions,scalable-large/devices,scalable-large/mimetypes,scalable-large/places
 
 [scalable-small/actions]
 Size=18
@@ -32,30 +32,58 @@ MaxSize=20
 Context=Places
 Type=Scalable
 
+[scalable-sidebar/actions]
+Size=21
+MinSize=21
+MaxSize=21
+Context=Actions
+Type=Scalable
+
+[scalable-sidebar/devices]
+Size=21
+MinSize=21
+MaxSize=21
+Context=Devices
+Type=Scalable
+
+[scalable-sidebar/mimetypes]
+Size=21
+MinSize=21
+MaxSize=21
+Context=MimeTypes
+Type=Scalable
+
+[scalable-sidebar/places]
+Size=21
+MinSize=21
+MaxSize=21
+Context=Places
+Type=Scalable
+
 [scalable/actions]
 Size=24
-MinSize=21
+MinSize=22
 MaxSize=35
 Context=Actions
 Type=Scalable
 
 [scalable/devices]
 Size=24
-MinSize=21
+MinSize=22
 MaxSize=35
 Context=Devices
 Type=Scalable
 
 [scalable/mimetypes]
 Size=24
-MinSize=21
+MinSize=22
 MaxSize=35
 Context=MimeTypes
 Type=Scalable
 
 [scalable/places]
 Size=24
-MinSize=21
+MinSize=22
 MaxSize=35
 Context=Places
 Type=Scalable
@@ -88,30 +116,58 @@ MaxSize=40
 Context=Places
 Type=Scalable
 
+[scalable-sidebar-2x/actions]
+Size=42
+MinSize=42
+MaxSize=42
+Context=Actions
+Type=Scalable
+
+[scalable-sidebar-2x/devices]
+Size=42
+MinSize=42
+MaxSize=42
+Context=Devices
+Type=Scalable
+
+[scalable-sidebar-2x/mimetypes]
+Size=42
+MinSize=42
+MaxSize=42
+Context=MimeTypes
+Type=Scalable
+
+[scalable-sidebar-2x/places]
+Size=42
+MinSize=42
+MaxSize=42
+Context=Places
+Type=Scalable
+
 [scalable-2x/actions]
 Size=44
-MinSize=41
+MinSize=43
 MaxSize=48
 Context=Actions
 Type=Scalable
 
 [scalable-2x/devices]
 Size=44
-MinSize=41
+MinSize=43
 MaxSize=48
 Context=Devices
 Type=Scalable
 
 [scalable-2x/mimetypes]
 Size=44
-MinSize=41
+MinSize=43
 MaxSize=48
 Context=MimeTypes
 Type=Scalable
 
 [scalable-2x/places]
 Size=44
-MinSize=41
+MinSize=43
 MaxSize=48
 Context=Places
 Type=Scalable
