@@ -37,7 +37,7 @@ Scope {
     // wallpaper.sh's DIR, DESK and LOCK: keep in step with it.
     readonly property string folder: (Quickshell.env("HOME") ?? "") + "/Pictures/Wallpapers"
     readonly property string deskFile: root.folder + "/current-desktop.png"
-    readonly property string lockFile: root.folder + "/current.png"
+    readonly property string lockFile: root.folder + "/current-lockscreen.png"
     // The freedesktop thumbnail cache's 256 px size, twice a tile or more.
     readonly property string thumbnails: (Quickshell.env("XDG_CACHE_HOME") || ((Quickshell.env("HOME") ?? "") + "/.cache"))
                                          + "/thumbnails/large"
@@ -341,7 +341,7 @@ Scope {
                 const out = [];
                 for (let i = 0; i < pictures.count; i++) {
                     const name = pictures.get(i, "fileName");
-                    if (name === "current.png" || name === "current-desktop.png")
+                    if (name === "current-lockscreen.png" || name === "current-desktop.png")
                         continue;
                     out.push({ name: name, path: pictures.get(i, "filePath"), modified: String(pictures.get(i, "fileModified")) });
                 }

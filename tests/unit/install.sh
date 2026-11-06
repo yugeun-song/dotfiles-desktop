@@ -603,6 +603,21 @@ same "a profile's own user.js is left alone" "$ff/own.default/user.js" <(echo 'u
 has "and the switch it lacks is named" "$out" "toolkit.legacyUserProfileCustomizations.stylesheets"
 absent "the install section is no profile" "$ff/Install4F96"
 
+# ---- the lock screen's picture under its new name ----
+setup
+w="$T/home/Pictures/Wallpapers"
+mkdir -p "$w"
+echo mine >"$w/current.png"
+ln -s /nowhere/clip.mp4 "$w/current.video"
+run
+same "the lock's picture takes its new name" "$w/current-lockscreen.png" <(echo mine)
+absent "and the old one goes" "$w/current.png"
+if [[ -L "$w/current-lockscreen.video" && ! -L "$w/current.video" ]]; then pass; else fail "the video's link keeps pace, even dangling"; fi
+echo other >"$w/current.png"
+run
+same "a picture already under the new name is not overwritten" "$w/current-lockscreen.png" <(echo mine)
+same "and the old file is left as it is" "$w/current.png" <(echo other)
+
 # ---- the line icons, checked against upstream before they go in ----
 setup
 icons=$T/home/.local/share/icons/SpaceduckLines

@@ -30,7 +30,7 @@ expect() {
 
 W="$WORK/home/Pictures/Wallpapers"
 DESK="$W/current-desktop.png"
-LOCK="$W/current.png"
+LOCK="$W/current-lockscreen.png"
 
 mkdir -p "$WORK/bin"
 # listactive answers at once: the script waits up to 5 s for a silent one.
@@ -155,7 +155,7 @@ expect "--reload did not give hyprpaper the desktop's file" sent_last "$DESK"
 
 # ---- videos ----------------------------------------------------------------
 DV="$W/current-desktop.video"
-LV="$W/current.video"
+LV="$W/current-lockscreen.video"
 plays() { [[ -L "$1" && "$(readlink -f -- "$1")" == "$(readlink -f -- "$2")" ]]; }
 if command -v ffmpeg >/dev/null 2>&1 \
     && ffmpeg -loglevel error -nostdin -f lavfi -i color=c=red:s=64x36:d=1 -c:v libx264 -pix_fmt yuv420p "$WORK/clip.mp4" 2>/dev/null; then

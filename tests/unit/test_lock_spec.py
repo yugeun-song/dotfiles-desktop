@@ -121,12 +121,12 @@ class Video(unittest.TestCase):
 
     def test_the_link_beside(self):
         with tempfile.TemporaryDirectory() as tmp:
-            picture = pathlib.Path(tmp, "current.png")
+            picture = pathlib.Path(tmp, "current-lockscreen.png")
             picture.write_bytes(b"")
             self.assertEqual(lock_spec.video_beside(str(picture)), "")
             clip = pathlib.Path(tmp, "clip.mp4")
             clip.write_bytes(b"x")
-            pathlib.Path(tmp, "current.video").symlink_to(clip)
+            pathlib.Path(tmp, "current-lockscreen.video").symlink_to(clip)
             self.assertEqual(lock_spec.video_beside(str(picture)), str(clip.resolve()))
             got = lock_spec.spec(SMALL.replace("~/Pictures/w.png", str(picture)))
             self.assertEqual(got["outputs"]["eDP-1"]["background"]["video"], str(clip.resolve()))

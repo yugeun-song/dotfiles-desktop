@@ -1265,6 +1265,24 @@ dolphin_look() {
     rm -f -- "$bar"
 }
 
+# The lock screen's picture was current.png until 2026-11-07 (the user: beside
+# current-desktop.png the name said too little). hyprlock.conf names the new one,
+# so the user's picture moves with it, and its video's link. Never over one that
+# is already there.
+wallpaper_names() {
+    local dir="$HOME/Pictures/Wallpapers" kind old new
+    for kind in png video; do
+        old="$dir/current.$kind" new="$dir/current-lockscreen.$kind"
+        [[ -e "$old" || -L "$old" ]] || continue
+        [[ -e "$new" || -L "$new" ]] && continue
+        if (( CHECK )); then
+            todo "$(tilde "$old") to be renamed $(tilde "$new")"
+        else
+            mv -n -- "$old" "$new" && wrote "$(tilde "$new")" renamed
+        fi
+    done
+}
+
 # Firefox draws its window buttons itself and fills a disc under each one
 # hovered, the close one's red (the user, 2026-11-06: change it); only a
 # profile's own style sheet reaches them (firefox/userChrome.css), and only
@@ -1794,6 +1812,7 @@ cursor_theme
 group_close
 
 group_open "seeded once"
+wallpaper_names
 seed "$SRC/hypr/hypridle.conf" "$CONFIG/hypr/hypridle.conf"
 seed "$SRC/hypr/hyprlock.conf" "$CONFIG/hypr/hyprlock.conf"
 seed "$SRC/hypr/hyprpaper.conf" "$CONFIG/hypr/hyprpaper.conf"

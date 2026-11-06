@@ -1908,7 +1908,7 @@ im.paste((24, 26, 32), (0, 868, 2560, 1440))
 im.save(sys.argv[1])' "$WORK/wall.png"
     sleep 1
     lockconf="$WORK/config/hypr/hyprlock.conf"
-    sed -i "s#^\$media = .*#\$media = python3 $WORK/config/hypr/scripts/lock-media.py#; s#^\$island = .*#\$island = sh $WORK/config/hypr/scripts/lock-island.sh#; s#~/.config/hypr/lock-blank.png#$WORK/config/hypr/lock-blank.png#; s#~/Pictures/Wallpapers/current.png#$WORK/wall.png#" "$lockconf"
+    sed -i "s#^\$media = .*#\$media = python3 $WORK/config/hypr/scripts/lock-media.py#; s#^\$island = .*#\$island = sh $WORK/config/hypr/scripts/lock-island.sh#; s#~/.config/hypr/lock-blank.png#$WORK/config/hypr/lock-blank.png#; s#~/Pictures/Wallpapers/current-lockscreen.png#$WORK/wall.png#" "$lockconf"
     if fitted=$(HYPRLAND_INSTANCE_SIGNATURE="$SIG" "$WORK/config/hypr/scripts/lock-fit.sh" "$lockconf" "$WORK/hyprlock-fit.conf"); then
         WAYLAND_DISPLAY="$WL" HYPRLAND_INSTANCE_SIGNATURE="$SIG" DBUS_SESSION_BUS_ADDRESS="$BUS" \
             LOCK_MEDIA_RUN="$WORK/lockrun" LOCK_WEATHER="$WORK/bar/scripts/weather.sh" LOCK_ISLAND_RUN="$WORK/island" \

@@ -35,9 +35,9 @@ set -euo pipefail
 
 DIR="$HOME/Pictures/Wallpapers"
 DESK="$DIR/current-desktop.png"
-LOCK="$DIR/current.png"
+LOCK="$DIR/current-lockscreen.png"
 DESK_VIDEO="$DIR/current-desktop.video"
-LOCK_VIDEO="$DIR/current.video"
+LOCK_VIDEO="$DIR/current-lockscreen.video"
 USAGE="usage: wallpaper.sh <image|video> | [--desktop <image|video>] [--lock <image|video>] | --reload | --show"
 
 die() { printf 'wallpaper: %s\n' "$*" >&2; exit 1; }
