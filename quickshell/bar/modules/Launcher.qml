@@ -14,20 +14,46 @@ Scope {
     property string query: ""
     property int selected: 0
 
+    // The pointer's last place over a row, in the window's terms. A row takes
+    // the selection only when the pointer moves, never for landing under one at
+    // rest: the card opens on its first row wherever the pointer was left, and
+    // stays there as a query changes the rows (the user, 2026-11-07: it always
+    // opened on the third, the one under their pointer).
+    property var pointerAt: null
+
+    function pointerMoved(at) {
+        const moved = root.pointerAt !== null && (at.x !== root.pointerAt.x || at.y !== root.pointerAt.y);
+        root.pointerAt = at;
+        return moved;
+    }
+
     readonly property int maxRows: 8
 
     function toggle() {
         if (root.open) {
             root.close();
-        } else {
+        } else if (Surfaces.mayOpen("launcher")) {
             root.query = "";
             root.selected = 0;
+            root.pointerAt = null;
             root.open = true;
         }
     }
 
     function close() {
         root.open = false;
+    }
+
+    // Transient, one panel at a time (services/Surfaces.qml).
+    onOpenChanged: Surfaces.report("launcher", root.open)
+
+    Connections {
+        target: Surfaces
+
+        function onShut(name) {
+            if (name === "launcher")
+                root.close();
+        }
     }
 
     readonly property var allEntries: {
@@ -165,14 +191,11 @@ Scope {
                 right: true
             }
 
-            Rectangle {
+            // Clear, the screen left as it is (the user, 2026-11-04: only
+            // the session dialog dims); a click beside the card still closes it.
+            MouseArea {
                 anchors.fill: parent
-                color: Qt.rgba(Theme.bg.r, Theme.bg.g, Theme.bg.b, 0.72)
-
-                MouseArea {
-                    anchors.fill: parent
-                    onClicked: root.close()
-                }
+                onClicked: root.close()
             }
 
             Rectangle {
@@ -383,16 +406,14 @@ Scope {
                                 }
                             }
 
-                            HoverHandler {
-                                onHoveredChanged: {
-                                    if (hovered)
-                                        root.selected = row.index;
-                                }
-                            }
-
                             MouseArea {
                                 anchors.fill: parent
+                                hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
+                                onPositionChanged: mouse => {
+                                    if (root.pointerMoved(mapToItem(null, mouse.x, mouse.y)))
+                                        root.selected = row.index;
+                                }
                                 onClicked: root.launch(row.modelData)
                             }
                         }

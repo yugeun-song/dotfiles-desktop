@@ -244,6 +244,17 @@ sees the internet answer, so it shows within seconds of connecting. A click
 on it picks the place (`modules/WeatherPanel.qml`), searched by name and
 kept in the bar's state, not here; Seoul by default.
 
+The power button opens the control centre (`modules/ControlCentre.qml`),
+laid out after GNOME's quick settings: the sound and where it plays, the
+brightness, Wi-Fi, Bluetooth, the microphone, the cameras and the power
+mode, each section opening in place. Settings go to KDE's network and
+Bluetooth pages and pavucontrol-qt, a new network's password to
+NetworkManager's agent; the shell takes no secret. Its buttons open the
+session dialog, the Displays panel and the wallpaper picker
+(`modules/WallpaperPicker.qml`, the pictures in `~/Pictures/Wallpapers`,
+set through `hypr/scripts/wallpaper.sh`). Only the session dialog dims the
+screen; which panels may stand together is `services/Surfaces.qml`.
+
 The bar writes no core file when it crashes and keeps no detailed log
 (window titles, track titles); `systemctl --user set-environment
 BAR_DETAILED_LOGS=1` and `bar --restart` bring the log back for chasing a
@@ -257,7 +268,8 @@ read the keyboards. pkexec asks for an administrator's password at each
 the reader in a unit of its own, so the bar's reloads and restarts keep it;
 a login starts it off. No keyboard is held open while the session is
 locked, another console is in front, a password is typed (a polkit,
-pinentry, askpass, keyring or wallet window focused, or a terminal reading
+pinentry, askpass, keyring or wallet window focused, a network or Bluetooth
+settings window or prompt, or a terminal reading
 with its echo off, which `scripts/inputstate.py` tells from two terminal
 flags), or that watch is down. Keys are zeroed once decoded and go only to
 the overlay, over the holder's socket only the bar may use, never to a file

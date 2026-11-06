@@ -254,14 +254,17 @@ Row {
         }
     }
 
-    // The dialog the power key opens, for the pointer: lock, sign out,
-    // sleep, restart, shut down. The outermost item, where a desktop's
-    // session menu is looked for.
+    // The control centre (modules/ControlCentre.qml), the user's call
+    // (2026-11-04): the outermost item, where a desktop's system menu is
+    // looked for, opening on this bar's screen. The session dialog is a
+    // button in it, and the power key still opens that dialog directly.
     StatusItem {
+        id: powerItem
+
         icon: Theme.iconPower
         iconScale: Theme.statusIconBoost
 
         interactive: true
-        onActivated: Session.toggleMenu()
+        onActivated: Controls.toggle(powerItem.QsWindow.window?.screen ?? null)
     }
 }

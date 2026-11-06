@@ -16,6 +16,17 @@ Scope {
         id: displays
     }
 
+    PowerMenu {
+        id: sessionMenu
+    }
+
+    // Every entry offered, Lock among them: it went missing unnoticed once,
+    // told as not installed by a list its probe was not on (2026-11-06).
+    function testSessionMenu(check) {
+        check("session dialog: every entry offered", sessionMenu.usable.map(e => e.id), sessionMenu.entries.map(e => e.id));
+        check("session dialog: Lock among them", sessionMenu.usable.some(e => e.id === "lock"), true);
+    }
+
     function testLauncher(check) {
         const code = { name: "Visual Studio Code", genericName: "Text Editor", keywords: ["vscode", "editor"],
                        startupClass: "code", comment: "Code editing. Redefined.", execString: "/usr/bin/code %F" };

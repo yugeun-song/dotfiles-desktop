@@ -5,7 +5,7 @@ import QtQuick
 import Quickshell
 
 // Whether the session dialog (modules/PowerMenu.qml) is up. Here, not in
-// the dialog: the power key and the button on every bar open the same one
+// the dialog: the keys and the control centre's button open the same one
 // dialog, and sibling modules cannot reach each other's properties.
 Singleton {
     id: root
@@ -15,4 +15,7 @@ Singleton {
     function toggleMenu() {
         root.menuOpen = !root.menuOpen;
     }
+
+    // The system modal: it shuts every other panel (Surfaces.qml).
+    onMenuOpenChanged: Surfaces.report("session", root.menuOpen)
 }

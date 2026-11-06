@@ -23,7 +23,10 @@ hl.window_rule({ match = { pin = true }, border_color = "rgba(ecf0c1ff) rgba(686
 -- the bar that steals focus on hover; refuse it focus.
 hl.window_rule({ match = { class = "^$", title = "^quickshell$" }, no_focus = true })
 
-hl.layer_rule({ match = { namespace = "^(quickshell:launcher|quickshell:powermenu)$" }, blur = true })
+-- Only the session dialog frosts what lies behind it, under the dim it always
+-- has (modules/PowerMenu.qml). No other panel dims or blurs the screen (the
+-- user, 2026-11-04).
+hl.layer_rule({ match = { namespace = "^(quickshell:powermenu)$" }, blur = true })
 
 -- The bar is opaque; blurring it only costs a pass.
 hl.layer_rule({ match = { namespace = "^(quickshell)$" }, blur = false })

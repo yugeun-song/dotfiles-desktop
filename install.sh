@@ -1090,6 +1090,8 @@ doctor() {
         "kitty:terminal" "inotifywait:session watch (polls every 5 s without it)"
         "rsvg-convert:the drawn arrow in the cursor theme"
         "pw-dump:the program sharing the screen or in a call, on the island"
+        "kcmshell6:the control centre's network and Bluetooth settings (a terminal program without it)"
+        "powerprofilesctl:the control centre's power mode"
     )
     for tool in "${tools[@]}"; do
         command -v "${tool%%:*}" >/dev/null 2>&1 || missing+=("${tool%%:*} (${tool#*:})")

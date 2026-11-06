@@ -82,8 +82,12 @@ Singleton {
     // prompts), or the focused terminal reads with its echo off
     // (scripts/inputstate.py: sudo, su, ssh, passwd, read -s, pkttyagent).
     // The reader is then paused, its keyboards closed; with the helper down
-    // nothing can tell, so it stays paused until the helper is back.
-    readonly property var secretWindows: /polkit|policykit|pinentry|askpass|gcr-prompter|kwalletd/i
+    // nothing can tell, so it stays paused until the helper is back. Since
+    // the control centre hands networks and Bluetooth to windows (2026-11-04)
+    // those count too: kded6 draws NetworkManager's and BlueZ's prompts,
+    // kcmshell6 and systemsettings the pages with Wi-Fi keys, bluedevil's
+    // wizard pairing PINs, nm-connection-editor the fallback's keys.
+    readonly property var secretWindows: /polkit|policykit|pinentry|askpass|gcr-prompter|kwalletd|kded6|kcmshell|systemsettings|bluedevil|nm-connection-editor|nm-applet/i
 
     readonly property var focusedWindow: Screens.focusedWindow
 

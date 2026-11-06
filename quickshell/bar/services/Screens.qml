@@ -64,7 +64,9 @@ Singleton {
     // Hyprland's layer events: Qt's application state stayed active after the
     // launcher had closed (nested session).
     readonly property var keyboardPanels: ["quickshell:launcher", "quickshell:powermenu",
-        "quickshell:notification-centre", "quickshell:cheatsheet", "quickshell:displays"]
+        "quickshell:notification-centre", "quickshell:cheatsheet", "quickshell:displays",
+        "quickshell:control-centre", "quickshell:wallpaper", "quickshell:widget-editor",
+        "quickshell:widget-settings", "quickshell:widget-options"]
 
     // The screen the keys go to.
     readonly property var keyboard: focus.panelsOpen > 0 ? root.focused : root.windowScreen

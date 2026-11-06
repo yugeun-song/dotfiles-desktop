@@ -468,6 +468,58 @@ Singleton {
     readonly property int displaysRevertSeconds: 30
 
     // ---------------------------------------------------------------------
+    // The control centre (modules/ControlCentre.qml), opened by the bar's
+    // power button: laid out after GNOME's quick settings, as the user asked
+    // (2026-11-04), in the bar's own colours and line roles.
+    // ---------------------------------------------------------------------
+    // As wide as the notification panel and in its column, so the two
+    // surfaces that open at the top right share one edge.
+    readonly property int controlWidth:        root.notifWidth + root.notifStackGap * 2
+    // The same on all four sides; a little more than the menus' (the user,
+    // 2026-11-04).
+    readonly property int controlPad:          root.px(16)
+    readonly property int controlGap:          root.px(9)
+    // The menus' corners: the panel hangs from a bar item as they do.
+    readonly property int controlRadius:       root.menuRadius
+    // A title and its state, with room around them; a pill, so a toggle reads
+    // apart from the rounded panel it sits in.
+    readonly property int controlTileHeight:   root.px(48)
+    readonly property int controlButtonSize:   root.px(36)
+    readonly property int controlSliderHeight: root.px(36)
+    // Thicker than the player's line, its knob always shown: this one is
+    // dragged, not glanced at.
+    readonly property int controlTrackHeight:  Math.max(4, root.px(5))
+    readonly property int controlKnobSize:     root.px(16)
+    readonly property int controlTitleSize:    root.menuItemTextSize
+    readonly property int controlStateSize:    root.px(11)
+    // A section opened in place is a group, so it sits in the well; its
+    // corners are the panel's at that inset, its rows a step in again.
+    readonly property int controlWellRadius:   Math.max(root.px(6), root.controlRadius - root.controlPad)
+    readonly property int controlRowInset:     root.px(4)
+    readonly property int controlRowRadius:    Math.max(root.px(4), root.controlWellRadius - root.controlRowInset)
+    readonly property int controlRowHeight:    root.menuRowHeight
+    // Rows a section shows, at most.
+    readonly property int controlRowsMost:     7
+    // How long a capture waits once the panel is closed: the panel must have
+    // left the screen it takes.
+    readonly property int controlCaptureDelayMs: 300
+    // The bar's strength steps (iconWifi1..4) and their _lock forms, named
+    // from the font's cmap (CaskaydiaCove Nerd Font Mono).
+    readonly property var controlWifiGlyphs: [root.iconWifi1, root.iconWifi2, root.iconWifi3, root.iconWifi4]
+    readonly property var controlWifiLockGlyphs: [0xF0921, 0xF0924, 0xF0927, 0xF092A].map(c => String.fromCodePoint(c))
+    readonly property string iconMic:        String.fromCodePoint(0xF036C)  // md-microphone
+    readonly property string iconMicOff:     String.fromCodePoint(0xF036D)  // md-microphone_off
+    readonly property string iconCamera:     String.fromCodePoint(0xF0100)  // md-camera
+    readonly property string iconMonitor:    String.fromCodePoint(0xF0379)  // md-monitor
+    readonly property string iconScreenshot: String.fromCodePoint(0xF0E51)  // md-monitor_screenshot
+    readonly property string iconChevron:    String.fromCodePoint(0xF0142)  // md-chevron_right
+    readonly property string iconSpeedSlow:  String.fromCodePoint(0xF0F86)  // md-speedometer_slow
+    readonly property string iconSpeedMid:   String.fromCodePoint(0xF0F85)  // md-speedometer_medium
+    readonly property string iconSpeedFast:  String.fromCodePoint(0xF04C5)  // md-speedometer
+    readonly property string iconSpeaker:    String.fromCodePoint(0xF04C3)  // md-speaker
+    readonly property string iconHeadset:    String.fromCodePoint(0xF02CE)  // md-headset
+
+    // ---------------------------------------------------------------------
     // The key overlay (modules/KeyOverlay.qml): a strip of fixed size.
     // ---------------------------------------------------------------------
     // Five caps of ordinary width with their gaps; a wider chord clips the
@@ -609,9 +661,12 @@ Singleton {
     // Written as code points: astral-plane literals corrupt easily into tofu.
     readonly property string iconWifiOff:   String.fromCodePoint(0xF092D)
     readonly property string iconWifiDown:  String.fromCodePoint(0xF092F)
-    readonly property string iconWifi1:     String.fromCodePoint(0xF0925)
-    readonly property string iconWifi2:     String.fromCodePoint(0xF0926)
-    readonly property string iconWifi3:     String.fromCodePoint(0xF0927)
+    // md-wifi_strength_1..4, three code points apart: each step's _alert
+    // and _lock forms sit between. Consecutive ones (0xF0925..0xF0928) drew
+    // a lock, then a warning, then three bars below 75 per cent.
+    readonly property string iconWifi1:     String.fromCodePoint(0xF091F)
+    readonly property string iconWifi2:     String.fromCodePoint(0xF0922)
+    readonly property string iconWifi3:     String.fromCodePoint(0xF0925)
     readonly property string iconWifi4:     String.fromCodePoint(0xF0928)
     readonly property string iconEthernet:  String.fromCodePoint(0xF0200)
     readonly property string iconBt:        String.fromCodePoint(0xF00AF)

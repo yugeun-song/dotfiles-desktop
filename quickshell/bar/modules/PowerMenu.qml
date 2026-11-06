@@ -13,8 +13,27 @@ import qs.services
 Scope {
     id: root
 
-    // Held by Session: the bar's power button opens this dialog too.
+    // Held by Session: the control centre's power button opens this dialog too.
     readonly property bool open: Session.menuOpen
+
+    // The entry Enter runs. As in Launcher.qml, the pointer takes it only by
+    // moving: Enter here ends the session, and a pointer left where Shut down
+    // happens to land must not choose it.
+    property int selected: 0
+    property var pointerAt: null
+
+    function pointerMoved(at) {
+        const moved = root.pointerAt !== null && (at.x !== root.pointerAt.x || at.y !== root.pointerAt.y);
+        root.pointerAt = at;
+        return moved;
+    }
+
+    onOpenChanged: {
+        if (root.open) {
+            root.selected = 0;
+            root.pointerAt = null;
+        }
+    }
 
     function toggle() {
         Session.toggleMenu();
@@ -30,11 +49,12 @@ Scope {
             label: "Lock",
             icon: Theme.iconLock,
             accent: Theme.accentIndigo,
-            // Not hyprlock directly: loginctl -> hypridle lock_cmd -> lock.sh,
-            // which turns fcitx5 off first. hyprlock binds no text-input, so in
-            // Hangul mode keys never reach it and pam_faillock trips.
+            // Not a locker directly: loginctl -> hypridle lock_cmd -> lock.sh,
+            // which picks the lock screen and turns fcitx5 off first for
+            // hyprlock, which binds no text-input (in Hangul mode keys never
+            // reach it and pam_faillock trips).
             command: ["loginctl", "lock-session"],
-            probe: "hyprlock"
+            probe: "loginctl"
         },
         {
             id: "logout",
@@ -54,17 +74,18 @@ Scope {
             icon: Theme.iconSleep,
             accent: Theme.accentTeal,
             // Locks itself instead of relying on hypridle's before_sleep_cmd,
-            // and suspends only once hyprlock is up. app-scope.sh moves the lock
-            // out of bar.service's cgroup, so restarting the bar cannot kill it;
-            // setsid is the weaker fallback. Backgrounded: lock.sh blocks while
-            // hyprlock runs. app-scope.sh is bash's: Debian's sh is dash.
+            // and suspends only once the compositor says the session is
+            // locked, whichever lock screen holds it. app-scope.sh moves the
+            // lock out of bar.service's cgroup, so restarting the bar cannot
+            // kill it; setsid is the weaker fallback. Backgrounded: lock.sh
+            // blocks while the lock lasts (and does nothing if one runs).
+            // app-scope.sh is bash's: Debian's sh is dash.
             command: ["sh", "-c",
                 "l=\"${XDG_CONFIG_HOME:-$HOME/.config}/hypr/scripts/lock.sh\"; " +
                 "s=\"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar/scripts/app-scope.sh\"; " +
-                "pidof hyprlock >/dev/null 2>&1 || " +
                 "if [ -r \"$s\" ]; then bash \"$s\" -- \"$l\" >/dev/null 2>&1 & " +
                 "else setsid -f \"$l\" >/dev/null 2>&1; fi; " +
-                "for _ in $(seq 50); do pidof hyprlock >/dev/null 2>&1 && exec systemctl suspend; sleep 0.1; done; " +
+                "for _ in $(seq 50); do [ \"$(hyprctl locked 2>/dev/null)\" = true ] && exec systemctl suspend; sleep 0.1; done; " +
                 "notify-send -u critical 'Sleep cancelled' 'The screen did not lock, so the session was not suspended.'"],
             probe: "systemctl"
         },
@@ -107,7 +128,12 @@ Scope {
     Process {
         id: probe
 
-        command: ["sh", "-c", "for c in hyprlock hyprctl systemctl; do command -v \"$c\" >/dev/null 2>&1 && echo \"$c\"; done"]
+        // The entries' own probes, not a second list: an entry whose probe
+        // is looked for nowhere reads as not installed and disappears, as
+        // Lock did when its probe changed and a list here did not (found by
+        // the user, 2026-11-06).
+        command: ["sh", "-c", "for c; do command -v \"$c\" >/dev/null 2>&1 && echo \"$c\"; done", "sh"]
+            .concat(Array.from(new Set(root.entries.map(e => e.probe))))
 
         stdout: SplitParser {
             onRead: line => {
@@ -172,6 +198,10 @@ Scope {
                 right: true
             }
 
+            // The screen behind dims, and is frosted (rules.lua), however the
+            // dialog was opened: it is the one system modal (services/Surfaces.qml),
+            // and the same dialog should not look different by the way in (the
+            // user, 2026-11-07; on 2026-11-04 only Ctrl+Alt+Del dimmed).
             Rectangle {
                 anchors.fill: parent
                 color: Qt.rgba(Theme.bg.r, Theme.bg.g, Theme.bg.b, 0.72)
@@ -227,12 +257,12 @@ Scope {
                                 required property int index
                                 required property var modelData
 
-                                readonly property bool current: overlay.selected === button.index
+                                readonly property bool current: root.selected === button.index
 
                                 width: Theme.px(96)
                                 height: Theme.px(96)
                                 radius: Theme.px(14)
-                                color: button.current || hover.hovered ? button.modelData.accent : Qt.rgba(1, 1, 1, 0.05)
+                                color: button.current ? button.modelData.accent : Qt.rgba(1, 1, 1, 0.05)
 
                                 Column {
                                     anchors.centerIn: parent
@@ -243,7 +273,7 @@ Scope {
                                         text: button.modelData.icon
                                         font.family: Theme.iconFont
                                         font.pixelSize: Theme.px(30)
-                                        color: button.current || hover.hovered ? Theme.ink : Theme.fg
+                                        color: button.current ? Theme.ink : Theme.fg
                                     }
 
                                     Text {
@@ -252,22 +282,18 @@ Scope {
                                         font.family: Theme.uiFont
                                         font.pixelSize: Theme.px(12)
                                         font.weight: Font.Medium
-                                        color: button.current || hover.hovered ? Theme.ink : Theme.muted
-                                    }
-                                }
-
-                                HoverHandler {
-                                    id: hover
-
-                                    onHoveredChanged: {
-                                        if (hovered)
-                                            overlay.selected = button.index;
+                                        color: button.current ? Theme.ink : Theme.muted
                                     }
                                 }
 
                                 MouseArea {
                                     anchors.fill: parent
+                                    hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
+                                    onPositionChanged: mouse => {
+                                        if (root.pointerMoved(mapToItem(null, mouse.x, mouse.y)))
+                                            root.selected = button.index;
+                                    }
                                     onClicked: root.run(button.modelData)
                                 }
                             }
@@ -283,8 +309,6 @@ Scope {
                     }
                 }
             }
-
-            property int selected: 0
 
             Item {
                 anchors.fill: parent
@@ -303,15 +327,25 @@ Scope {
                         break;
                     case Qt.Key_Left:
                     case Qt.Key_H:
-                        overlay.selected = (overlay.selected - 1 + n) % n;
+                        root.selected = (root.selected - 1 + n) % n;
                         break;
                     case Qt.Key_Right:
                     case Qt.Key_L:
-                        overlay.selected = (overlay.selected + 1) % n;
+                        root.selected = (root.selected + 1) % n;
+                        break;
+                    // Ctrl+N and Ctrl+P too, as a terminal's lists and the
+                    // launcher step (the user, 2026-11-04); plain N and P do
+                    // nothing here.
+                    case Qt.Key_N:
+                    case Qt.Key_P:
+                        if ((event.modifiers & Qt.ControlModifier) === 0)
+                            return;
+                        root.selected = event.key === Qt.Key_N ? (root.selected + 1) % n
+                                                               : (root.selected - 1 + n) % n;
                         break;
                     case Qt.Key_Return:
                     case Qt.Key_Enter:
-                        root.run(root.usable[overlay.selected]);
+                        root.run(root.usable[root.selected]);
                         break;
                     default:
                         return;

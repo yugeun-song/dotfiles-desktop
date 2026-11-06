@@ -27,6 +27,8 @@ Scope {
     }
 
     function show() {
+        if (!Surfaces.mayOpen("displays"))
+            return;
         root.error = "";
         root.hint = "";
         root.menuOpen = false;
@@ -38,6 +40,19 @@ Scope {
     function close() {
         root.menuOpen = false;
         root.open = false;
+    }
+
+    // A settings window (services/Surfaces.qml): a transient panel opens over
+    // it and has the keys meanwhile; only the session dialog shuts it.
+    onOpenChanged: Surfaces.report("displays", root.open)
+
+    Connections {
+        target: Surfaces
+
+        function onShut(name) {
+            if (name === "displays")
+                root.close();
+        }
     }
 
     // Left open, the panel held every screensaver off all night (shell.qml
@@ -1214,7 +1229,8 @@ Scope {
             exclusionMode: ExclusionMode.Ignore
             focusable: true
             WlrLayershell.layer: WlrLayer.Overlay
-            WlrLayershell.keyboardFocus: WlrKeyboardFocus.Exclusive
+            // The keys go to whatever stands over it, and come back after.
+            WlrLayershell.keyboardFocus: Surfaces.top === "displays" ? WlrKeyboardFocus.Exclusive : WlrKeyboardFocus.None
             WlrLayershell.namespace: "quickshell:displays"
 
             anchors {
@@ -1299,10 +1315,11 @@ Scope {
                     root.menuOpen = false;
                 }
 
-                // Dim backdrop; clicking it closes the panel.
+                // A clear backdrop (the user, 2026-11-04: only the session
+                // dialog dims); clicking it closes the panel.
                 Rectangle {
                     anchors.fill: parent
-                    color: Qt.rgba(Theme.bg.r, Theme.bg.g, Theme.bg.b, 0.78)
+                    color: "transparent"
 
                     MouseArea {
                         anchors.fill: parent

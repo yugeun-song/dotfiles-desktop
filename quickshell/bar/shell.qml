@@ -41,6 +41,14 @@ ShellRoot {
         id: displays
     }
 
+    // The power button's panel; its buttons open the two panels above,
+    // which it cannot reach itself.
+    ControlCentre {
+        id: controlCentre
+
+        onDisplaysAsked: displays.show()
+    }
+
     WeatherPanel {
         id: weatherPanel
     }

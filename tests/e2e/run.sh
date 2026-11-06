@@ -67,7 +67,15 @@ stop_bar() {
     # A bar scenario 18 stopped takes no TERM until it goes on.
     kill -CONT "$QS_PID" "${tree[@]}" 2>/dev/null
     kill "$QS_PID" "${tree[@]}" 2>/dev/null
-    for _ in $(seq 30); do kill -0 "$QS_PID" 2>/dev/null || break; sleep 0.1; done
+    # The program is a child of that subshell and holds its instance a moment
+    # longer ("An instance of this configuration is already running").
+    local p alive
+    for _ in $(seq 50); do
+        alive=0
+        for p in "$QS_PID" "${tree[@]}"; do kill -0 "$p" 2>/dev/null && alive=1; done
+        (( alive )) || break
+        sleep 0.1
+    done
     QS_PID=""
 }
 
@@ -181,6 +189,24 @@ no_qml_warnings() { local w; w=$(grep -E "WARN scene|ERROR" "$WORK/qs.out" | gre
 output_mark() { wc -l < "$WORK/qs.out"; }
 quiet_since() { local w; w=$(tail -n +"$(( $1 + 1 ))" "$WORK/qs.out" | grep -E "$2"); [[ -z "$w" ]] || { echo "$w"; return 1; }; }
 session_dialog_open() { has_layer quickshell:powermenu && [[ "$(ipc e2e session)" == true ]]; }
+# A patch of desktop far from the panels and the dialog, as one colour.
+desk_colour() {
+    shot -g "1800,1200 40x40" "$WORK/desk.png" 2>/dev/null || return 1
+    magick "$WORK/desk.png" -resize 1x1 -format '%[pixel:p{0,0}]' info:
+}
+desk_dimmed() { [[ "$(desk_colour)" != "$plain_desk" ]]; }
+# Panels called up open where the bar last heard the focus go, and it hears only
+# a change: focus already here when the bar started says nothing. So by way of
+# the other screen.
+focus_external() {
+    n dispatch "hl.dsp.focus({ monitor = 'HEADLESS-1' })" >/dev/null
+    sleep 0.2
+    n dispatch "hl.dsp.focus({ monitor = 'HEADLESS-2' })" >/dev/null
+    sleep 0.2
+}
+controls_open() { has_layer quickshell:control-centre && [[ "$(ipc e2e controls)" == true ]]; }
+# The control centre's power button, once the panel has laid it out.
+controls_power() { local p; p=$(ipc e2e controlsPower) || return 1; cx=$(jq .x <<<"$p"); cy=$(jq .y <<<"$p"); (( cx >= 0 && cy >= 0 )); }
 overlay_on() { has_layer quickshell:keys && key_state_is .enabled true; }
 no_writes() { ! grep -q -E '^(lock|suspend|session-power|ddc-set|backlight-set)' "$WORK/apps.log" 2>/dev/null; }
 shot_saved() { compgen -G "$WORK/home/Pictures/Screenshots/*.png" >/dev/null; }
@@ -360,9 +386,11 @@ echo "e2e: nested session $SIG on $WL, bar pid $QS_PID"
 # 1. The bar comes up clean.
 check "the bar loads without QML warnings" no_qml_warnings
 
-# 2. The power button at the bar's right end opens the session dialog.
-# The glyph at the bar's right end, found in a capture of it once the bar
-# has drawn it (the first frames come a moment after the bar answers IPC).
+# 2. The power button at the bar's right end opens the control centre, and
+# the control centre's own power button the session dialog (the user,
+# 2026-11-04). The glyph at the bar's right end, found in a capture of it
+# once the bar has drawn it (the first frames come a moment after the bar
+# answers IPC).
 power_x() {
     shot -g "2360,0 200x34" "$WORK/bar-end.png" 2>/dev/null || return 1
     x=$(python3 - "$WORK/bar-end.png" <<'EOF'
@@ -389,13 +417,65 @@ elif ! { x=""; wait_for 5 steady power_x; }; then
 else
     # Waited for, not slept on: on a loaded machine the dialog maps later
     # than any fixed pause, and the check failed once beside a busy build.
-    input move 2000 600 sleep 100 move "$x" 16 sleep 200 click sleep 100
-    check "the power button opens the session dialog" wait_for 3 session_dialog_open
+    mark=$(output_mark)
+    # The dim below is read on this screen.
+    focus_external
+    input move 2000 600 sleep 100 move "$x" 16 sleep 200
+    plain_desk=$(desk_colour)
+    input click sleep 100
+    check "the power button opens the control centre" wait_for 3 controls_open
     input key 1 sleep 100
-    check "Esc closes it" wait_for 2 lacks_layer quickshell:powermenu
+    check "Esc closes the control centre" wait_for 2 lacks_layer quickshell:control-centre
+    input move "$x" 16 sleep 200 click sleep 100
+    if ! { wait_for 3 controls_open && cx=-1 && wait_for 3 controls_power; }; then
+        fail "the control centre's power button: not laid out"
+    else
+        input move "$cx" "$cy" sleep 200 click sleep 100
+        check "its power button opens the session dialog" wait_for 3 session_dialog_open
+        check "and the control centre is gone" lacks_layer quickshell:control-centre
+        check "the screen behind it dims, opened this way too" wait_for 2 desk_dimmed
+        input key 1 sleep 100
+        check "Esc closes it" wait_for 2 lacks_layer quickshell:powermenu
+        check "and the screen comes back" wait_for 2 eval '! desk_dimmed'
+        input key ctrl alt 111 sleep 100
+        check "Ctrl+Alt+Del opens the same dialog" wait_for 3 session_dialog_open
+        check "over the same dim" wait_for 2 desk_dimmed
+        input key 1 sleep 100
+        wait_for 2 lacks_layer quickshell:powermenu
+        # Enter ends the session from what is selected, so a pointer left where
+        # a button lands must not choose it.
+        input move 1280 720 sleep 200 key ctrl alt 111 sleep 300
+        wait_for 3 session_dialog_open
+        check "the dialog opens on its first entry, whatever lands under the pointer" test "$(ipc e2e sessionRow)" = 0
+        input move 1284 724 sleep 50 move 1288 728 sleep 200
+        check "and the entry under the pointer lights once it moves" test "$(ipc e2e sessionRow)" != 0
+        input key 1 sleep 100
+        wait_for 2 lacks_layer quickshell:powermenu
+    fi
+    check "the control centre opens without QML warnings" quiet_since "$mark" "WARN scene|ERROR"
 fi
 
-# 3. A long launcher query stays inside the card.
+# 3. The launcher opens on its first row with the pointer left on another, and
+# the pointer takes the selection only by moving. (The user, 2026-11-07: it
+# always opened on the third.)
+focus_external
+input move 1280 330 sleep 200
+n dispatch 'hl.dsp.global("quickshell:launcher")' >/dev/null
+if wait_for 3 has_layer quickshell:launcher; then
+    sleep 0.4
+    check "the launcher opens on its first row, whatever lands under the pointer" test "$(ipc e2e launcherRow)" = 0
+    # A hand's short move, not one step: the first motions only tell a row where
+    # the pointer is, the more so on a card just mapped.
+    input move 1284 334 sleep 30 move 1288 338 sleep 30 move 1292 342 sleep 30 move 1296 346 sleep 30 \
+        move 1300 350 sleep 30 move 1304 354 sleep 200
+    check "and the row under the pointer lights once it moves" test "$(ipc e2e launcherRow)" != 0
+    n dispatch 'hl.dsp.global("quickshell:launcher")' >/dev/null
+    wait_for 2 lacks_layer quickshell:launcher
+else
+    fail "the launcher: it did not open"
+fi
+
+# A long launcher query stays inside the card.
 n dispatch 'hl.dsp.global("quickshell:launcher")' >/dev/null
 wait_for 3 has_layer quickshell:launcher
 input type "fgdfgdfgdfgdfgdsghdgkjhdfkghdfkghkdfjghkdfjhgkldjfhglkdjhgkldfjhgkldshgkdsjfhgkldsfjhgkldsfjhgkldsfhglkdsjfhgkldsfjhglksdhgdlksfjghdklsfj" sleep 400

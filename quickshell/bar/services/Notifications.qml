@@ -30,9 +30,23 @@ Singleton {
     property bool centreShown: false
 
     function toggleCentre() {
+        if (!root.centreOpen && !Surfaces.mayOpen("notifications"))
+            return;
         root.centreOpen = !root.centreOpen;
         if (root.centreOpen)
             root.markRead();
+    }
+
+    // Transient, one panel at a time (services/Surfaces.qml).
+    onCentreOpenChanged: Surfaces.report("notifications", root.centreOpen)
+
+    Connections {
+        target: Surfaces
+
+        function onShut(name) {
+            if (name === "notifications")
+                root.centreOpen = false;
+        }
     }
 
     signal toast(var entry)

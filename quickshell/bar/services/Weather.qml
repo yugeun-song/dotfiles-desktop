@@ -95,9 +95,23 @@ Singleton {
     property var panelScreen: null
 
     function togglePanel(screen): void {
+        if (!root.panelOpen && !Surfaces.mayOpen("weather"))
+            return;
         if (!root.panelOpen)
             root.panelScreen = screen;
         root.panelOpen = !root.panelOpen;
+    }
+
+    // Transient, one panel at a time (services/Surfaces.qml).
+    onPanelOpenChanged: Surfaces.report("weather", root.panelOpen)
+
+    Connections {
+        target: Surfaces
+
+        function onShut(name) {
+            if (name === "weather")
+                root.panelOpen = false;
+        }
     }
 
     // The panel's search, through weather.sh: the name asked for last and

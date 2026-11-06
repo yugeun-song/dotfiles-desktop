@@ -47,7 +47,10 @@ def logger(name):
 power = BAR / "modules/PowerMenu.qml"
 edit(power, 'command: ["loginctl", "lock-session"],', f"command: {logger('lock')},")
 edit(power, r'command: \["sh", "-c",\n.*?"notify-send -u critical .*?\],', f"command: {logger('suspend')},", regex=True)
-if "systemctl suspend" in power.read_text() or "loginctl" in power.read_text().split("command:")[1]:
+# The command arrays alone: the lock entry's probe names loginctl, which runs
+# nothing.
+if "systemctl suspend" in power.read_text() \
+        or any("loginctl" in c for c in re.findall(r"command:\s*(\[[^\]]*\])", power.read_text(), re.S)):
     sys.exit("defang: PowerMenu.qml still holds a real session command")
 
 (HYPR / "scripts/session-power.sh").write_text(f'#!/bin/sh\necho "session-power $*" >> {LOG}\n')
@@ -162,6 +165,12 @@ probe = '''
     IpcHandler {
         target: "e2e"
 
+        function launcherRow(): int {
+            return launcher.selected;
+        }
+        function sessionRow(): int {
+            return powerMenu.selected;
+        }
         function keys(): string {
             return JSON.stringify({ enabled: KeyFeed.enabled, locked: KeyFeed.locked,
                                     chords: KeyFeed.chords.map(c => c.key), failure: KeyFeed.failure,
@@ -181,6 +190,28 @@ probe = '''
         }
         function session(): bool {
             return Session.menuOpen;
+        }
+        function controls(): bool {
+            return Controls.open;
+        }
+        // The control centre's power button, in its screen's pixels.
+        function controlsPower(): string {
+            const find = item => {
+                if (!item)
+                    return null;
+                if (item.objectName === "e2e-controls-power")
+                    return item;
+                for (let i = 0; i < item.children.length; i++) {
+                    const hit = find(item.children[i]);
+                    if (hit)
+                        return hit;
+                }
+                return null;
+            };
+            const win = controlCentre.window;
+            const button = win ? find(win.contentItem) : null;
+            const p = button ? button.mapToItem(null, button.width / 2, button.height / 2) : null;
+            return JSON.stringify({ x: p ? Math.round(p.x) : -1, y: p ? Math.round(p.y) : -1 });
         }
         function badge(): string {
             return JSON.stringify({ choice: Badge.choice, current: Badge.current.id, offered: Badge.offered.map(m => m.id) });

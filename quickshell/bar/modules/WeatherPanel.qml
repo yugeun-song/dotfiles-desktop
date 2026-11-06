@@ -7,7 +7,7 @@ import qs.services
 
 // The weather's place, chosen on a panel laid out as the Displays panel is
 // (Super+O; the user, 2026-10-27, after a dropdown read awkwardly): a card
-// over the dimmed screen whose bar was clicked, with a search field, the
+// over the screen whose bar was clicked, with a search field, the
 // places Open-Meteo's geocoder finds by that name (Weather.find, through
 // weather.sh) as two-line rows, the place the weather is for checked, and
 // Seoul, the default, offered back while another place is kept. A pick is
@@ -161,10 +161,11 @@ Scope {
             FittedStage {
                 fit: win.fit
 
-                // Dim backdrop; clicking it closes the panel.
+                // A clear backdrop (the user, 2026-11-04: only the session
+                // dialog dims); clicking it closes the panel.
                 Rectangle {
                     anchors.fill: parent
-                    color: Qt.rgba(Theme.bg.r, Theme.bg.g, Theme.bg.b, 0.78)
+                    color: "transparent"
 
                     MouseArea {
                         anchors.fill: parent
