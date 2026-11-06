@@ -344,7 +344,9 @@ system service items stay out, as the right side shows that state. A
 program that hides its window without a tray item (KakaoTalk under Wine,
 `hiders` in `services/Tray.qml`) is found by its process name; its menu
 holds Quit (SIGTERM), and Force quit (SIGKILL) once Quit has had three
-seconds. `Theme.trayIconSaturation: 0` gives the icons their colours.
+seconds. `Theme.trayIconSaturation: 0` gives the icons their colours. A right
+click elsewhere on the bar opens its own menu of what the shell offers, with the
+live keys (`modules/BarMenu.qml`, `services/BarOptions.qml`).
 
 Editing the QML: Nerd Font glyphs are written as code points; quickshell's
 `percentage`, `signalStrength` and `battery` run 0.0 to 1.0; a `pragma

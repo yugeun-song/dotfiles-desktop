@@ -9,6 +9,8 @@ PanelWindow {
     id: root
 
     required property var modelData
+    // What the bar's menu runs (BarMenu.qml), from shell.qml.
+    property var menuActions: ({})
 
     readonly property string previewEdge: Quickshell.env("BAR_PREVIEW") ?? ""
     readonly property bool preview: root.previewEdge !== ""
@@ -59,6 +61,10 @@ PanelWindow {
 
             // No edge line: on a dark wallpaper the line marked the bar off
             // more than the user wanted (2026-10-27).
+
+            BarMenu {
+                actions: root.menuActions
+            }
 
             // Fixed-width parts first, so nothing after them can shift them: the
             // tray's icons come and go with their applications, and the

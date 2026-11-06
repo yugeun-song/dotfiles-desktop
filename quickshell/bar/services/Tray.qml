@@ -84,17 +84,21 @@ Singleton {
     }
 
     // Open only for one with a desktop entry that is not quitting; Force
-    // quit only once Quit has been given its time.
+    // quit only once Quit has been given its time. In the form every tray menu
+    // has, words and a rule before Quit, as an application's own comes (the
+    // user, 2026-11-06: one design across all of them; menuEntries drops any
+    // icon an application names, and so no menu here adds one).
     function processEntries(proc): var {
         if (!proc)
             return [];
         const entries = [];
-        if (root.canOpen(proc))
-            entries.push({ label: `Open ${proc.name}`, icon: Theme.iconApps, action: () => root.open(proc.entry) });
-        entries.push({ label: `Quit ${proc.name}`, icon: Theme.iconPower, action: () => root.quit(proc.pid, false) });
+        if (root.canOpen(proc)) {
+            entries.push({ label: `Open ${proc.name}`, action: () => root.open(proc.entry) });
+            entries.push({ separator: true });
+        }
+        entries.push({ label: `Quit ${proc.name}`, action: () => root.quit(proc.pid, false) });
         if (proc.stuck)
-            entries.push({ label: `Force quit ${proc.name}`, icon: Theme.iconPower, detail: "SIGKILL",
-                           action: () => root.quit(proc.pid, true) });
+            entries.push({ label: `Force quit ${proc.name}`, detail: "SIGKILL", action: () => root.quit(proc.pid, true) });
         return entries;
     }
 

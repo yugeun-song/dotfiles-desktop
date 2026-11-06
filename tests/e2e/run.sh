@@ -934,9 +934,11 @@ EOF
 )
 }
 # The menu under an icon at x: its entries' text lines, top to bottom, as
-# screen y (the separator is too faint to count).
+# screen y (the separator is too faint to count). From the icon rightwards, as a
+# menu hangs from its item's left edge: to its left the desktop's widgets show,
+# whose words would count as rows.
 menu_rows() {
-    shot -g "$(( $1 - 150 )),40 300x220" "$WORK/traymenu.png" 2>/dev/null || return 1
+    shot -g "$(( $1 - 10 )),40 ${2:-300}x${3:-220}" "$WORK/traymenu.png" 2>/dev/null || return 1
     rows=$(python3 - "$WORK/traymenu.png" <<'EOF'
 import sys
 from PIL import Image
@@ -2129,6 +2131,41 @@ else
     ipc widgets close >/dev/null
     check "and gives them back" wait_for 5 has_layer quickshell:widgets HEADLESS-2
     check "the widgets' files raised no QML warning" quiet_since "$mark" '[@/](Widget[A-Za-z]*|CalendarWidget|ClockWidget|WeatherWidget|SystemWidget)\.qml'
+fi
+
+# 32. The bar's own menu (modules/BarMenu.qml, services/BarOptions.qml; the user,
+# 2026-11-06): a right click where no part of the bar takes one hangs it under
+# the pointer, a row for each thing the shell offers, and a row runs its own and
+# shuts the menu. The rows are read off the picture as the tray's are.
+if (( ! PIL )); then
+    skip "bar menu: python3-pillow is not installed"
+else
+    rows_of_bar_menu() { menu_rows 900 700 640 && [[ $(wc -w <<<"$rows") == "$1" ]]; }
+    bar_row() { awk -v at="$1" '{print $at}' <<<"$rows"; }
+    bar_is() { [[ "$(ipc e2e "$1")" == "$2" ]]; }
+    bar_menu_gone() { ! rows_of_bar_menu 14; }
+    right_click 900
+    if wait_for 5 rows_of_bar_menu 14; then
+        pass "a right click on the bar opens its menu, all its rows"
+        y=$(bar_row 2)
+        input move 910 "$y" sleep 200 click sleep 100
+        check "its Control centre opens the control centre" wait_for 3 bar_is controls true
+        check "and the menu has shut" wait_for 3 bar_menu_gone
+        input key 1 sleep 100
+        wait_for 3 bar_is controls false
+        right_click 900
+        if wait_for 5 rows_of_bar_menu 14; then
+            y=$(bar_row 14)
+            input move 910 "$y" sleep 200 click sleep 100
+            check "its Session opens the session dialog, and only that" wait_for 3 bar_is session true
+            input key 1 sleep 100
+            wait_for 3 bar_is session false
+        else
+            fail "the menu opens again"
+        fi
+    else
+        fail "a right click on the bar opens its menu, all its rows"
+    fi
 fi
 
 check "no session action or hardware write was even attempted" no_writes

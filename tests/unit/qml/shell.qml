@@ -1072,6 +1072,41 @@ ShellRoot {
         check("apps: and nothing with neither", Apps.argvOf({ command: [], execString: " %f " }), []);
     }
 
+    function testBarOptions() {
+        const keys = BarOptions.keysOf([
+            { description: "Display settings", modmask: 0, key: "XF86Display" },
+            { description: "Display settings", modmask: 64, key: "O" },
+            { description: "Application launcher", modmask: 64, key: "SUPER_L" },
+            { description: "Session dialog", modmask: 12, key: "Delete" },
+            { description: "Show the notification history", modmask: 64, key: "N" },
+            { description: "Something else", modmask: 64, key: "Q" },
+            { modmask: 64, key: "Z" }
+        ]);
+        check("bar menu: the key with a modifier before a key of its own", keys["Display settings"], "Super+O");
+        check("bar menu: a lone Super tapped", keys["Application launcher"], "Super");
+        check("bar menu: modifiers in a keyboard's order", keys["Session dialog"], "Ctrl+Alt+Del");
+        const ran = [];
+        const run = {};
+        for (const group of BarOptions.groups) {
+            for (const row of group)
+                run[row.id] = () => ran.push(row.id);
+        }
+        const menu = BarOptions.entries(keys, run, { island: true, keyOverlay: false });
+        const rows = menu.filter(e => !e.separator);
+        check("bar menu: rules only between groups",
+              [menu.filter(e => e.separator).length, menu[0].separator === true, menu[menu.length - 1].separator === true],
+              [BarOptions.groups.length - 1, false, false]);
+        check("bar menu: words only, as every menu of the bar's", rows.filter(e => (e.icon ?? "") !== "").length, 0);
+        check("bar menu: a row's key", rows.find(e => e.label === "Displays…").detail, "Super+O");
+        check("bar menu: no key, no words", rows.find(e => e.label === "Control centre").detail, "");
+        check("bar menu: a switch shows its state", [rows.find(e => e.label === "Island").checked, rows.find(e => e.label === "Key overlay").checked],
+              [true, false]);
+        check("bar menu: nothing else carries a check", rows.filter(e => e.checkable).length, 2);
+        rows.forEach(e => e.action());
+        check("bar menu: every row runs its own, in order", ran, BarOptions.groups.reduce((all, group) => all.concat(group), []).map(r => r.id));
+        check("bar menu: a row with nothing to run does nothing", BarOptions.entries({}, {}, {}).filter(e => !e.separator)[0].action(), undefined);
+    }
+
     function testTray() {
         check("tray: mnemonics", ["_Exit", "Save__as", "a_b__c", "plain"].map(t => Tray.plainLabel(t)),
               ["Exit", "Save_as", "ab_c", "plain"]);
@@ -1096,8 +1131,10 @@ ShellRoot {
         check("tray: Force quit once Quit has failed", Tray.processEntries({ name: "Hider", pid: 1, stuck: true }).map(e => e.label),
               ["Quit Hider", "Force quit Hider"]);
         const hider = { name: "Hider", pid: 1, entry: "hider", quitting: false, stuck: false };
-        check("tray: Open first for a hider with a desktop entry", Tray.processEntries(hider).map(e => e.label),
-              ["Open Hider", "Quit Hider"]);
+        check("tray: Open first for a hider with a desktop entry, a rule before Quit",
+              Tray.processEntries(hider).map(e => e.separator ? "-" : e.label), ["Open Hider", "-", "Quit Hider"]);
+        check("tray: a hider's menu has the form of an application's, no icons",
+              Tray.processEntries(Object.assign({}, hider, { stuck: true })).filter(e => (e.icon ?? "") !== "").length, 0);
         check("tray: no Open while it quits",
               Tray.processEntries(Object.assign({}, hider, { quitting: true })).map(e => e.label), ["Quit Hider"]);
         check("tray: nor once it is stuck, Force quit after Quit",

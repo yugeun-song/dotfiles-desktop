@@ -7,6 +7,8 @@ import "modules"
 import qs.services
 
 ShellRoot {
+    id: shell
+
     // No reload on a file's write: install.sh writes file by file and reloads
     // once at the end (below). A reload per write met a half-copied tree and,
     // while reloads still restarted the key overlay's reader, asked for its
@@ -18,8 +20,30 @@ ShellRoot {
     Variants {
         model: Quickshell.screens
 
-        Bar {}
+        Bar {
+            menuActions: shell.menuActions
+        }
     }
+
+    // What a right click on the bar runs (services/BarOptions.qml names the rows):
+    // the panels are siblings a bar cannot reach. Lock and Sleep as the session
+    // dialog's own rows do them, which say why they go the way they go.
+    readonly property var menuActions: ({
+        launcher: () => launcher.toggle(),
+        controls: () => Controls.toggle(null),
+        notifications: () => notificationCentre.toggle(),
+        weather: () => Weather.togglePanel(Screens.focused),
+        displays: () => displays.show(),
+        wallpaper: () => wallpaperPicker.show(),
+        widgetEdit: () => Widgets.toggleEditing(),
+        widgetSettings: () => Widgets.toggleSettings(),
+        island: () => Media.toggleIsland(),
+        keyOverlay: () => KeyFeed.toggle(),
+        cheatsheet: () => cheatsheet.toggle(),
+        lock: () => powerMenu.run(powerMenu.entries.find(e => e.id === "lock")),
+        sleep: () => powerMenu.run(powerMenu.entries.find(e => e.id === "suspend")),
+        session: () => powerMenu.toggle()
+    })
 
     // The lock screen swept up at the unlock, on each screen.
     Variants {
@@ -32,11 +56,17 @@ ShellRoot {
         }
     }
 
-    Launcher {}
+    Launcher {
+        id: launcher
+    }
 
-    PowerMenu {}
+    PowerMenu {
+        id: powerMenu
+    }
 
-    Cheatsheet {}
+    Cheatsheet {
+        id: cheatsheet
+    }
 
     Displays {
         id: displays
@@ -75,7 +105,9 @@ ShellRoot {
     // created on first reference, otherwise the bus name stays unowned.
     NotificationToasts {}
 
-    NotificationCentre {}
+    NotificationCentre {
+        id: notificationCentre
+    }
 
     // Inert until Super+Y switches it on, since it reads input devices; its
     // reader then outlives reloads and restarts (services/KeyFeed.qml).

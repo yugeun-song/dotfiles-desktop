@@ -372,7 +372,8 @@ Singleton {
     readonly property int vizBarWidth:   Math.max(2, root.px(3))
     readonly property int vizBarSpacing: Math.max(1, root.px(2))
 
-    // Dropdown menus (PopupMenu and its MenuRow, BadgePicker), on the
+    // The badge's picker and the surfaces set after it (the control centre,
+    // the lock's power menu), on the
     // proportions of the reference menus the user sent (2026-10-27),
     // measured in the height of their capitals, c (Inter's are 0.727 em).
     // The roomier set, the user's pick over the denser one (rows 2.39c
@@ -402,6 +403,23 @@ Singleton {
     // both sides.
     readonly property int menuIconSize:        Math.round(1.38 * root.menuCap / 0.586)
     readonly property int menuLeadWidth:       Math.round((1.38 + 1.54) * root.menuCap)
+    // The menus a bar item opens (PopupMenu: the tray's, a status item's, the
+    // bar's own), after the one the user sent on 2026-11-07: longer sideways and
+    // less round than the set above, which read tall and narrow (192 x 427 for
+    // Zoom's). Width is what they named, and rows a third tighter are half of
+    // it: the reference's rows are ten times as wide as they are tall, these
+    // were under five. Not as dense as the reference, 1.9c apart, since the user
+    // kept the room once before (2026-10-27). A menu is at least 18 em wide, and
+    // words alone keep 3 em clear beyond the longest, where a key would sit. The
+    // lit row's corners follow the menu's, 0.55c further in.
+    readonly property int barMenuRowHeight:       Math.round(2.9 * root.menuCap)
+    readonly property int barMenuSeparatorHeight: Math.round(1.1 * root.menuCap)
+    readonly property int barMenuPad:             Math.round(0.55 * root.menuCap)
+    readonly property int barMenuRowPad:          Math.round(1.3 * root.menuCap)
+    readonly property int barMenuRadius:          Math.round(0.9 * root.menuCap)
+    readonly property int barMenuRowRadius:       root.barMenuRadius - root.barMenuPad
+    readonly property int barMenuMinWidth:        18 * root.menuTextSize
+    readonly property int barMenuTailWidth:       3 * root.menuTextSize
     readonly property color menuHighlight:     root.accentIndigo
     readonly property color menuHighlightText: root.ink
 
