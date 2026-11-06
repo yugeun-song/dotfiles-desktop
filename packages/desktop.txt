@@ -64,6 +64,9 @@ plasma-nm          # the control centre's network settings
 bluez
 bluedevil          # the control centre's Bluetooth settings
 bluetui            # Bluetooth pairing, in the terminal
+android-tools      # the tablet mirror's adb
+android-udev       # adb's access to the USB device
+scrcpy             # the tablet mirror panel; needs android-tools
 
 # What the scripts call.
 jq

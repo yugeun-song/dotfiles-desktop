@@ -34,6 +34,8 @@ ok "every name is a package name" "$bad" ""
 machine=$(names "$REPO"/packages/{desktop,user,user-aur}.txt \
     | grep -E '^(linux(-lts|-zen|-hardened)?(-headers)?|linux-firmware.*|.*-ucode|grub.*|efibootmgr|mkinitcpio|.*-dkms|nvidia.*|vulkan-(intel|radeon)|xf86-video-.*|intel-media-driver|libva-intel-driver|sof-firmware)$' | tr '\n' ' ')
 ok "nothing tied to the hardware or the boot is listed" "$machine" ""
+pos() { names "$REPO/packages/desktop.txt" | grep -n -x -- "$1" | cut -d: -f1; }
+ok "the tablet mirror's tools come before what needs them" "$(( $(pos android-tools) < $(pos scrcpy) && $(pos android-udev) < $(pos scrcpy) ))" 1
 ok "the AUR step's tools come first" "$(names "$REPO/packages/desktop.txt" | head -2 | tr '\n' ' ')" "base-devel git "
 
 # ------------------------------------------------------------------- stubs --
