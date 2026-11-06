@@ -1797,7 +1797,8 @@ rm -f "$WORK/bin/hyprctl" "$WORK/fake-locked"
 # scripts/lock-media.py, scripts/lock-colours.py), on the nested compositor
 # only and last, since a lock that is killed rather than unlocked leaves that
 # compositor locked. Over a wallpaper light down to the field and dark under
-# it: the island at the top with its lock, the clock in a dark, the playing
+# it: the notch black against the top edge with its lock, the clock in a
+# dark, the playing
 # track's card (the bar's grown island at 1.6 times) with its cover and its
 # play-pause disc in that dark, "Press to unlock" in the bar's beige, and a
 # click on the disc reaching the player, the card then drawing play. The
@@ -1818,10 +1819,10 @@ def pixels(box):
     return [data[i:i + 3] for i in range(0, len(data), 3)]
 def count(box, test):
     return sum(1 for c in pixels(box) if test(c))
-# The island in the bar's colour, its lock in the bar's beige.
+# The notch black against the top edge, its lock in the bar's beige.
 beige = lambda c: c[0] > 200 and c[1] > 200 and 150 < c[2] < 215
-island = count((1180, 8, 1380, 58), lambda c: abs(c[0] - 15) <= 3 and abs(c[1] - 17) <= 3 and abs(c[2] - 27) <= 3)
-lock = count((1190, 18, 1225, 48), beige)
+island = count((1215, 0, 1345, 48), lambda c: max(c) <= 4)
+lock = count((1160, 4, 1200, 48), beige)
 clock_box = (1110, 505, 1450, 572)
 clock = count(clock_box, lambda c: max(c) < 120)
 # The cover scenario 25 made: magenta, as the island's check reads it.
@@ -1833,9 +1834,12 @@ toggle = min(pixels((1260, 772, 1300, 812)), key=sum)
 print(island, lock, clock, cover, unlock, max(abs(a - b) for a, b in zip(ink, toggle)))
 EOF
 }
+# The clock's count depends on the time it shows: "07:11" has far less ink
+# than "08:58" (a run at 07:20 counted 4841), so its floor is the lowest a
+# time draws, as 30's is.
 lock_shows() {
     local b l c v u o
-    read -r b l c v u o < <(lock_pixels) && (( b > 6000 && l > 40 && c > 5000 && v > 1500 && u > 400 && o < 40 ))
+    read -r b l c v u o < <(lock_pixels) && (( b > 2500 && l > 25 && c > 3500 && v > 1500 && u > 400 && o < 40 ))
 }
 # The card drawn for the paused player: its state names the status.
 paused_card() { grep -qs $'\tPaused\t' "$WORK"/lockrun/card-????????; }
@@ -1873,7 +1877,7 @@ def count(box, test):
 def near(rgb):
     return lambda c: all(abs(a - b) <= 40 for a, b in zip(c, rgb))
 beige = lambda c: c[0] > 200 and c[1] > 200 and 150 < c[2] < 215
-lead, trail, mark = (1188, 16, 1226, 50), (1298, 16, 1368, 50), (1334, 16, 1374, 50)
+lead, trail, mark = (1160, 4, 1200, 48), (1300, 4, 1400, 48), (1360, 4, 1400, 48)
 print(count(lead, beige), count(lead, near((55, 163, 222))),
       count(mark, near((55, 163, 222))), count(trail, near((55, 192, 88))))
 EOF
@@ -1882,9 +1886,9 @@ island_is() {
     local beige blue mark number
     read -r beige blue mark number < <(island_pixels) || return 1
     case $1 in
-        device) (( beige < 10 && blue > 20 && mark > 20 )) ;;
-        number) (( number > 40 && mark < 5 )) ;;
-        rest) (( beige > 40 && blue < 5 && mark < 5 && number < 5 )) ;;
+        device) (( beige < 6 && blue > 12 && mark > 12 )) ;;
+        number) (( number > 25 && mark < 4 )) ;;
+        rest) (( beige > 25 && blue < 4 && mark < 4 && number < 4 )) ;;
     esac
 }
 
@@ -1908,7 +1912,7 @@ im.save(sys.argv[1])' "$WORK/wall.png"
             LOCK_MEDIA_RUN="$WORK/lockrun" LOCK_WEATHER="$WORK/bar/scripts/weather.sh" LOCK_ISLAND_RUN="$WORK/island" \
             hyprlock -c "$fitted" >"$WORK/hyprlock.out" 2>&1 &
         LOCK_PID=$!
-        check "the lock shows its island and lock, a dark clock, the card with its dark disc and a beige Press to unlock" \
+        check "the lock shows its notch and lock, a dark clock, the card with its dark disc and a beige Press to unlock" \
             wait_for 10 lock_shows
         read -r b l c v u o < <(lock_pixels)
         echo "e2e: lock pixels: island ${b:-?}, lock ${l:-?}, clock ${c:-?}, cover ${v:-?}, unlock ${u:-?}, toggle off the clock's ink by ${o:-?}"
@@ -1935,6 +1939,134 @@ im.save(sys.argv[1])' "$WORK/wall.png"
     else
         fail "lock screen: lock-fit.sh wrote no configuration"
     fi
+    stop_tree "$MPRIS_PID"
+    MPRIS_PID=""
+fi
+
+# 30. The Quickshell lock screen (quickshell/bar/lock.qml, the user's,
+# 2026-11-05), on the nested compositor scenario 29 left locked: it takes the
+# lock over (allow_session_lock_restore), says so (LOCK_READY), and draws the
+# same design from lock-spec.py's reading of 29's fitted copy, so 29's
+# pixels hold for it too; its island reads the bar's parts (lock-island.json);
+# its play-pause reaches the player. Then a PAM stack of the run's own, with
+# a password of the run's own and a tally of the run's own (never the user's
+# password nor their faillock): three wrong passwords lock it for its step,
+# which it counts down, and the right one unlocks; the lock screen then ends.
+qs_lock_shows() {
+    local b l c v u o
+    read -r b l c v u o < <(lock_pixels) && (( b > 2500 && l > 25 && c > 3500 && v > 1500 && u > 300 && o < 40 ))
+}
+qs_lock_island() {
+    python3 - "$WORK/island/lock-island.json" "$@" <<'EOF'
+import json, pathlib, sys
+f = pathlib.Path(sys.argv[1])
+f.parent.mkdir(exist_ok=True)
+if len(sys.argv) == 2:
+    f.unlink(missing_ok=True)
+else:
+    f.write_text(json.dumps(dict(zip(("lead", "trail", "mark", "tone"), sys.argv[2:]))))
+EOF
+}
+qs_lock_up() { [[ -s "$WORK/lock-ready" && "$(n locked)" == true ]]; }
+# The notch while music plays (the user, 2026-11-06): its width, from the
+# first black pixel of its middle row to the last, which music must not
+# change from the shape's 330 units (250 px here); what its right end holds, neither black nor the
+# lock's beige: the small square of bars; and at the foot's middle, where
+# the status pills were, nothing but the ground.
+notch_music() {
+    shot -o HEADLESS-2 "$WORK/notch.png" 2>/dev/null || return 1
+    python3 - "$WORK/notch.png" <<'EOF'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert("RGB")
+# From its first black pixel to its last, the lock and the bars between.
+black = [x for x in range(1000, 1561) if max(im.getpixel((x, 15))) <= 4]
+left, right = (black[0], black[-1]) if black else (0, -1)
+beige = lambda c: c[0] > 200 and c[1] > 200 and 150 < c[2] < 215
+bars = sum(1 for x in range(1360, 1400) for y in range(8, 46)
+           if max(im.getpixel((x, y))) > 40 and not beige(im.getpixel((x, y))))
+foot = sum(1 for x in range(1100, 1460, 2) for y in range(1340, 1440, 2) if beige(im.getpixel((x, y))))
+print(right - left + 1, bars, foot)
+EOF
+}
+qs_unlocked() { [[ "$(n locked)" == false ]] && ! kill -0 "$LOCK_PID" 2>/dev/null; }
+qs_lock_quiet() {
+    local w
+    w=$(grep -E "WARN scene|ERROR" "$WORK/qslock.out" | grep -v -E "portal|Could not register")
+    [[ -z "$w" ]] || { echo "$w"; return 1; }
+}
+
+if (( ! PIL )); then
+    skip "Quickshell lock screen: python3-pillow is not installed"
+elif [[ -z "$WL" || "$WL" == "$WAYLAND_DISPLAY" || ! -S "$RT/$WL" ]]; then
+    fail "Quickshell lock screen: refusing to lock anything but the nested compositor"
+elif [[ ! -s "$WORK/hyprlock-fit.conf" ]]; then
+    fail "Quickshell lock screen: scenario 29 left no fitted copy to draw"
+else
+    mkdir -p "$WORK/pam.d" "$WORK/tally" "$WORK/island"
+    # pam_exec hands the password over on stdin, its NUL after it.
+    cat > "$WORK/pam-check.sh" <<'EOF'
+#!/bin/sh
+[ "$(tr -d '\000')" = "e2e-pass" ]
+EOF
+    chmod +x "$WORK/pam-check.sh"
+    # The machine's steps in small: three failures lock for six seconds.
+    # nodelay on every faillock line: the first one that lacks it holds each
+    # failure two seconds, and a password typed meanwhile is not taken.
+    cat > "$WORK/pam.d/locktest" <<EOF
+auth       requisite                   pam_faillock.so      preauth deny=3 unlock_time=6 fail_interval=86400 dir=$WORK/tally nodelay
+auth       [success=1 default=bad]     pam_exec.so          expose_authtok quiet $WORK/pam-check.sh
+auth       [default=die]               pam_faillock.so      authfail deny=0 fail_interval=86400 dir=$WORK/tally nodelay
+auth       optional                    pam_permit.so
+auth       required                    pam_faillock.so      authsucc deny=0 fail_interval=86400 dir=$WORK/tally nodelay
+account    required                    pam_permit.so
+EOF
+    python3 -I "$WORK/config/hypr/scripts/lock-spec.py" "$WORK/hyprlock-fit.conf" > "$WORK/lock-spec.json"
+    benv python3 -I "$REPO/tests/e2e/mprisapp.py" "$WORK/mpris.log" "$WORK/cover.png" &
+    MPRIS_PID=$!
+    sleep 1
+    qs_lock_island
+    # The power panel's actions, should anything reach them, go to a log.
+    cat > "$WORK/bin/lock-power" <<EOF
+#!/bin/sh
+echo "lock-power \$1" >> "$WORK/apps.log"
+EOF
+    chmod +x "$WORK/bin/lock-power"
+    benv env LOCK_SPEC="$WORK/lock-spec.json" LOCK_READY="$WORK/lock-ready" LOCK_RUN="$WORK/island" \
+        LOCK_PAM_SERVICE=locktest LOCK_PAM_DIR="$WORK/pam.d" LOCK_FAILLOCK_DIR="$WORK/tally" \
+        LOCK_PAM_STEPS="$WORK/pam.d/locktest" LOCK_SESSION_POWER="$WORK/bin/lock-power" \
+        qs -n -p "$WORK/bar/lock.qml" >"$WORK/qslock.out" 2>&1 &
+    LOCK_PID=$!
+    check "the Quickshell lock takes the lock over and says it holds it" wait_for 10 qs_lock_up
+    check "it draws the design: the notch and its lock, a dark clock, the card with its dark disc, a beige Press to unlock" \
+        wait_for 10 qs_lock_shows
+    read -r b l c v u o < <(lock_pixels)
+    echo "e2e: Quickshell lock pixels: island ${b:-?}, lock ${l:-?}, clock ${c:-?}, cover ${v:-?}, unlock ${u:-?}, toggle off the clock's ink by ${o:-?}"
+    qs_lock_island "$(printf '\U000F02CB')" "" "$(printf '\U000F05E0')" "#37a3de"
+    check "an event on its island: the glyph leading, the mark trailing" wait_for 5 island_is device
+    qs_lock_island "$(printf '\U000F140B')" "100%" "" "#37c058"
+    check "a percentage at its trailing end instead" wait_for 5 island_is number
+    qs_lock_island
+    check "and the lock again once the event has gone" wait_for 5 island_is rest
+    read -r nw nb nf < <(notch_music)
+    echo "e2e: the notch with music playing: ${nw:-?} px wide, ${nb:-?} pixels of bars at its right end; beige at the foot's middle ${nf:-?}"
+    check "music does not widen the notch: it keeps the shape's width" test "${nw:-0}" -ge 246 -a "${nw:-0}" -le 255
+    check "and shows only a small square of bars at its right end" test "${nb:-0}" -gt 4
+    check "nothing stands at the foot's middle where the status pills were" test "${nf:-1}" -eq 0
+    : > "$WORK/mpris.log"
+    input move 1280 792 sleep 300 click sleep 300
+    check "a click on its play-pause reaches the player" wait_for 4 logged "$WORK/mpris.log" Pause
+    for pw in e2e-wrong-1 e2e-wrong-2 e2e-wrong-3; do
+        input type "$pw" sleep 150 key 28 sleep 1500
+    done
+    check "three wrong passwords lock it for its step, counted down" wait_for 6 logged "$WORK/qslock.out" "locked out for"
+    check "the run's own tally has the three" test "$(faillock --dir "$WORK/tally" --user "$(id -un)" | grep -c ' V$')" -eq 3
+    sleep 7
+    input type "e2e-pass" sleep 150 key 28
+    check "the right password unlocks, and the lock screen ends" wait_for 6 qs_unlocked
+    check "the Quickshell lock raised no QML warning" qs_lock_quiet
+    kill -KILL "$LOCK_PID" 2>/dev/null
+    LOCK_PID=""
     stop_tree "$MPRIS_PID"
     MPRIS_PID=""
 fi

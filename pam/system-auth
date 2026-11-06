@@ -1,0 +1,48 @@
+#%PAM-1.0
+
+# Arch's pambase system-auth with the lockout in steps (the user, 2026-11-05:
+# 10 wrong passwords lock for a minute, 15 for two, 20 for four, and so on),
+# for every prompt that comes through here: the lock screen, sudo, login.
+# From the 10th wrong password each further one locks for its step: a
+# minute up to the 14th, two up to the 19th, then twice as long every five,
+# 64 minutes from the 40th. pam_faillock has no free tries between steps.
+#
+# requisite, not pambase's required: a locked account is refused before its
+# password is tried, so a right guess during a lock teaches nothing (with
+# required the password was still checked, and a right one cleared the count
+# once the first step's minute was up). authfail with deny=0: a lock that
+# runs out would otherwise wipe the count (pam_faillock marks the tally
+# unlocked and the next failure starts it again from one), and the steps
+# would never climb. authsucc with deny=0: a right password, let through by
+# the steps above, clears the count. fail_interval: the failures of the last
+# day count; /run/faillock is cleared at boot as well.
+#
+# tests/unit/test_pam_steps.py runs these lines with stand-ins for the
+# password check; keep the two in step.
+auth       requisite                   pam_faillock.so      preauth deny=10 unlock_time=60 fail_interval=86400
+auth       requisite                   pam_faillock.so      preauth deny=15 unlock_time=120 fail_interval=86400
+auth       requisite                   pam_faillock.so      preauth deny=20 unlock_time=240 fail_interval=86400
+auth       requisite                   pam_faillock.so      preauth deny=25 unlock_time=480 fail_interval=86400
+auth       requisite                   pam_faillock.so      preauth deny=30 unlock_time=960 fail_interval=86400
+auth       requisite                   pam_faillock.so      preauth deny=35 unlock_time=1920 fail_interval=86400
+auth       requisite                   pam_faillock.so      preauth deny=40 unlock_time=3840 fail_interval=86400
+-auth      [success=2 default=ignore]  pam_systemd_home.so
+auth       [success=1 default=bad]     pam_unix.so          try_first_pass nullok
+auth       [default=die]               pam_faillock.so      authfail deny=0 fail_interval=86400
+auth       optional                    pam_permit.so
+auth       required                    pam_env.so
+auth       required                    pam_faillock.so      authsucc deny=0 fail_interval=86400
+
+-account   [success=1 default=ignore]  pam_systemd_home.so
+account    required                    pam_unix.so
+account    optional                    pam_permit.so
+account    required                    pam_time.so
+
+-password  [success=1 default=ignore]  pam_systemd_home.so
+password   required                    pam_unix.so          try_first_pass nullok shadow
+password   optional                    pam_permit.so
+
+-session   optional                    pam_systemd_home.so
+session    required                    pam_limits.so
+session    required                    pam_unix.so
+session    optional                    pam_permit.so

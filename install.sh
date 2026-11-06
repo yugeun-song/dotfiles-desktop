@@ -753,6 +753,10 @@ greeter_is_tuigreet() {
 system_files() {
     printf '%s\n' "fontconfig/local.conf:$FONTCONF:644"
     greeter_is_tuigreet && printf '%s\n' "tuigreet/config.toml:$GREETERCONF:644"
+    # Arch's PAM stack with the lockout in steps (pam/system-auth). Other
+    # families lay theirs out otherwise (Debian's common-auth, Fedora's
+    # authselect), so only Arch's is replaced.
+    [[ "$FAMILY" == arch ]] && printf '%s\n' "pam/system-auth:$ROOT/etc/pam.d/system-auth:644"
     printf '%s\n' "${CAMERA_FILES[@]}" "${KEYFEED_FILES[@]}"
 }
 

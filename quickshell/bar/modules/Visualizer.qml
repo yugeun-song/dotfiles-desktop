@@ -17,8 +17,10 @@ Item {
     // Fewer bars than cava's bands take bands spread across the spectrum.
     property int bars: Cava.barCount
 
-    readonly property int barWidth: Theme.vizBarWidth
-    readonly property int barSpacing: Theme.vizBarSpacing
+    // The bar's sizes; the lock screen's notch sets its own for its small
+    // square of bars (LockNotch.qml).
+    property int barWidth: Theme.vizBarWidth
+    property int barSpacing: Theme.vizBarSpacing
     readonly property int maxHeight: root.levelHeight
 
     implicitWidth: root.bars * root.barWidth + (root.bars - 1) * root.barSpacing

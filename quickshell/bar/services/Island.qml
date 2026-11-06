@@ -289,6 +289,19 @@ Singleton {
         return { lead: lead, trail: "", mark: mark === "" ? "" : `<span foreground="${hex}">${mark}</span>` };
     }
 
+    // The same in parts, for the Quickshell lock screen (lock.qml), which
+    // draws them itself: the leading glyph (the lock between events), the
+    // trailing number with its sign, or the device's mark, and the tone.
+    function lockParts(kind: string, glyph: string, value: string, tone: color): var {
+        if (kind === "")
+            return { lead: Theme.iconLock, trail: "", mark: "", tone: "" };
+        const number = /^(\d{1,3})(%?)$/.exec(value);
+        const mark = value === "Connected" ? Theme.iconCheckCircle
+                   : value === "Disconnected" ? Theme.iconCloseCircle : "";
+        return { lead: glyph, trail: number !== null ? `${number[1]}${number[2]}` : "",
+                 mark: number !== null ? "" : mark, tone: root.hexOf(tone) };
+    }
+
     function hexOf(c: color): string {
         const part = v => Math.round(v * 255).toString(16).padStart(2, "0");
         return `#${part(c.r)}${part(c.g)}${part(c.b)}`;

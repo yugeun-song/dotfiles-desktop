@@ -128,13 +128,14 @@ class LockColoursTest(unittest.TestCase):
 
     # The user's calls: the panel's proportions on every screen, wider on a
     # wider one rather than larger (2026-10-24); the card and its controls
-    # at the bar's grown island's proportions on every one (2026-10-26).
+    # at the bar's grown island's proportions on every one (2026-10-26). The
+    # shape is the notch (2026-11-06): 330 x 102 of the design's units.
     def test_every_screen_gets_the_panels_proportions(self):
         text = self.fit(self.dark())
         self.assertEqual(widget(text, "TEST-B", text="$TIME")["font_size"], "107")
         self.assertEqual(widget(text, "TEST-A", text="$TIME")["font_size"], "85")
-        self.assertEqual(widget(text, "TEST-B", type="shape")["size"], "214, 51")
-        self.assertEqual(widget(text, "TEST-A", type="shape")["size"], "190, 41")
+        self.assertEqual(widget(text, "TEST-B", type="shape")["size"], "282, 87")
+        self.assertEqual(widget(text, "TEST-A", type="shape")["size"], "251, 70")
         self.assertEqual(card(text, "TEST-A")["size"], "177")
         # Unstretched as the card, where the shape above is 1.111 wider.
         shuffle = {"onclick": "$media click shuffle"}
@@ -144,7 +145,7 @@ class LockColoursTest(unittest.TestCase):
     def test_an_ultrawide_stretches_no_further_than_the_cap(self):
         self.screens([("TEST-W", 3440, 1440)])
         text = self.fit(self.dark())
-        self.assertEqual(widget(text, "TEST-W", type="shape")["size"], "214, 41")
+        self.assertEqual(widget(text, "TEST-W", type="shape")["size"], "282, 70")
         self.assertEqual(widget(text, "TEST-W", onclick="$media click loop")["position"], "111, -72")
 
     def test_a_narrower_screen_scales_by_its_width(self):

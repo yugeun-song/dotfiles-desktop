@@ -3,8 +3,10 @@
 # the graphical session's VT (printed at the end).
 #
 # ext-session-lock keeps the session locked when the locker dies, so killing
-# hyprlock alone leaves a blank locked screen. End hyprlock, then clear the
-# orphaned lock; Hyprland refuses to clear one that still has a live client.
+# the lock screen alone leaves a blank locked screen. End it (the Quickshell
+# lock, quickshell/bar/lock.qml, or hyprlock, lock.sh's fallback), then clear
+# the orphaned lock; Hyprland refuses to clear one that still has a live
+# client.
 
 set -uo pipefail
 
@@ -41,6 +43,18 @@ if pidof hyprlock >/dev/null 2>&1; then
         sleep 0.25
     done
     pidof hyprlock >/dev/null 2>&1 && pkill -9 -x hyprlock
+fi
+
+# The Quickshell lock by its config file, as lock.sh starts it.
+qs_lock="${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar/lock.qml"
+if pgrep -f -- "-p $qs_lock" >/dev/null 2>&1; then
+    echo "unlock: ending the Quickshell lock screen"
+    pkill -f -- "-p $qs_lock"
+    for _ in {1..40}; do
+        pgrep -f -- "-p $qs_lock" >/dev/null 2>&1 || break
+        sleep 0.25
+    done
+    pgrep -f -- "-p $qs_lock" >/dev/null 2>&1 && pkill -9 -f -- "-p $qs_lock"
 fi
 
 back="switch back to the graphical session's VT"

@@ -503,11 +503,12 @@ hl.bind("CTRL + ALT + L", hl.dsp.exec_cmd("loginctl lock-session"), { descriptio
 -- A crashed locker leaves the session locked (ext-session-lock) with no
 -- password field. This starts a new one, which may attach
 -- (allow_session_lock_restore, general.lua), so the way back is the
--- password, as from any lock. Not hl.clear_crashed_lockscreen(): that
--- unlocks outright, so anyone at the keyboard had the session once hyprlock
--- had crashed. The escape that needs no locker is a text console's login
--- and bin/unlock. locked = true, since ordinary binds are not delivered then.
-hl.bind("CTRL + ALT + SHIFT + U", hl.dsp.exec_cmd("pidof hyprlock || " .. scripts .. "/lock.sh"),
+-- password, as from any lock; lock.sh does nothing while one runs. Not
+-- hl.clear_crashed_lockscreen(): that unlocks outright, so anyone at the
+-- keyboard had the session once the locker had crashed. The escape that
+-- needs no locker is a text console's login and bin/unlock. locked = true,
+-- since ordinary binds are not delivered then.
+hl.bind("CTRL + ALT + SHIFT + U", hl.dsp.exec_cmd(scripts .. "/lock.sh"),
     { locked = true, description = "Restart a crashed lock screen" })
 -- Through scripts/session-power.sh, which ends the compositor before the
 -- shutdown transaction starts (a direct poweroff with an external lit hung

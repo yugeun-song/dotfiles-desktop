@@ -179,15 +179,21 @@ session within a few seconds, hyprlock locks with the same design. It shows
 the date, the time, the weather and what plays, with its transport, to
 anyone walking past: the user's trade for the design. `scripts/lock-media.py` draws the track's card, the bar's
 grown island scaled up, kept with its covers in `$XDG_RUNTIME_DIR/hyprlock`
-until the unlock; `scripts/lock-colours.py` picks the text's colours from
-the wallpaper, and `scripts/lock-fit.sh` keeps the panel's proportions on
-every screen. Its island takes the bar's island events, one at a time, a
-glyph at its left end and a number or mark at its right
+until the unlock; `scripts/lock-colours.py` picks hyprlock's text colours
+from the wallpaper by the same rules, and `scripts/lock-fit.sh` keeps the panel's proportions on
+every screen. Its island is a notch at the top edge (`LockNotch.qml`) that
+takes the bar's island events, one at a time, a glyph at its left end and a
+number or mark at its right, or a small square of bars while music plays
 (`services/LockIsland.qml`, `scripts/lock-island.sh`; hyprlock reads them
-again only at the bar's SIGUSR2). It fades in, and at the unlock the bar
+again only at the bar's SIGUSR2). It comes in over the desktop frosting
+under it, and at the unlock the bar
 sweeps it up off the desktop (`modules/UnlockSweep.qml`). `Ctrl+Alt+Shift+U`
-on it starts a new locker when hyprlock has crashed: the way out is the
-password, never an unlock without one.
+on it starts a new locker when one has crashed: the way out is the
+password, never an unlock without one. Wrong passwords lock for longer the
+more there are (`pam/system-auth`, Arch only, through sudo): from the 10th a
+minute each, two from the 15th, doubling every five to 64 minutes from the
+40th, for the lock screen, sudo and login alike; a right password or a
+reboot clears the count.
 
 The clipboard history (`Super+V`, cliphist) lives in `$XDG_RUNTIME_DIR`, a
 tmpfs gone at logout, and `cliphist-expire.timer` drops entries after half

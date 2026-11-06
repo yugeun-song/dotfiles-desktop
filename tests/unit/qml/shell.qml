@@ -4,6 +4,7 @@ import Quickshell.Io
 import Quickshell.Services.SystemTray
 import "modules"
 import qs.services
+import "modules/lockout.js" as Lockout
 
 // Unit tests for the bar's own logic, run by tests/unit/qml.sh in a copy of
 // quickshell/bar with this file as its shell.qml: offscreen, on no bus, with
@@ -895,6 +896,50 @@ ShellRoot {
         Widgets.layout = Widgets.layout.filter(it => it.id === "clock");
         check("widgets: a removed kind no longer placed", [Widgets.placed("clock"), Widgets.placed("system")], [true, false]);
         Widgets.layout = Widgets.defaults.layout;
+    }
+
+    // The lock screen's lockout countdown (modules/lockout.js) by
+    // pam_faillock's rule, and the island's parts it draws (Island.lockParts).
+    function testLockout() {
+        const pam = "auth requisite pam_faillock.so preauth deny=10 unlock_time=60 fail_interval=86400\n"
+            + "auth  requisite  pam_faillock.so  preauth deny=15 unlock_time=120 fail_interval=86400  # two\n"
+            + "-auth [success=2 default=ignore] pam_systemd_home.so\n"
+            + "auth [default=die] pam_faillock.so authfail deny=0\n"
+            + "# auth requisite pam_faillock.so preauth deny=1 unlock_time=1\n";
+        check("lockout: the steps of the preauth lines, in order",
+              Lockout.steps(pam, ""), [{ deny: 10, unlock: 60, interval: 86400 }, { deny: 15, unlock: 120, interval: 86400 }]);
+        check("lockout: a bare line takes faillock.conf, then the module's defaults",
+              [Lockout.steps("auth required pam_faillock.so preauth\n", "deny = 10\nunlock_time = 180\n"),
+               Lockout.steps("auth required pam_faillock.so preauth\n", "")],
+              [[{ deny: 10, unlock: 180, interval: 900 }], [{ deny: 3, unlock: 600, interval: 900 }]]);
+        const listing = "test:\nWhen                Type  Source                                           Valid\n"
+            + "2026-11-05 10:00:00 SVC   login                                                V\n"
+            + "2026-11-05 10:00:05 TTY   /dev/tty1                                            V\n"
+            + "2026-11-05 10:00:09 SVC   login                                                I\n";
+        const times = Lockout.failures(listing);
+        check("lockout: the tally's valid failures, local time", [times.length, times[1] - times[0]], [2, 5000]);
+        const steps = Lockout.steps(pam, "");
+        const base = new Date(2026, 10, 5, 10, 0, 0).getTime();
+        const tries = n => Array.from({ length: n }, (_, i) => base + i * 1000);
+        const latest = n => base + (n - 1) * 1000;
+        check("lockout: nine open, the tenth locks a minute, the fifteenth two",
+              [Lockout.until(tries(9), steps, latest(9)), Lockout.until(tries(10), steps, latest(10)),
+               Lockout.until(tries(15), steps, latest(15))],
+              [0, latest(10) + 60000, latest(15) + 120000]);
+        check("lockout: open again once the step's time is out",
+              Lockout.until(tries(10), steps, latest(10) + 61000), 0);
+        check("lockout: failures past the interval do not count",
+              Lockout.until(tries(10), [{ deny: 10, unlock: 60, interval: 5 }], latest(10)), 0);
+        check("lockout: a step with no unlock time holds until reset",
+              Lockout.until(tries(3), [{ deny: 3, unlock: 0, interval: 900 }], latest(3) + 1e9), Infinity);
+        check("lockout: what is left as m:ss", [Lockout.clock(59001), Lockout.clock(65000), Lockout.clock(3840000)],
+              ["1:00", "1:05", "64:00"]);
+        check("lock island: the lock alone between events",
+              Island.lockParts("", "", "", "transparent"), { lead: Theme.iconLock, trail: "", mark: "", tone: "" });
+        check("lock island: a level, and a device come and gone",
+              [Island.lockParts("volume", "V", "42%", "#37c058").trail, Island.lockParts("bt", "B", "Connected", "#37a3de").mark,
+               Island.lockParts("bt", "B", "Disconnected", "#37a3de").mark, Island.lockParts("bt", "B", "Connected", "#37a3de").tone],
+              ["42%", Theme.iconCheckCircle, Theme.iconCloseCircle, "#37a3de"]);
     }
 
     function testBadge() {

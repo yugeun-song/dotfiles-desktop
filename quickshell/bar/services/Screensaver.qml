@@ -43,6 +43,20 @@ Singleton {
     // bar left off would be lit again.
     property bool loaded: false
 
+    // Each display's stage ("lit", "black", "off") as ScreensaverDpms sets
+    // it, for what plays on the desktop and should rest while a display is
+    // dark (VideoWallpaper.qml). Set there only.
+    property var stages: ({})
+
+    function setStage(name: string, stage: string): void {
+        const next = Object.assign({}, root.stages);
+        if (stage === "")
+            delete next[name];
+        else
+            next[name] = stage;
+        root.stages = next;
+    }
+
     // Minutes per connector for every monitor the compositor lists, rebuilt
     // whenever the file or the monitor set changes. A property rather than a
     // function for the module's bindings: a singleton's functions are not

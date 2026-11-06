@@ -17,6 +17,15 @@ set -uo pipefail
 REPO=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)
 command -v qs >/dev/null 2>&1 || { echo "SKIP  qml: quickshell (qs) is not installed"; exit 0; }
 
+# The compiled shaders the bar loads are what their sources compile to.
+shaders=0
+"$REPO/quickshell/bar/shaders/build.sh" --check || shaders=$?
+case $shaders in
+    0) ;;
+    2) echo "SKIP  qml: shaders: no qsb to compile them with" ;;
+    *) echo "FAIL  qml: a compiled shader is out of date (quickshell/bar/shaders/build.sh)"; exit 1 ;;
+esac
+
 WORK=$(mktemp -d -p /tmp qs-unit.XXXXXX)
 # The tray suite's stand-ins outlive a failed run unless stopped here; each
 # pid only while it still has a stand-in's name. Called by the trap.

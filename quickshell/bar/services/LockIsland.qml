@@ -8,11 +8,13 @@ import Quickshell.Io
 // covers the bar, so while the screen is locked the event goes to the lock's
 // own island instead, as Island.lockCompact sets it out, one at a time.
 //
-// hyprlock reads its three island labels (hypr/hyprlock.conf, through
-// hypr/scripts/lock-island.sh) when it starts and again at each SIGUSR2
-// (their cmd[update:0:1]), never on a timer: the bar writes the three files
-// and then sends the signal, so the lock screen polls nothing and changes
-// only when the island does. SIGUSR1 would unlock the session; the command
+// The Quickshell lock (lock.qml, the locker since 2026-11-05) watches one
+// file, the parts as Island.lockParts gives them, and draws them itself.
+// hyprlock, the locker lock.sh falls back to, reads its three island labels
+// (hypr/hyprlock.conf, through hypr/scripts/lock-island.sh) when it starts
+// and again at each SIGUSR2 (their cmd[update:0:1]), never on a timer: the
+// bar writes the three files and then sends the signal, so either lock
+// screen polls nothing and changes only when the island does. SIGUSR1 would unlock the session; the command
 // below is the only signal sent, and the e2e defang matches it exactly.
 //
 // Written only while locked and in the session's tmpfs, so nothing of it
@@ -27,6 +29,7 @@ Singleton {
     // What the lock's island shows now; a string, so that only a change of
     // what it shows asks for a write.
     readonly property var shown: Island.lockCompact(Island.kind, Island.glyph, Island.value, Island.tone)
+    readonly property var parts: Island.lockParts(Island.kind, Island.glyph, Island.value, Island.tone)
     readonly property string shownKey: `${root.shown.lead}\u0001${root.shown.trail}\u0001${root.shown.mark}`
 
     onShownKeyChanged: {
@@ -52,6 +55,7 @@ Singleton {
     function publish(): void {
         if (!root.active)
             return;
+        partsFile.setText(JSON.stringify(root.parts) + "\n");
         leadFile.setText(root.shown.lead);
         trailFile.setText(root.shown.trail);
         markFile.setText(root.shown.mark);
@@ -63,6 +67,15 @@ Singleton {
 
     // Whole files (written beside, then renamed) and written before the
     // signal goes, so hyprlock never reads half of one.
+    FileView {
+        id: partsFile
+
+        path: root.dir === "" ? "" : root.dir + "/lock-island.json"
+        blockWrites: true
+        atomicWrites: true
+        printErrors: false
+    }
+
     FileView {
         id: leadFile
 

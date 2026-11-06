@@ -310,9 +310,11 @@ Scope {
 
             // Waits for the saved state and the minutes (root.ready).
             Component.onCompleted: {
+                Screensaver.setStage(slot.name, slot.stage);
                 if (root.ready)
                     slot.start();
             }
+            Component.onDestruction: Screensaver.setStage(slot.name, "")
 
             Connections {
                 target: root
@@ -360,7 +362,10 @@ Scope {
             // bar runs without its detailed log.
             readonly property string stage: slot.wantOff ? "off" : slot.dark ? "black" : "lit"
 
-            onStageChanged: console.info(`[screensaver] ${slot.name}: ${slot.stage}`)
+            onStageChanged: {
+                console.info(`[screensaver] ${slot.name}: ${slot.stage}`);
+                Screensaver.setStage(slot.name, slot.stage);
+            }
 
             // Set while a display taken over off waits for the next input.
             property bool waking: false
