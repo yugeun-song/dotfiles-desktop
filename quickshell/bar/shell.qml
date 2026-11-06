@@ -2,6 +2,7 @@ import QtQuick
 import Quickshell
 import Quickshell.Hyprland
 import Quickshell.Io
+import Quickshell.Services.Pipewire
 import "modules"
 import qs.services
 
@@ -97,6 +98,26 @@ ShellRoot {
         function onChanged() {
             Island.volumeChanged();
         }
+    }
+
+    // Whether a program is linked to a screen's stream, for ScreenShare: a
+    // share's frames pause while the screen holds still, Hyprland then says
+    // its screencast stopped, and the share is over only once the link goes.
+    // Read here so that ScreenShare's unit tests need no PipeWire. A screen's
+    // stream is a video source no device backs, told from a camera as
+    // scripts/share-apps.py tells it; device.id reads only once bound.
+    readonly property var videoSources: Pipewire.linkGroups.values
+        .map(g => g?.source)
+        .filter(s => s && (s.type & PwNodeType.VideoSource) === PwNodeType.VideoSource && !s.isStream)
+
+    PwObjectTracker {
+        objects: shell.videoSources
+    }
+
+    Binding {
+        target: ScreenShare
+        property: "streamed"
+        value: shell.videoSources.some(s => s.ready && s.properties["device.id"] === undefined)
     }
 
     // The island's event on the lock screen as well (services/LockIsland.qml):

@@ -20,14 +20,29 @@ import qs.services
 // its next resize, so it may stop under another name. A program that copies
 // the screen any other way is not seen.
 //
+// The event follows the frames, not the share: Hyprland says a copy stopped
+// half a second after its last frame, as a portal share's frames pause
+// while the screen holds still, and started at the next one. Taken as the
+// share's end, every still moment began a new share at 0:00 (the user,
+// 2026-11-06: Zoom's clock went back to 0:00 when another island event
+// came; recorded, a stop and a start every 3 s over a still screen). So a
+// stop only pauses a share that has lasted while a program is linked to a
+// screen's stream (`streamed`): the share and its clock go on until the
+// link goes or the frames come back. Hyprland names no program, so the one
+// stream holds every paused share, and two portal shares end together.
+//
 // Who shares comes from PipeWire, by no name either (scripts/share-apps.py),
 // looked up when the lasting shares change.
 Singleton {
     id: root
 
     // { key: { since, count } }: when the first share under the key began,
-    // and how many are on (one start and one stop each).
+    // and how many are on (one start and one stop each); 0 while paused.
     property var shares: ({})
+    // A program linked to a screen's stream in PipeWire's graph, set by
+    // shell.qml, so that this file reads no PipeWire (its unit tests have
+    // none).
+    property bool streamed: false
     // Those that have lasted, as { type, name, since }, set after active,
     // since and kind so that its handlers find them set: as bindings on it
     // they read stale there, and the clock and the lookup never started.
@@ -68,7 +83,39 @@ Singleton {
         onLoaded: {
             root.shares = root.parseObject(kept.shares);
             root.settle();
+            if (Object.values(root.shares).some(s => s.count === 0))
+                pausedCheck.restart();
         }
+    }
+
+    // A paused share is over once no program is linked to a screen's stream.
+    onStreamedChanged: {
+        if (!root.streamed)
+            root.dropPaused();
+    }
+
+    // A reload finds the paused shares before PipeWire has told the new
+    // instance of any stream: they wait for it a little, then go.
+    Timer {
+        id: pausedCheck
+
+        interval: 3000
+        onTriggered: {
+            if (!root.streamed)
+                root.dropPaused();
+        }
+    }
+
+    function dropPaused(): void {
+        const next = {};
+        for (const key of Object.keys(root.shares)) {
+            if (root.shares[key].count > 0)
+                next[key] = root.shares[key];
+        }
+        if (Object.keys(next).length === Object.keys(root.shares).length)
+            return;
+        root.shares = next;
+        root.settle();
     }
 
     onSharesChanged: kept.shares = JSON.stringify(root.shares)
@@ -103,10 +150,13 @@ Singleton {
         const entry = next[key];
         if (data.slice(0, a) === "1") {
             next[key] = entry ? { since: entry.since, count: entry.count + 1 } : { since: Date.now(), count: 1 };
-        } else if (entry) {
-            // A stop with no start seen began before this instance.
+        } else if (entry && entry.count > 0) {
+            // A stop with no start seen began before this instance, and one
+            // of a paused share changes nothing.
             if (entry.count > 1)
                 next[key] = { since: entry.since, count: entry.count - 1 };
+            else if (root.streamed && Date.now() - entry.since >= Theme.shareLastsMs)
+                next[key] = { since: entry.since, count: 0 };
             else
                 delete next[key];
         }

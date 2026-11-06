@@ -1233,6 +1233,30 @@ ShellRoot {
         check("share: every window under one key", Object.keys(ScreenShare.shares), ["window,"]);
         ScreenShare.take("0,window,the title it has now");
         check("share: a window share stops under another name", Object.keys(ScreenShare.shares), []);
+        // Hyprland's stop over a still screen, while a program is linked to
+        // the screen's stream: the share and its clock go on.
+        ScreenShare.streamed = true;
+        const lasted = Date.now() - Theme.shareLastsMs - 1000;
+        ScreenShare.shares = { "monitor,HEADLESS-1": { since: lasted, count: 1 } };
+        ScreenShare.take("0,monitor,HEADLESS-1");
+        check("share: a still screen pauses a share that has lasted", ScreenShare.shares["monitor,HEADLESS-1"], { since: lasted, count: 0 });
+        check("share: and it still counts", ScreenShare.lasting.length, 1);
+        ScreenShare.take("0,monitor,HEADLESS-1");
+        check("share: a paused share passes a second stop over", ScreenShare.shares["monitor,HEADLESS-1"], { since: lasted, count: 0 });
+        ScreenShare.take("1,monitor,HEADLESS-1");
+        check("share: the next frames go on with its clock", ScreenShare.shares["monitor,HEADLESS-1"], { since: lasted, count: 1 });
+        ScreenShare.take("0,monitor,HEADLESS-1");
+        ScreenShare.streamed = false;
+        check("share: over once the stream's link goes", Object.keys(ScreenShare.shares), []);
+        check("share: and no longer counts", ScreenShare.active, false);
+        ScreenShare.streamed = true;
+        ScreenShare.take("1,monitor,HEADLESS-1");
+        ScreenShare.take("0,monitor,HEADLESS-1");
+        check("share: a screenshot's copy beside a stream leaves nothing", Object.keys(ScreenShare.shares), []);
+        ScreenShare.streamed = false;
+        ScreenShare.shares = { "monitor,HEADLESS-1": { since: lasted, count: 1 } };
+        ScreenShare.take("0,monitor,HEADLESS-1");
+        check("share: with no stream a stop ends a share that has lasted", Object.keys(ScreenShare.shares), []);
         check("share: the clock under an hour", ScreenShare.clockText(61000), "1:01");
         check("share: the clock past an hour", ScreenShare.clockText(3723000), "1:02:03");
         check("share: the clock before its first second", ScreenShare.clockText(-5), "0:00");
