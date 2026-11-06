@@ -84,6 +84,12 @@ edit(BAR / "services/LockIsland.qml", 'command: ["pkill", "--older", "2", "-USR2
 # through this id: the speaker's place depends on which readouts show.
 edit(BAR / "modules/StatusItems.qml", "        onActivated: Volume.toggleMute()",
      '        objectName: "e2e-sound"\n        onActivated: Volume.toggleMute()')
+# The video wallpaper's link (VideoWallpaper.qml) in the run's own directory:
+# the user's would have the nested bar play the user's video.
+edit(BAR / "modules/VideoWallpaper.qml",
+     'readonly property string link: (Quickshell.env("HOME") ?? "") + "/Pictures/Wallpapers/current-desktop.video"',
+     f'readonly property string link: "{WORK / "current-desktop.video"}"')
+
 # The weather, for the probe's weather(): it shows on every machine here.
 edit(BAR / "modules/StatusItems.qml", "        onActivated: Weather.togglePanel(",
      '        objectName: "e2e-weather"\n        onActivated: Weather.togglePanel(')

@@ -159,9 +159,24 @@ seen, a display lit but black included (`--status` only diagnoses;
 anew only when the bar is gone from a display or does not answer. `unlock`
 clears a stuck lock screen.
 
-The lock screen (`hypr/hyprlock.conf`) shows the date, the time, the weather
-and what plays, with its transport, to anyone walking past: the user's trade
-for the design. `scripts/lock-media.py` draws the track's card, the bar's
+`scripts/wallpaper.sh <image>` sets the desktop's and the lock screen's
+picture; `--desktop <image>` and `--lock <image>` set one side alone, or each
+its own when given together. A video works too: its first frame is stored as
+the picture and a `.video` link beside it names the video, which plays muted
+on the desktop while the desktop is in view (`modules/VideoWallpaper.qml`, a
+player process of its own, `videowall.qml`, paused when covered and ended
+after a minute of it) and under the lock screen's blur (`LockVideo.qml`).
+
+The lock screen is Quickshell's (`quickshell/bar/lock.qml`, a process of
+its own that `scripts/lock.sh` starts at a lock and that ends at the
+unlock): it draws `hypr/hyprlock.conf`'s design as `scripts/lock-spec.py`
+reads it from lock-fit.sh's copy, shakes the typed dots and the notch at a
+wrong password, and counts a lockout down. Its words and surfaces take their
+colour per pixel from what lies under them, a video too
+(`shaders/lockink.frag`, compiled by `shaders/build.sh`). When it does not hold the
+session within a few seconds, hyprlock locks with the same design. It shows
+the date, the time, the weather and what plays, with its transport, to
+anyone walking past: the user's trade for the design. `scripts/lock-media.py` draws the track's card, the bar's
 grown island scaled up, kept with its covers in `$XDG_RUNTIME_DIR/hyprlock`
 until the unlock; `scripts/lock-colours.py` picks the text's colours from
 the wallpaper, and `scripts/lock-fit.sh` keeps the panel's proportions on

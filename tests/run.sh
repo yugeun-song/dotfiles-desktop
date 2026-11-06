@@ -102,6 +102,7 @@ tests/unit/alarm.sh || failed=1
 tests/unit/weather.sh || failed=1
 tests/unit/camera.sh || failed=1
 tests/unit/lock.sh || failed=1
+tests/unit/wallpaper.sh || failed=1
 tests/unit/install.sh || failed=1
 for name in keyfeed keyfeed_hold inputstate camera_switch lock_media lock_colours share_apps polkit_tty obs_auth; do
     if out=$(python3 -I "tests/unit/test_$name.py" 2>&1); then

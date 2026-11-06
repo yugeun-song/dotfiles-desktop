@@ -45,6 +45,9 @@ ShellRoot {
         id: weatherPanel
     }
 
+    // A video wallpaper where wallpaper.sh linked one; nothing without it.
+    VideoWallpaper {}
+
     // Inert until a display is given a time in the Displays panel, and held
     // off while that panel is open.
     ScreensaverDpms {

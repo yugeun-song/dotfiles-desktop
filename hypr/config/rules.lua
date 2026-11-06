@@ -32,6 +32,12 @@ hl.layer_rule({ match = { namespace = "^(quickshell)$" }, blur = false })
 -- there; a popin on each move flashed the caps already up.
 hl.layer_rule({ match = { namespace = "^(quickshell:keys)$" }, no_anim = true })
 
+-- A video wallpaper (VideoWallpaper.qml) plays over hyprpaper's picture, its
+-- first frame, on the same background level: below zero, so it is drawn after
+-- hyprpaper whichever surface came first (hyprpaper makes its surfaces again
+-- for a screen plugged in), and there or not as hyprpaper's picture is.
+hl.layer_rule({ match = { namespace = "^(quickshell:video-wallpaper)$" }, order = -1, no_anim = true })
+
 -- Hyprland draws the layers of a level by descending order, so the lowest
 -- order is drawn last, on top (0.56.2, Renderer.cpp arrangeLayersForMonitor).
 
