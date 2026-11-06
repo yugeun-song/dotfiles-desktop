@@ -196,6 +196,7 @@ check("every way Dolphin starts names the same style sheet", all(starts.values()
 props = configparser.ConfigParser(interpolation=None)
 props.optionxform = str
 props.read_string((repo / "kde/dolphin/global.directory").read_text())
+check("Dolphin shows hidden files by default", props.get("Settings", "HiddenFilesShown", fallback="") == "true")
 check("Dolphin opens folders in the list view with its four columns",
       props.get("Dolphin", "ViewMode", fallback="") == "1"
       and props.get("Dolphin", "VisibleRoles", fallback="").split(",")
