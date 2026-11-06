@@ -13,6 +13,9 @@ Item {
 
     // Set when the glyph came from the icon font rather than from Inter.
     property bool iconGlyph: false
+    // The whole cap at this share of the key overlay's: the cheatsheet sets
+    // its caps in a list (modules/Cheatsheet.qml).
+    property real size: 1
 
     // Hangul is drawn in the Hangul font by name: left to fontconfig's
     // fallback its taller line made the cap 5 px taller than a latin one. At
@@ -24,11 +27,16 @@ Item {
     readonly property color shadow: Theme.muted
     readonly property color ink: Theme.readableOn(root.face)
 
-    // How far the side shows below the face.
-    readonly property int drop: Theme.px(3)
+    // A length of the overlay's cap at this cap's size; px() itself at 1.
+    function sized(base: real): int {
+        return Math.max(1, Math.round(Theme.px(base) * root.size));
+    }
 
-    implicitWidth: Math.max(label.implicitWidth + Theme.px(20), Theme.px(42))
-    implicitHeight: label.implicitHeight + Theme.px(16) + root.drop
+    // How far the side shows below the face.
+    readonly property int drop: root.sized(3)
+
+    implicitWidth: Math.max(label.implicitWidth + root.sized(20), root.sized(42))
+    implicitHeight: label.implicitHeight + root.sized(16) + root.drop
 
     // The latin line's height, given to every text label: one cap height
     // whatever the font.
@@ -36,7 +44,7 @@ Item {
         id: latinLine
 
         font.family: Theme.uiFont
-        font.pixelSize: Theme.px(17)
+        font.pixelSize: root.sized(17)
         font.weight: Font.DemiBold
     }
 
@@ -45,7 +53,7 @@ Item {
         anchors.right: parent.right
         anchors.bottom: parent.bottom
         height: parent.height - root.drop
-        radius: Theme.px(8)
+        radius: root.sized(8)
         color: root.shadow
     }
 
@@ -54,7 +62,7 @@ Item {
         anchors.right: parent.right
         anchors.top: parent.top
         height: parent.height - root.drop
-        radius: Theme.px(8)
+        radius: root.sized(8)
         color: root.face
         border.width: 1
         border.color: Theme.bg
@@ -63,7 +71,7 @@ Item {
             id: label
 
             anchors.centerIn: parent
-            spacing: Theme.px(2)
+            spacing: root.sized(2)
 
             // Bold, one step above the key: Inter draws modifier marks with
             // thinner strokes, so Bold beside DemiBold looks equal in weight.
@@ -72,7 +80,7 @@ Item {
                 visible: root.mods !== ""
                 text: root.mods
                 font.family: Theme.uiFont
-                font.pixelSize: Theme.px(17)
+                font.pixelSize: root.sized(17)
                 font.weight: Font.Bold
                 color: root.ink
             }
@@ -84,7 +92,7 @@ Item {
                 text: root.text
                 font.family: root.iconGlyph ? Theme.iconFont : root.hangul ? Theme.hangulFont : Theme.uiFont
                 // Nerd Font glyphs sit small in their em box; size up to match.
-                font.pixelSize: root.iconGlyph ? Theme.px(20) : Theme.px(17)
+                font.pixelSize: root.iconGlyph ? root.sized(20) : root.sized(17)
                 font.weight: Font.DemiBold
                 color: root.ink
             }

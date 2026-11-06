@@ -1,26 +1,36 @@
 pragma ComponentBehavior: Bound
-
 import QtQuick
 import Quickshell
-import Quickshell.Wayland
-import Quickshell.Io
 import Quickshell.Hyprland
+import Quickshell.Io
+import Quickshell.Wayland
 import qs.services
 
 // Key bindings read live from `hyprctl -j binds`, so the sheet never drifts
-// from hypr/config/keybinds.lua. Binds without a description are left out on
-// purpose. Flat table, one full chord per row.
+// from hypr/config/keybinds.lua; binds without a description are left out
+// on purpose. As the user asked (2026-11-04): searched as the launcher is,
+// laid out to be read at a glance, and the keys drawn as keys, the key
+// overlay's caps at a list's size. The grouping, the merging of one action's
+// chords and the search are services/Shortcuts.qml's. Modifiers keep their
+// words on the caps (Super, Ctrl, Alt, Shift), not the overlay's symbols:
+// the sheet is for readers who do not know the bindings yet.
 Scope {
     id: root
 
-    // Three columns leave too little room for chord plus description.
-    readonly property int columnCount: 2
-
     property bool open: false
+    property var groups: []
+    property string query: ""
+
+    readonly property var shown: Shortcuts.filter(root.groups, root.query)
+    readonly property int count: root.shown.reduce((n, g) => n + g.rows.length, 0)
 
     function toggle() {
-        if (!root.open)
+        if (!root.open && !Surfaces.mayOpen("cheatsheet"))
+            return;
+        if (!root.open) {
+            root.query = "";
             binds.running = true;   // reread on every open; bindings can change
+        }
         root.open = !root.open;
     }
 
@@ -28,67 +38,16 @@ Scope {
         root.open = false;
     }
 
-    // ---- reading the bindings -------------------------------------------
+    // Transient, one panel at a time (services/Surfaces.qml).
+    onOpenChanged: Surfaces.report("cheatsheet", root.open)
 
-    property var columns: []
-    property int total: 0
+    Connections {
+        target: Surfaces
 
-
-    // Hyprland modmask bits; 69 = Super+Ctrl+Shift.
-    readonly property var modNames: [
-        { bit: 64, name: "Super" },
-        { bit: 4,  name: "Ctrl"  },
-        { bit: 8,  name: "Alt"   },
-        { bit: 1,  name: "Shift" }
-    ]
-
-    // Fewer modifiers first; ties break on the mask for a stable order.
-    function modRank(mask) {
-        let bits = 0;
-        for (let i = 0; i < root.modNames.length; i++)
-            if (mask & root.modNames[i].bit)
-                bits++;
-        return bits * 1000 + mask;
-    }
-
-    // Modifier names as words, not the key overlay's symbols: this page is
-    // for readers who do not know the bindings yet.
-    function chordLabel(mask, key) {
-        const parts = [];
-        for (let i = 0; i < root.modNames.length; i++)
-            if (mask & root.modNames[i].bit)
-                parts.push(root.modNames[i].name);
-        parts.push(root.keyLabel(key));
-        return parts.join(" + ");
-    }
-
-    // A key name as it is typed, not as X11 spells it.
-    function keyLabel(k) {
-        const map = {
-            "Return": "Enter", "slash": "/", "comma": ",", "period": ".",
-            "semicolon": ";", "apostrophe": "'", "grave": "`", "minus": "-",
-            "equal": "=", "bracketleft": "[", "bracketright": "]",
-            "backslash": "\\", "Print": "PrtSc", "Escape": "Esc",
-            "mouse_up": "Wheel up", "mouse_down": "Wheel down",
-            "Page_Up": "PgUp", "Page_Down": "PgDn", "space": "Space"
-        };
-        if (map[k] !== undefined)
-            return map[k];
-        if (k.indexOf("mouse:") === 0)
-            return "Mouse " + k.slice(6);
-        // Shorten XF86 keysyms so they do not push the description off the row.
-        if (k.indexOf("XF86") === 0) {
-            const t = k.slice(4)
-                .replace("MonBrightness", "Brightness ")
-                .replace("Audio", "")
-                .replace(/([a-z])([A-Z])/g, "$1 $2");
-            return t.charAt(0).toUpperCase() + t.slice(1);
+        function onShut(name) {
+            if (name === "cheatsheet")
+                root.close();
         }
-        if (k.indexOf("switch:") === 0)
-            return k.indexOf("switch:on:") === 0 ? "Lid closed" : "Lid opened";
-        if (k === "SUPER_L" || k === "SUPER_R")
-            return k === "SUPER_L" ? "Super (left)" : "Super (right)";
-        return k.length === 1 ? k.toUpperCase() : k;
     }
 
     Process {
@@ -103,36 +62,12 @@ Scope {
                     parsed = JSON.parse(this.text);
                 } catch (e) {
                     console.warn("[cheatsheet] could not parse hyprctl binds:", e);
-                    root.columns = [];
-                    root.total = 0;
-                    return;
                 }
-
-                const rows = [];
-                for (let i = 0; i < parsed.length; i++) {
-                    const b = parsed[i];
-                    if (!b.description)
-                        continue;
-                    const mask = b.modmask || 0;
-                    rows.push({
-                        rank: root.modRank(mask),
-                        chord: root.chordLabel(mask, b.key || ""),
-                        what: b.description
-                    });
-                }
-
-                rows.sort((a, b) => a.rank - b.rank || a.what.localeCompare(b.what));
-
-                // Contiguous halves so the table reads down each column. Split
-                // here, not in a binding: a nested Repeater cannot see the outer
-                // index reliably and then renders nothing.
-                const per = Math.ceil(rows.length / root.columnCount);
-                const cols = [];
-                for (let c = 0; c < root.columnCount; c++)
-                    cols.push(rows.slice(c * per, (c + 1) * per));
-
-                root.total = rows.length;
-                root.columns = cols;
+                // Replaced only when the bindings changed: a new list rebuilt
+                // every row and the list jumped as it opened.
+                const next = Shortcuts.build(parsed);
+                if (JSON.stringify(next) !== JSON.stringify(root.groups))
+                    root.groups = next;
             }
         }
     }
@@ -140,11 +75,8 @@ Scope {
     GlobalShortcut {
         name: "cheatsheet"
         description: "Show every key binding"
-
         onPressed: root.toggle()
     }
-
-    // ---- the window ------------------------------------------------------
 
     LazyLoader {
         active: root.open
@@ -152,9 +84,9 @@ Scope {
         PanelWindow {
             id: win
 
+            screen: Screens.focused
             color: "transparent"
             focusable: true
-
             // Exclusive zone 0 would place this clear of the bar's zone and
             // shift the centred card; Ignore covers the whole output.
             exclusionMode: ExclusionMode.Ignore
@@ -172,44 +104,35 @@ Scope {
             // The sheet's share of this screen, as on the reference output.
             readonly property real fit: Theme.fit(win.screen)
 
-            // A PanelWindow never takes focus itself; Keys must live on a
-            // child. This one is also the stage, so the card's caps and
-            // margins keep their share of the screen.
             FittedStage {
+                id: stage
+
                 fit: win.fit
-                focus: true
 
-                Keys.onPressed: event => {
-                    if (event.key === Qt.Key_Escape
-                        || event.key === Qt.Key_Slash
-                        || event.key === Qt.Key_Q) {
-                        root.close();
-                        event.accepted = true;
-                    }
-                }
-
-                // Dim backdrop; clicking it closes the sheet.
-                Rectangle {
+                // A clear backdrop (the user, 2026-11-04: only the session
+                // dialog dims); clicking it closes the sheet.
+                MouseArea {
                     anchors.fill: parent
-                    color: Qt.rgba(Theme.bg.r, Theme.bg.g, Theme.bg.b, 0.82)
-
-                    MouseArea {
-                        anchors.fill: parent
-                        onClicked: root.close()
-                    }
+                    onClicked: root.close()
                 }
 
                 Rectangle {
                     id: card
 
-                    // Uniform so the alternating stripes stay equal.
-                    readonly property int rowHeight: Theme.px(34)
                     readonly property int gutter: Theme.px(26)
+                    // The scroll bar's column beside the list, kept whether or
+                    // not it shows.
+                    readonly property int barRoom: Theme.px(8) + Theme.px(10)
 
                     anchors.centerIn: parent
-                    width: Math.min(parent.width - Theme.px(64), Theme.px(1560))
-                    height: Math.min(parent.height - Theme.px(64), Theme.px(960))
-                    radius: Theme.px(18)
+                    // A share of the screen, the same on every one, and one
+                    // column, as the user asked (2026-11-04: by ratio, smaller,
+                    // a single column). Its height holds whatever a search
+                    // leaves, so the card does not jump while typing.
+                    width: Math.max(Math.min(Theme.px(520), parent.width - Theme.px(64)),
+                                    Math.round(parent.width * 0.36))
+                    height: Math.round(parent.height * 0.72)
+                    radius: Theme.surfaceRadius
                     color: Theme.surfaceBg
                     border.width: Theme.surfaceBorder
                     border.color: Theme.surfaceLine
@@ -219,184 +142,165 @@ Scope {
                         anchors.fill: parent
                     }
 
-                    Text {
-                        id: title
-
-                        anchors.top: parent.top
-                        anchors.left: parent.left
-                        anchors.topMargin: card.gutter
-                        anchors.leftMargin: card.gutter
-                        text: "Key bindings"
-                        font.family: Theme.uiFont
-                        font.pixelSize: Theme.px(28)
-                        font.weight: Font.DemiBold
-                        color: Theme.fg
-                    }
-
-                    Text {
-                        anchors.verticalCenter: title.verticalCenter
-                        anchors.right: parent.right
-                        anchors.rightMargin: card.gutter
-                        text: "Esc to close"
-                        font.family: Theme.uiFont
-                        font.pixelSize: Theme.px(14)
-                        color: Theme.surfaceFaint
-                    }
-
-                    // Header row and rule.
                     Item {
                         id: head
 
-                        anchors.top: title.bottom
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.topMargin: Theme.px(40)
-                        anchors.leftMargin: card.gutter
-                        anchors.rightMargin: card.gutter
-                        height: Theme.px(36)
+                        x: card.gutter
+                        y: card.gutter
+                        width: card.width - card.gutter * 2
+                        height: Theme.px(30)
 
-                        Row {
-                            anchors.fill: parent
-                            spacing: card.gutter
-
-                            Repeater {
-                                model: root.columnCount
-
-                                Item {
-                                    width: (head.width - card.gutter * (root.columnCount - 1))
-                                           / root.columnCount
-                                    height: head.height
-
-                                    Text {
-                                        anchors.left: parent.left
-                                        anchors.bottom: parent.bottom
-                                        anchors.bottomMargin: Theme.px(10)
-                                        text: "KEYS"
-                                        font.family: Theme.uiFont
-                                        font.pixelSize: Theme.px(13)
-                                        font.letterSpacing: Theme.px(2)
-                                        color: Theme.surfaceText
-                                    }
-
-                                    Text {
-                                        anchors.left: parent.left
-                                        anchors.leftMargin: card.chordWidth + Theme.px(18)
-                                        anchors.bottom: parent.bottom
-                                        anchors.bottomMargin: Theme.px(10)
-                                        text: "ACTION"
-                                        font.family: Theme.uiFont
-                                        font.pixelSize: Theme.px(13)
-                                        font.letterSpacing: Theme.px(2)
-                                        color: Theme.surfaceText
-                                    }
-                                }
-                            }
+                        Text {
+                            anchors.left: parent.left
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: "Keyboard shortcuts"
+                            font.family: Theme.uiFont
+                            font.pixelSize: Theme.px(22)
+                            font.weight: Font.DemiBold
+                            color: Theme.fg
                         }
 
-                        // Under the column heads: the strongest rule inside
-                        // the card, yet no stronger than its edge; at 78% it
-                        // had been the brightest line on the screen.
-                        Rectangle {
-                            anchors.bottom: parent.bottom
-                            width: parent.width
-                            height: Theme.surfaceBorder
-                            color: Theme.surfaceLine
+                        Text {
+                            anchors.right: parent.right
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: root.query.trim() !== "" ? `${root.count} found · Esc to close` : "Esc to close"
+                            font.family: Theme.uiFont
+                            font.pixelSize: Theme.px(13)
+                            color: Theme.surfaceFaint
                         }
                     }
 
-                    // Fixed so the action column lines up without measuring
-                    // every row. Fits "Super + Ctrl + Alt + Shift + Delete"
-                    // (~260 px in Inter at this size).
-                    readonly property int chordWidth: Theme.px(300)
+                    // The search, set as the launcher's and the weather panel's
+                    // fields are; typing goes here.
+                    Rectangle {
+                        id: search
+
+                        x: card.gutter
+                        y: head.y + head.height + Theme.px(14)
+                        width: card.width - card.gutter * 2
+                        height: Theme.px(40)
+                        radius: height / 2
+                        color: Theme.surfaceRaised
+
+                        Text {
+                            id: glyph
+
+                            x: Theme.px(14)
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: Theme.iconSearch
+                            font.family: Theme.iconFont
+                            font.pixelSize: Theme.px(16)
+                            color: Theme.muted
+                        }
+
+                        TextInput {
+                            id: field
+
+                            anchors.left: glyph.right
+                            anchors.leftMargin: Theme.px(10)
+                            anchors.right: parent.right
+                            anchors.rightMargin: Theme.px(14)
+                            anchors.verticalCenter: parent.verticalCenter
+                            focus: true
+                            clip: true
+                            maximumLength: 60
+                            font.family: Theme.uiFont
+                            font.pixelSize: Theme.px(14)
+                            color: Theme.fg
+                            selectionColor: Theme.accentIndigo
+                            selectedTextColor: Theme.ink
+                            // A composing Hangul syllable counts at once.
+                            onTextChanged: root.query = field.text + field.preeditText
+                            onPreeditTextChanged: root.query = field.text + field.preeditText
+
+                            Text {
+                                anchors.fill: parent
+                                visible: field.text === "" && field.preeditText === ""
+                                text: "Search shortcuts"
+                                font: field.font
+                                color: Theme.muted
+                            }
+
+                            // Esc closes at once, a search or not (the user,
+                            // 2026-11-04: not twice); the next opening starts
+                            // with an empty field.
+                            Keys.onPressed: event => {
+                                switch (event.key) {
+                                case Qt.Key_Escape:
+                                    root.close();
+                                    break;
+                                case Qt.Key_Down:
+                                    list.contentY = Math.min(list.contentY + Theme.px(40),
+                                                             Math.max(0, list.contentHeight - list.height));
+                                    break;
+                                case Qt.Key_Up:
+                                    list.contentY = Math.max(0, list.contentY - Theme.px(40));
+                                    break;
+                                case Qt.Key_PageDown:
+                                    list.contentY = Math.min(list.contentY + list.height * 0.9,
+                                                             Math.max(0, list.contentHeight - list.height));
+                                    break;
+                                case Qt.Key_PageUp:
+                                    list.contentY = Math.max(0, list.contentY - list.height * 0.9);
+                                    break;
+                                default:
+                                    return;
+                                }
+                                event.accepted = true;
+                            }
+                        }
+                    }
 
                     Flickable {
-                        id: body
+                        id: list
 
-                        anchors.top: head.bottom
-                        anchors.left: parent.left
-                        anchors.right: parent.right
-                        anchors.bottom: parent.bottom
-                        anchors.leftMargin: card.gutter
-                        anchors.rightMargin: card.gutter
-                        anchors.topMargin: Theme.px(14)
-                        anchors.bottomMargin: Theme.px(22)
-
-                        contentHeight: table.height
+                        x: card.gutter
+                        y: search.y + search.height + Theme.px(18)
+                        width: card.width - card.gutter * 2 - card.barRoom
+                        height: card.height - list.y - card.gutter
+                        contentWidth: list.width
+                        contentHeight: groups.implicitHeight
                         clip: true
                         boundsBehavior: Flickable.StopAtBounds
 
-                        Row {
-                            id: table
+                        Column {
+                            id: groups
 
-                            width: parent.width
-                            spacing: card.gutter
+                            width: list.width
+                            spacing: Theme.px(22)
 
                             Repeater {
-                                model: root.columns
+                                model: root.shown
 
-                                Column {
-                                    id: column
-
+                                ShortcutGroup {
                                     required property var modelData
 
-                                    width: (table.width - card.gutter * (root.columnCount - 1))
-                                           / root.columnCount
-
-                                    Repeater {
-                                        model: column.modelData
-
-                                        Item {
-                                            id: row
-
-                                            required property var modelData
-                                            required property int index
-
-                                            width: column.width
-                                            height: card.rowHeight
-
-                                            // Stripe on every other row, the rows'
-                                            // only divide (Theme.surfaceSeparator's
-                                            // note). In the card's own colour it
-                                            // had not shown, and a hairline under
-                                            // every row did the work instead.
-                                            Rectangle {
-                                                anchors.fill: parent
-                                                visible: row.index % 2 === 0
-                                                color: Theme.surfaceRaised
-                                                opacity: 0.8
-                                            }
-
-                                            Text {
-                                                anchors.left: parent.left
-                                                anchors.leftMargin: Theme.px(4)
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                width: card.chordWidth
-                                                text: row.modelData.chord
-                                                font.family: Theme.uiFont
-                                                font.pixelSize: Theme.px(15)
-                                                color: Theme.surfaceText
-                                                elide: Text.ElideRight
-                                                // Never parse a key label as markup.
-                                                textFormat: Text.PlainText
-                                            }
-
-                                            Text {
-                                                anchors.left: parent.left
-                                                anchors.leftMargin: card.chordWidth + Theme.px(18)
-                                                anchors.right: parent.right
-                                                anchors.verticalCenter: parent.verticalCenter
-                                                textFormat: Text.PlainText
-                                                text: row.modelData.what
-                                                font.family: Theme.uiFont
-                                                font.pixelSize: Theme.px(15)
-                                                color: Theme.fg
-                                                elide: Text.ElideRight
-                                            }
-                                        }
-                                    }
+                                    data_: modelData
+                                    columnWidth: list.width
                                 }
                             }
                         }
+
+                        // Say why the list is empty; the two causes differ.
+                        Text {
+                            width: list.width
+                            visible: root.count === 0
+                            wrapMode: Text.Wrap
+                            textFormat: Text.PlainText
+                            text: root.groups.length === 0 ? "No key bindings with a description were found."
+                                                           : `No shortcut matches "${root.query.trim()}".`
+                            font.family: Theme.uiFont
+                            font.pixelSize: Theme.menuItemTextSize
+                            color: Theme.muted
+                        }
+                    }
+
+                    ScrollTrack {
+                        x: list.x + list.width + Theme.px(10)
+                        y: list.y
+                        width: Theme.px(8)
+                        height: list.height
+                        view: list
                     }
                 }
             }

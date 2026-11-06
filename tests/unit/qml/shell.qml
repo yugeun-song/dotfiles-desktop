@@ -738,6 +738,100 @@ ShellRoot {
         check("badge: automatic is the system's", Badge.current.id, Badge.autoMark.id);
     }
 
+    // The cheatsheet's rows (services/Shortcuts.qml), from hyprctl's shape.
+    function testShortcuts() {
+        check("shortcuts: a mouse button by its side", Shortcuts.keyCap("mouse:272"), "Left click");
+        check("shortcuts: a media key as printed", Shortcuts.keyCap("XF86AudioRaiseVolume"), "Volume +");
+        check("shortcuts: an arrow as a key draws it", Shortcuts.keyCap("Down"), "↓");
+        check("shortcuts: a letter in capitals", Shortcuts.keyCap("s"), "S");
+        check("shortcuts: punctuation in either case", ["BracketLeft", "bracketright", "Slash"].map(k => Shortcuts.keyCap(k)),
+              ["[", "]", "/"]);
+        check("shortcuts: modifiers in a keyboard's order", Shortcuts.chord(65, "S").caps, ["Super", "Shift", "S"]);
+        check("shortcuts: a lone Super is tapped", Shortcuts.chord(64, "SUPER_L"), { caps: ["Super"], note: "tap" });
+        check("shortcuts: the lid is no key", Shortcuts.chord(0, "switch:on:Lid Switch"), { caps: [], note: "Lid closed" });
+        const b = (description, modmask, key) => ({ description, modmask, key });
+        const built = Shortcuts.build([
+            b("Terminal", 64, "Return"), b("Move window down", 65, "J"), b("Move window down", 65, "Down"),
+            b("Workspace 1", 64, "1"), b("Workspace 2", 64, "2"), b("Workspace 10", 64, "0"),
+            b("", 64, "X"), b("Lock", 12, "L")
+        ]);
+        check("shortcuts: groups in their order, the empty left out", built.map(g => g.name),
+              ["Applications", "Windows", "Workspaces", "Session"]);
+        check("shortcuts: an action's chords on one row", built[1].rows[0].chords.map(c => c.caps.join("+")),
+              ["Super+Shift+J", "Super+Shift+↓"]);
+        check("shortcuts: numbered actions as a range", [built[2].rows[0].what, built[2].rows[0].to],
+              ["Workspace 1–10", "0"]);
+        check("shortcuts: a search by words", Shortcuts.filter(built, "lock").map(g => g.rows[0].what), ["Lock"]);
+        // "lock" typed with the input method in Hangul: two jamo and one syllable.
+        const lockInHangul = String.fromCodePoint(0x3163, 0x3150, 0xcc28);
+        check("shortcuts: the wallpaper picker is the shell's", Shortcuts.groupOf("Pick the wallpaper"), "Shell");
+        check("shortcuts: Hangul typed for latin", Shortcuts.latinOf(lockInHangul), "lock");
+        check("shortcuts: and found", Shortcuts.filter(built, lockInHangul).map(g => g.rows[0].what), ["Lock"]);
+        check("shortcuts: a search by a key", Shortcuts.filter(built, "j").length, 1);
+        check("shortcuts: nothing found", Shortcuts.filter(built, "zzzz"), []);
+    }
+
+    // Which panels stand together (services/Surfaces.qml). The panels' own
+    // reports are made here by hand, as each panel makes them.
+    function testSurfaces() {
+        const asked = [];
+        const listen = name => asked.push(name);
+        Surfaces.shown = [];
+        Surfaces.shut.connect(listen);
+        Surfaces.report("displays", true);
+        Surfaces.report("controls", true);
+        check("surfaces: a transient opens over the display panel", asked, []);
+        check("surfaces: and has the keys", Surfaces.top, "controls");
+        Surfaces.report("launcher", true);
+        check("surfaces: one transient at a time", asked, ["controls"]);
+        Surfaces.report("controls", false);
+        check("surfaces: the display panel stays under", Surfaces.shown, ["displays", "launcher"]);
+        Surfaces.report("launcher", false);
+        check("surfaces: and has the keys back", Surfaces.top, "displays");
+        asked.length = 0;
+        Surfaces.report("session", true);
+        check("surfaces: the session dialog shuts the rest", asked, ["displays"]);
+        check("surfaces: nothing opens over it", Surfaces.mayOpen("launcher"), false);
+        check("surfaces: but itself", Surfaces.mayOpen("session"), true);
+        Surfaces.report("displays", false);
+        Surfaces.report("session", false);
+        check("surfaces: all may open after it", Surfaces.mayOpen("weather"), true);
+        Surfaces.shut.disconnect(listen);
+        Surfaces.shown = [];
+    }
+
+    // The control centre's Wi-Fi rows and glyphs, and its one open section.
+    function testControls() {
+        const n = (name, connected, known, signal, secured) => ({ name, connected, known, signal, secured });
+        check("controls: in use, then saved, then the rest",
+              Controls.networkOrder([n("b", false, false, 0.9, true), n("a", false, true, 0.2, true),
+                                     n("c", true, true, 0.4, true)], 7).map(x => x.name), ["c", "a", "b"]);
+        check("controls: strongest first within a group",
+              Controls.networkOrder([n("weak", false, false, 0.2, true), n("strong", false, false, 0.8, true)], 7)
+                  .map(x => x.name), ["strong", "weak"]);
+        check("controls: one row per name, its strongest kept",
+              Controls.networkOrder([n("x", false, false, 0.3, true), n("x", false, false, 0.8, true)], 7)
+                  .map(x => x.signal), [0.8]);
+        check("controls: a hidden network has no row", Controls.networkOrder([n("", false, false, 0.9, false)], 7), []);
+        check("controls: at most the rows asked for",
+              Controls.networkOrder([n("a", false, false, 0.1, false), n("b", false, false, 0.2, false),
+                                     n("c", false, false, 0.3, false)], 2).map(x => x.name), ["c", "b"]);
+        check("controls: four steps of signal",
+              [0, 0.24, 0.25, 0.49, 0.5, 0.74, 0.75, 1].map(s => Controls.wifiGlyph(s, false).codePointAt(0)),
+              [0xF091F, 0xF091F, 0xF0922, 0xF0922, 0xF0925, 0xF0925, 0xF0928, 0xF0928]);
+        check("controls: a lock where a password is asked", Controls.wifiGlyph(0.8, true).codePointAt(0), 0xF092A);
+        check("theme: the bar's Wi-Fi steps are the strength glyphs, no lock or warning among them",
+              [Theme.iconWifi1, Theme.iconWifi2, Theme.iconWifi3, Theme.iconWifi4].map(g => g.codePointAt(0)),
+              [0xF091F, 0xF0922, 0xF0925, 0xF0928]);
+        Controls.expanded = "";
+        Controls.expand("wifi");
+        check("controls: a section opens", Controls.expanded, "wifi");
+        Controls.expand("sound");
+        check("controls: another takes its place", Controls.expanded, "sound");
+        Controls.expand("sound");
+        check("controls: and shuts again", Controls.expanded, "");
+    }
+
     function testApps() {
         const terminal = [Paths.hyprScripts + "/terminal.sh", "-e"];
         check("apps: an entry's command", Apps.argvOf({ command: ["kakaotalk"], runInTerminal: false }), ["kakaotalk"]);

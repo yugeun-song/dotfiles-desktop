@@ -542,6 +542,10 @@ Singleton {
     readonly property string iconWallpaper:  String.fromCodePoint(0xF0E09)  // md-wallpaper
     readonly property string iconFolderOpen: String.fromCodePoint(0xF0770)  // md-folder_open
 
+    // The cheatsheet's keycaps (modules/ShortcutChord.qml): the key overlay's
+    // caps at this share, a list's size.
+    readonly property real shortcutCapSize: 0.62
+
     // ---------------------------------------------------------------------
     // The key overlay (modules/KeyOverlay.qml): a strip of fixed size.
     // ---------------------------------------------------------------------
