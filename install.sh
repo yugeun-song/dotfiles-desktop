@@ -23,8 +23,9 @@
 # again. A file this repository did not write (another program changed it,
 # or it was there first) is a conflict: the difference is shown and the
 # choice is the user's. /etc/fonts/local.conf, /etc/tuigreet/config.toml,
-# the camera switch and the key overlay's reader need sudo, asked for once,
-# up front: printed as manual steps when it never ran.
+# Arch's /etc/pam.d/system-auth, the camera switch and the key overlay's
+# reader need sudo, asked for once, up front: printed as manual steps when it
+# never ran.
 #
 # Test hooks: DOTFILES_OS_RELEASE replaces /etc/os-release, DOTFILES_SYSTEMD
 # replaces /run/systemd/system, and DOTFILES_ROOT goes in front of root's
@@ -107,6 +108,7 @@ NOTES=()
 PROBLEMS=()
 SEEDS_DIFFER=0
 SUDO_OK=0
+SUDO_HELD=0
 SUDO_KEEPALIVE=
 FAMILY="" PRETTY=""
 
@@ -527,7 +529,7 @@ cleanup() {
     [[ -n "$SUDO_KEEPALIVE" ]] && kill "$SUDO_KEEPALIVE" 2>/dev/null
     # The timestamp this run kept alive would let anything on this terminal
     # use sudo without a password for minutes more.
-    (( SUDO_OK )) && sudo -k 2>/dev/null
+    (( SUDO_HELD )) && sudo -k 2>/dev/null
     save_manifest
     rm -f -- "$STATE_TMP"
     if (( ! FINISHED && code == 1 && ! CHECK && WRITTEN )); then
@@ -858,22 +860,28 @@ root_plan() {
     done
 }
 
-# Asked for before the first write, and only when a root's file differs: an
-# update that leaves them alone never prompts.
+# Asked for before the first write, once, and only when a root's file
+# differs or a package is to be installed (packages/apply.sh): an update that
+# needs neither never prompts. Root's files and packages are confirmed apart,
+# so declining the files leaves SUDO_OK clear while the packages still go.
 acquire_sudo() {
-    local src dst mode
+    local src dst mode packages=0 files=0
     local -a want=()
     while IFS=: read -r src dst mode; do
         system_current "$src" "$dst" "$mode" || want+=("$src:$dst:$mode")
     done < <(system_files)
-    (( ${#want[@]} )) || return 0
+    # The tests' root never installs a package.
+    if [[ -z "$ROOT" ]] && "$SRC/packages/apply.sh" --pending 9>&-; then packages=1; fi
+    (( ${#want[@]} || packages )) || return 0
     command -v sudo >/dev/null 2>&1 || return 0
-    if ! root_plan "${want[@]}"; then
+    if (( ${#want[@]} )) && root_plan "${want[@]}"; then files=1; fi
+    if (( ! files && ! packages )); then
         echo
         return 0
     fi
     if sudo -v 2>/dev/null; then
-        SUDO_OK=1
+        SUDO_OK=$files
+        SUDO_HELD=1
         # Kept alive: a cold run can outlast sudo's timestamp. Without the
         # lock's descriptor, and only while this script lives: a sleep that
         # inherited fd 9 held the lock for 50 s after the run, and a killed
@@ -1538,6 +1546,44 @@ if (( ! CHECK )); then
     exec 9>"${MANIFEST_FILE%/*}/lock"
     flock -n 9 || stop "another ./install.sh is running"
     acquire_sudo
+fi
+
+# Packages before any file, since the files run them: this repository's and
+# the user's (packages/apply.sh), then dotfiles-terminal's by its own
+# installer, which puts its packages before its own files. Never in the
+# tests' root. The terminal's checkout is found next to this one or in ~.
+TERMINAL_DIR=""
+if [[ -z "$ROOT" ]]; then
+    for _t in "${DOTFILES_TERMINAL:-}" "$SRC/../dotfiles-terminal" "$HOME/dotfiles-terminal"; do
+        [[ -n "$_t" && -f "$_t/install.sh" ]] || continue
+        TERMINAL_DIR=$(cd -- "$_t" && pwd -P) && break
+    done
+    _args=()
+    (( CHECK )) && _args+=(--check)
+    printf '%spackages%s\n' "$BOLD" "$RESET"
+    _status=0
+    TERMINAL_LIST=${TERMINAL_DIR:+$TERMINAL_DIR/packages.txt} \
+        "$SRC/packages/apply.sh" "${_args[@]}" 9>&- || _status=$?
+    case $_status in
+        0) ;;
+        1) if (( CHECK )); then DRIFT=1; else stop "the packages did not install; no file was written"; fi ;;
+        3) LEFT+=("./install.sh in a terminal, for the packages it lists as missing") ;;
+        *) stop "packages/apply.sh failed with status $_status" ;;
+    esac
+    echo
+    if [[ -n "$TERMINAL_DIR" ]]; then
+        _status=0
+        bash "$TERMINAL_DIR/install.sh" "${_args[@]}" 9>&- || _status=$?
+        if (( _status )); then
+            if (( CHECK )); then DRIFT=1
+            else LEFT+=("dotfiles-terminal: its ./install.sh stopped (status $_status); run it in $(tilde "$TERMINAL_DIR")")
+            fi
+        fi
+        echo
+    else
+        NOTES+=("dotfiles-terminal is neither next to this checkout nor in ~, so its files and packages were left")
+    fi
+    unset _t _status _args
 fi
 
 # Scripts first: the config and the bar call them, and the reloads below may

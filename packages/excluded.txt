@@ -1,0 +1,31 @@
+# Installed here, and left out of every list on purpose: tied to this
+# machine's hardware or boot, or once needed by these files and no longer.
+# apply.sh --check does not count them among packages no list names.
+
+# Hardware and boot (the user, 2026-11-06: none of these).
+base
+linux
+linux-firmware
+linux-headers
+intel-ucode
+grub
+grub-btrfs
+efibootmgr
+os-prober
+mkinitcpio
+sof-firmware
+intel-media-driver
+libva-intel-driver
+intel-compute-runtime
+intel-gpu-tools
+vpl-gpu-rt
+vulkan-intel
+v4l2loopback-dkms
+btrfs-progs
+compsize
+snapper
+snap-pac
+zram-generator
+
+# Named by these files, used by them no more.
+kde-gtk-config     # its gtkconfig is off (kde/kded5rc); GTK loads none of its modules (gtk/gtk-3.0-settings.ini)

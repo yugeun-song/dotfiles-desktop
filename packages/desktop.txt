@@ -1,0 +1,101 @@
+# What dotfiles-desktop runs, reads or draws with, from the official
+# repositories (the AUR's are in user-aur.txt). packages/apply.sh installs
+# what is missing and never reinstalls; a name with a note is one whose
+# reason the code does not make plain.
+
+# The AUR step builds with these, so they come first.
+base-devel
+git
+
+# The session: compositor, its idle, lock and wallpaper daemons, the bar.
+hyprland
+hypridle
+hyprlock           # lock.sh's fallback when the Quickshell lock does not hold the session
+hyprpaper
+hyprpicker         # capture.sh's colour picker
+quickshell
+qt6-wayland
+qt6-multimedia     # video wallpapers and the lock's video
+qt6-multimedia-ffmpeg
+qt6-websockets     # the island's OBS link
+xdg-desktop-portal
+xdg-desktop-portal-hyprland
+xdg-desktop-portal-gtk
+polkit-kde-agent   # hypr/scripts/polkit-agent.sh
+greetd
+greetd-tuigreet
+kitty
+upower             # the battery reading
+
+# Input.
+fcitx5
+fcitx5-gtk
+fcitx5-qt
+fcitx5-hangul
+fcitx5-configtool  # the input method item's settings
+
+# Sound and media.
+pipewire
+pipewire-pulse
+pipewire-alsa
+wireplumber
+libpulse           # volume.sh's pactl
+alsa-utils         # volume.sh's amixer
+playerctl
+cava
+ffmpeg             # wallpaper.sh: a video's first frame
+libcanberra        # the alarm's sound
+libnotify          # the scripts' notify-send
+
+# Capture and the clipboard.
+grim
+slurp
+swappy
+wl-clipboard
+cliphist
+fuzzel             # clipboard.sh's picker
+
+# What the bar controls.
+brightnessctl
+ddcutil
+power-profiles-daemon
+networkmanager
+plasma-nm          # the control centre's network settings
+bluez
+bluedevil          # the control centre's Bluetooth settings
+bluetui            # Bluetooth pairing, in the terminal
+
+# What the scripts call.
+jq
+inotify-tools
+imagemagick
+librsvg
+xdg-utils
+xdg-user-dirs
+kcmutils           # kcmshell6
+kconfig            # install.sh's kreadconfig6 and kwriteconfig6
+python-pillow      # lock-colours.py, lock-media.py, the cursor build
+python-gobject     # lock-media.py
+python-cairo       # lock-media.py
+
+# What the keys and the bar open.
+dolphin
+kate
+systemsettings
+pavucontrol-qt
+btop
+
+# The look.
+breeze             # the Qt style where Kvantum is missing
+breeze-gtk
+breeze-icons
+kvantum
+kvantum-qt5
+plasma-integration
+plasma5-integration
+oxygen-cursors     # what the cursor theme is built from
+inter-font
+ttf-cascadia-code-nerd
+noto-fonts
+noto-fonts-cjk
+noto-fonts-emoji

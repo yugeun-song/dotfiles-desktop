@@ -44,7 +44,8 @@ bin/                 bar and unlock (to ~/.local/bin), recover-desktop (to ~/)
 camera/              the camera switch, its polkit action and udev rule (root's)
 keyfeed/             the key overlay's reader and its polkit action (root's)
 fontconfig/          font chain (to /etc/fonts/local.conf)
-gtk/ kde/ fcitx5/    seeded settings: GTK, Qt/KDE colours, Korean input
+gtk/ kde/ fcitx5/    GTK and Qt look (colours, the Kvantum theme), Korean input
+packages/            what install.sh installs first (apply.sh)
 tuigreet/            the greeter's look (only when greetd runs tuigreet)
 theme/               colour notes (DESIGN.md) and the cursor theme builder
 tests/               tests/run.sh; --e2e and --vm add the slower suites
@@ -67,18 +68,27 @@ nothing to do as one dim line; colour only on a terminal, never under
 owner: the bar when its tree changed, Hyprland when its config did, the user
 manager when a unit did. The `Spaceduck-Sky` cursor theme is rebuilt only
 when its scripts or the Oxygen_White theme it is drawn from changed, and
-sudo is asked for only when one of root's files differs.
+sudo is asked for, once at the start, only when one of root's files differs
+or a package is to be installed.
+
+Packages come before any file. On Arch, `packages/apply.sh` installs what
+`packages/` lists and the system lacks: this repository's (`desktop.txt`)
+and the user's own (`user.txt`, `user-aur.txt`), never what `excluded.txt`
+leaves out (hardware and boot); pacman first, then the AUR through yay in
+its review prompts; never a reinstall, never `-Sy`, only in a terminal.
+Then dotfiles-terminal's `install.sh` runs, from its checkout beside this
+one or in `~`.
 
 Files are copied, never linked: **nothing edited here runs until the
 installer runs again**, and a running unit keeps its old code until it
 restarts. A *mirror* (the Hyprland config and scripts, the quickshell tree,
-`bin/`, the units, the D-Bus service, the Spotify flags, the output preset)
-is overwritten on every run, file by file. A *seed* (fcitx5, GTK, KDE,
-hypridle, hyprlock, hyprpaper) is copied once and then left to its program,
-which rewrites it: a newer version from here replaces it only while the
-installed copy is still one this repository wrote. One its program changed
-stays and is listed by `--check`; copy a change back here to keep it, or
-delete the installed file to take this one.
+`bin/`, the units, the D-Bus service, the Spotify flags, the output preset,
+the Kvantum theme, GTK's colours) is overwritten on every run, file by file.
+A *seed* (fcitx5, GTK, KDE, hypridle, hyprlock, hyprpaper) is copied once and
+then left to its program, which rewrites it: a newer version from here
+replaces it only while the installed copy is still one this repository wrote.
+One its program changed stays and is listed by `--check`; copy a change back
+here to keep it, or delete the installed file to take this one.
 
 A target whose content this repository did not write (another program
 changed it, or it was there first) is a **conflict**. The installer shows a

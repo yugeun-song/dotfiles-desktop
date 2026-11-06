@@ -1,0 +1,6 @@
+# The user's packages from the AUR, built by yay in its review prompts.
+# yay-bin is the helper itself: apply.sh builds it with makepkg first when
+# it is missing.
+google-chrome
+visual-studio-code-bin
+yay-bin

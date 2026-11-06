@@ -106,6 +106,7 @@ tests/unit/wallpaper.sh || failed=1
 tests/unit/install.sh || failed=1
 tests/unit/kvantum.sh || failed=1
 tests/unit/icons.sh || failed=1
+tests/unit/packages.sh || failed=1
 for name in keyfeed keyfeed_hold inputstate camera_switch lock_media lock_colours share_apps polkit_tty obs_auth pam_steps lock_spec default_editor; do
     if out=$(python3 -I "tests/unit/test_$name.py" 2>&1); then
         echo "PASS  $name: $(grep -oE '^Ran [0-9]+ tests' <<<"$out" | sed 's/^Ran //')"
