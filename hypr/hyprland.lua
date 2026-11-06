@@ -62,6 +62,8 @@ load_module("general")
 -- After general (catch-all monitor rule), before keybinds (lid binds use it).
 load_module("monitors")
 load_module("rules")
+-- After rules: of two rules on a window, the later wins.
+load_module("zoom")
 load_module("keybinds")
 load_module("execs")
 

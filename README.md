@@ -31,7 +31,7 @@ each script degrades on its own.
 ```
 hypr/hyprland.lua    entry point; loads hypr/config/, then ~/.config/hypr/local.lua
                      if present (untracked, never installed)
-hypr/config/         env, general, monitors (output policy), rules, keybinds, execs
+hypr/config/         env, general, monitors (output policy), rules, zoom, keybinds, execs
 hypr/scripts/        what keys and units call: capture, lock, session, power,
                      camera, monitor overrides, the nested self-test
 hypr/*.conf          hypridle, hyprlock, hyprpaper (seeded)
