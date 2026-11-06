@@ -97,18 +97,24 @@ Item {
         color: Theme.muted
     }
 
+    // Keyed by name, each row reading its own values: with the readings themselves
+    // as the model, every change was a new model and the Repeater made every row
+    // again, some 190 objects two or three times a second while the desktop showed.
+    readonly property var keys: root.shown.map(s => s.key)
+
     Repeater {
-        model: root.shown
+        model: root.keys
 
         Item {
             id: row
 
-            required property var modelData
+            required property string modelData
             required property int index
 
-            readonly property bool known: row.modelData.value >= 0
-            readonly property var reading: row.modelData.rate && row.known ? root.r.rate(row.modelData.value) : null
-            readonly property string detail: row.modelData.detail ?? ""
+            readonly property var info: root.shown.find(s => s.key === row.modelData) ?? ({})
+            readonly property bool known: row.info.value >= 0
+            readonly property var reading: row.info.rate && row.known ? root.r.rate(row.info.value) : null
+            readonly property string detail: row.info.detail ?? ""
             readonly property real chartX: root.nameW + 8
             readonly property real chartW: row.width - row.chartX - 10 - root.valueW - root.unitW
 
@@ -125,7 +131,7 @@ Item {
                 Text {
                     width: parent.width
                     elide: Text.ElideRight
-                    text: root.narrow && row.modelData.short ? row.modelData.short : row.modelData.label
+                    text: root.narrow && row.info.short ? row.info.short : row.info.label
                     font.family: Theme.uiFont
                     font.pixelSize: root.nameSize
                     font.weight: Font.Medium
@@ -150,8 +156,8 @@ Item {
                 y: 5
                 width: Math.max(0, row.chartW)
                 height: parent.height - 10
-                values: root.r.trails[row.modelData.key]?.v ?? []
-                minSpan: row.modelData.minSpan
+                values: root.r.trails[row.modelData]?.v ?? []
+                minSpan: row.info.minSpan
             }
 
             HeroText {
@@ -161,11 +167,11 @@ Item {
                 width: root.valueW
                 height: Math.min(parent.height - 6, root.figureH)
                 anchors.verticalCenter: parent.verticalCenter
-                text: !row.known ? "--" : row.reading ? row.reading.text : `${Math.round(row.modelData.value * 100)}`
+                text: !row.known ? "--" : row.reading ? row.reading.text : `${Math.round(row.info.value * 100)}`
                 probe: "100"
                 horizontal: "right"
                 tabular: true
-                color: row.modelData.alert ? Theme.accentRed : Theme.fg
+                color: row.info.alert ? Theme.accentRed : Theme.fg
             }
 
             Text {

@@ -47,6 +47,17 @@ Scope {
         }
     }
 
+    // Not asked while locked, so a window opened meanwhile has no IPC object yet
+    // and would read as tiled, hiding the widgets until the next window event.
+    Connections {
+        target: KeyFeed
+
+        function onLockedChanged() {
+            if (root.anyPlaced && !KeyFeed.locked)
+                refresh.restart();
+        }
+    }
+
     Timer {
         id: refresh
 
