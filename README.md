@@ -129,7 +129,8 @@ the panel, 2-100 on the main external) or `blocks` (ten per further
 external).
 
 `Super+O` opens the Displays panel: layout presets, the workspace scheme,
-and per output power, mode, scale, rotation, side and screensaver. Apply
+and per output power, mode, scale, rotation, side and screensaver; dragging
+the panel's box in the picture sets its side. Apply
 writes `~/.local/state/hypr/monitor-overrides` (one `selector TAB field TAB
 value` line each) through `scripts/monitor-override.sh`, then a 30 s
 countdown reverts unless Keep is pressed; the deadline survives a reload, a

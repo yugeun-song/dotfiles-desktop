@@ -104,6 +104,32 @@ Scope {
         check("hotplug: the selection follows its output", displays.current?.name, "eDP-1");
         displays.parseMonitors(JSON.stringify([monitors[1]]));
         check("hotplug: and again when one goes", displays.current?.name, "eDP-1");
+
+        // A drop in the picture takes the side nearest, in half sizes.
+        displays.monitorsFresh = false;
+        displays.overridesFresh = false;
+        displays.resetPendingOnLoad = true;
+        displays.parseMonitors(JSON.stringify(monitors));
+        displays.parseOverrides("");
+        check("drag: the panel and its external can be arranged", displays.arrangeable, true);
+        const ext = { x: 100, y: 0, w: 200, h: 100 };
+        check("drag: the side nearest", [
+            displays.direction({ x: 310, y: 10, w: 100, h: 60 }, ext),
+            displays.direction({ x: -20, y: 30, w: 100, h: 60 }, ext),
+            displays.direction({ x: 150, y: 110, w: 100, h: 60 }, ext),
+            displays.direction({ x: 150, y: -70, w: 100, h: 60 }, ext),
+            displays.direction({ x: 0, y: 105, w: 400, h: 40 }, { x: 180, y: 0, w: 40, h: 100 })
+        ], ["right", "left", "below", "above", "below"]);
+        displays.dropSide({ x: -20, y: 30, w: 100, h: 60 }, ext);
+        check("drag: a drop at the left sets the panel's side", displays.value("eDP-1", "side"), "left");
+        check("drag: pending until Apply", displays.dirty, true);
+        displays.dropSide({ x: 310, y: 10, w: 100, h: 60 }, ext);
+        check("drag: back at the right is nothing to apply", displays.dirty, false);
+        displays.applyPreset("mirror");
+        check("drag: mirrored, nothing to arrange", displays.arrangeable, false);
+        displays.dropSide({ x: -20, y: 30, w: 100, h: 60 }, ext);
+        check("drag: and a drop changes nothing", displays.value("eDP-1", "side"), "auto");
+        displays.applyPreset("left");
     }
 
 }

@@ -593,6 +593,45 @@ Scope {
         return want === "auto" ? "right" : want;
     }
 
+    // The external a side is taken against, as the picture draws it: the
+    // first lit one that mirrors nothing.
+    readonly property var anchorExternal: root.outputs.find(o => !o.disabled && !o.internal && o.mirrorOf === "") ?? null
+
+    // A drag in the picture means a side only while the panel and that
+    // external are both lit and the panel mirrors nothing, now and pending.
+    readonly property bool arrangeable: {
+        const panel = root.panel;
+        const anchor = root.anchorExternal;
+        if (!panel || !anchor || panel.disabled)
+            return false;
+        const p = root.pending[panel.name] ?? {};
+        const panelOff = p.enabled === undefined ? panel.disabled : p.enabled === "false";
+        const mirror = p.mirror === undefined ? panel.mirrorOf !== "" : p.mirror === "true";
+        return !panelOff && !mirror && (root.pending[anchor.name]?.enabled ?? "auto") !== "false";
+    }
+
+    // Where a box at `d` sits against one at `s`: the edge of s it is nearest
+    // to crossing, measured in half sizes, so a wide box under a narrow one
+    // does not read as beside it.
+    function direction(d, s) {
+        const dx = (d.x + d.w / 2 - (s.x + s.w / 2)) / Math.max(1, (d.w + s.w) / 2);
+        const dy = (d.y + d.h / 2 - (s.y + s.h / 2)) / Math.max(1, (d.h + s.h) / 2);
+        if (Math.abs(dx) >= Math.abs(dy))
+            return dx >= 0 ? "right" : "left";
+        return dy >= 0 ? "below" : "above";
+    }
+
+    // A box let go in the picture, as a display settings window takes one:
+    // the policy places the panel only by its side of the external, so the
+    // drop snaps to the side nearest and the boxes glide there; Apply keeps
+    // it, as it keeps a preset or a wheel step.
+    function dropSide(panelRect, externalRect) {
+        const panel = root.panel;
+        if (!panel || !root.arrangeable)
+            return;
+        root.setField(panel.name, "side", root.direction(panelRect, externalRect));
+    }
+
     // A wheel notch moves the panel one side round the first external,
     // clockwise for wheel down: the panel's side is the only arrangement the
     // policy takes, so there is no free placement. Whole notches only, so a
@@ -1413,6 +1452,9 @@ Scope {
 
                                 // Boxes in stage coordinates, one per output.
                                 readonly property var boxes: stage.place(root.outputs, stage.width, stage.height, root.pendingSide)
+                                // The box being dragged, and where it is now.
+                                property int dragIndex: -1
+                                property var dragRect: null
 
                                 // Enabled outputs keep their logical geometry
                                 // (size over scale, sides swapped when
@@ -1511,17 +1553,28 @@ Scope {
 
                                         readonly property var geometry: stage.boxes[box.index] ?? { x: 0, y: 0, w: 0, h: 0 }
                                         readonly property bool active: root.selected === box.index
+                                        // The pair a drag arranges: the panel and its external.
+                                        readonly property bool paired: root.arrangeable
+                                            && (box.modelData.internal || box.modelData === root.anchorExternal)
+                                        // The edge of this box the dragged one would join.
+                                        readonly property string edge: box.paired && stage.dragIndex !== -1 && stage.dragIndex !== box.index
+                                            ? root.direction(stage.dragRect, box.geometry) : ""
 
-                                        x: box.geometry.x
-                                        y: box.geometry.y
+                                        x: box.geometry.x + boxMouse.dx
+                                        y: box.geometry.y + boxMouse.dy
+                                        z: boxMouse.dragging ? 2 : 0
                                         width: box.geometry.w
                                         height: box.geometry.h
                                         radius: Theme.px(6)
 
-                                        // A wheel step moves the panel around
-                                        // the external; a glide reads as a
-                                        // move, a jump as a redraw.
+                                        // A wheel step or a drop moves the
+                                        // panel around the external; a glide
+                                        // reads as a move, a jump as a redraw.
+                                        // Not while dragged: the box is held
+                                        // to the pointer.
                                         Behavior on x {
+                                            enabled: !boxMouse.dragging
+
                                             NumberAnimation {
                                                 duration: 160
                                                 easing.type: Easing.OutCubic
@@ -1529,6 +1582,8 @@ Scope {
                                         }
 
                                         Behavior on y {
+                                            enabled: !boxMouse.dragging
+
                                             NumberAnimation {
                                                 duration: 160
                                                 easing.type: Easing.OutCubic
@@ -1569,14 +1624,81 @@ Scope {
                                             }
                                         }
 
+                                        // The edge it would join, in the state role's accent.
+                                        Rectangle {
+                                            visible: box.edge !== ""
+                                            color: Theme.accentIndigo
+                                            radius: width / 2
+                                            x: box.edge === "right" ? box.width - width : 0
+                                            y: box.edge === "below" ? box.height - height : 0
+                                            width: box.edge === "left" || box.edge === "right" ? Theme.px(3) : box.width
+                                            height: box.edge === "above" || box.edge === "below" ? Theme.px(3) : box.height
+                                        }
+
                                         HoverHandler {
                                             id: boxHover
                                         }
 
+                                        // A click selects; a drag of the
+                                        // panel or its external moves the
+                                        // box with the pointer (in the
+                                        // stage's coordinates, as the box
+                                        // itself moves) and a release
+                                        // takes the side it ends nearest.
                                         MouseArea {
+                                            id: boxMouse
+
+                                            property bool dragging: false
+                                            property point start: Qt.point(0, 0)
+                                            property real dx: 0
+                                            property real dy: 0
+
                                             anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
+                                            cursorShape: boxMouse.dragging ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                                            preventStealing: true
+
+                                            onPressed: mouse => {
+                                                boxMouse.start = boxMouse.mapToItem(stage, mouse.x, mouse.y);
+                                            }
+                                            onPositionChanged: mouse => {
+                                                if (!box.paired || !boxMouse.pressed)
+                                                    return;
+                                                const p = boxMouse.mapToItem(stage, mouse.x, mouse.y);
+                                                const dx = p.x - boxMouse.start.x;
+                                                const dy = p.y - boxMouse.start.y;
+                                                if (!boxMouse.dragging && Math.hypot(dx, dy) < Theme.px(6))
+                                                    return;
+                                                if (!boxMouse.dragging) {
+                                                    boxMouse.dragging = true;
+                                                    root.selected = box.index;
+                                                }
+                                                const g = box.geometry;
+                                                boxMouse.dx = Math.max(-g.x - g.w / 2, Math.min(stage.width - g.x - g.w / 2, dx));
+                                                boxMouse.dy = Math.max(-g.y - g.h / 2, Math.min(stage.height - g.y - g.h / 2, dy));
+                                                stage.dragIndex = box.index;
+                                                stage.dragRect = { x: g.x + boxMouse.dx, y: g.y + boxMouse.dy, w: g.w, h: g.h };
+                                            }
+                                            onReleased: {
+                                                if (!boxMouse.dragging)
+                                                    return;
+                                                const moved = stage.dragRect;
+                                                const other = stage.boxes[root.outputs.indexOf(box.modelData.internal ? root.anchorExternal : root.panel)];
+                                                boxMouse.end();
+                                                if (moved && other)
+                                                    root.dropSide(box.modelData.internal ? moved : other, box.modelData.internal ? other : moved);
+                                            }
+                                            onCanceled: boxMouse.end()
                                             onClicked: root.selected = box.index
+
+                                            // Glides back first, so the
+                                            // snap animates from the drop.
+                                            function end() {
+                                                boxMouse.dragging = false;
+                                                boxMouse.dx = 0;
+                                                boxMouse.dy = 0;
+                                                stage.dragIndex = -1;
+                                                stage.dragRect = null;
+                                            }
                                         }
                                     }
                                 }
@@ -2507,7 +2629,7 @@ Scope {
                             textFormat: Text.PlainText
                             text: root.hint !== "" ? root.hint
                                   : root.countdown > 0 ? "enter keeps, esc reverts"
-                                  : "digits select a display, the wheel over the picture moves the panel, enter applies, esc closes"
+                                  : "digits select a display, a drag or the wheel over the picture moves the panel, enter applies, esc closes"
                             font.family: Theme.uiFont
                             font.pixelSize: Theme.px(11)
                             color: root.hint !== "" ? Theme.accentAmber : Theme.muted
