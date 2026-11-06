@@ -1005,6 +1005,192 @@ user_services() {
     done
 }
 
+# ------------------------------------------------- another program's setting --
+
+# One key of a file another program keeps writing (dolphinrc holds window
+# sizes and recent paths too, so it cannot be a seed): set as a seed is,
+# while it is missing or still what this wrote, and left alone once the
+# program or the user has changed it. What was written is kept in the
+# manifest beside the files, under the key's own name. GROUP may name a
+# nested group as OUTER/INNER. WAS, if given, is the value this repository
+# wrote there before the manifest kept keys (a seed's): taken as its own.
+seed_key() {
+    local file=$1 group=$2 key=$3 value=$4 was=${5:-} now mark name part
+    local -a groups=() parts=()
+    mark="key:$file:$group:$key"
+    name="$(tilde "$file") [$group] $key"
+    IFS=/ read -ra parts <<<"$group"
+    for part in "${parts[@]}"; do groups+=(--group "$part"); done
+    now=$(kreadconfig6 --file "$file" "${groups[@]}" --key "$key" 2>/dev/null) || now=""
+    if [[ "$now" == "$value" ]]; then
+        if (( ! CHECK )) && [[ "${MANIFEST[$mark]:-}" != "$value" ]]; then
+            MANIFEST[$mark]=$value
+            MANIFEST_DIRTY=1
+        fi
+        same
+        return 0
+    fi
+    if [[ -n "$now" && "${MANIFEST[$mark]:-}" != "$now" && "$now" != "$was" ]]; then
+        SEEDS_DIFFER=$((SEEDS_DIFFER + 1))
+        (( CHECK )) && branch "${DIM}$name was changed after it was seeded; left alone$RESET"
+        same
+        return 0
+    fi
+    if (( CHECK )); then
+        todo "${YELLOW}missing $name$RESET"
+        return 0
+    fi
+    kwriteconfig6 --file "$file" "${groups[@]}" --key "$key" "$value" || stop "could not set $name"
+    MANIFEST[$mark]=$value
+    MANIFEST_DIRTY=1
+    wrote "$name"
+}
+
+# The line icons reach the system only checked by hash against Lucide's official
+# Git repository, and what does not match goes (the user, 2026-11-06): see
+# kde/icons/verify.py. It runs when what it checks is new and after --force;
+# the result is kept under the state directory, keyed by the theme's content
+# and the lock's, so an install with nothing new asks nothing of the network.
+# Only the installed copy is ever removed, never the checkout's: the next run
+# checks that again, and it stays out until it passes.
+ICONS_VERIFIED="$STATE/dotfiles-desktop/icons-verified"
+dolphin_look() {
+    local rc="$CONFIG/dolphinrc" font="Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" bar
+    command -v dolphin >/dev/null 2>&1 || return 0
+    command -v kreadconfig6 >/dev/null 2>&1 && command -v kwriteconfig6 >/dev/null 2>&1 || return 0
+    seed "$SRC/kde/dolphin/global.directory" "$DATA/dolphin/view_properties/global/.directory"
+    seed_key "$rc" General ShowStatusBar 1
+    seed_key "$rc" DetailsMode IconSize 22
+    seed_key "$rc" DetailsMode PreviewSize 22
+    seed_key "$rc" DetailsMode UseSystemFont false
+    seed_key "$rc" DetailsMode ViewFont "$font"
+    seed_key "$rc" IconsMode IconSize 64
+    seed_key "$rc" IconsMode PreviewSize 64
+    seed_key "$rc" IconsMode MaximumTextLines 2
+    seed_key "$rc" IconsMode UseSystemFont false
+    seed_key "$rc" IconsMode ViewFont "$font"
+    # The sidebar's rows, as the pictures the user sent (2026-11-06): the row is
+    # this and the style's 5 px above and below, so 28 px beside 13 px words.
+    seed_key "$rc" PlacesPanel IconSize 18
+    seed_key "$rc" "KFileDialog Settings" "Places Icons Auto-resize" false
+    seed_key "$rc" "KFileDialog Settings" "Places Icons Static Size" 16
+    seed_key "$rc" "MainWindow/Toolbar mainToolBar" ToolButtonStyle IconOnly
+    bar=$(mktemp) || stop "could not make a temporary file"
+    if python3 -I "$SRC/kde/dolphin-toolbar.py" >"$bar" 2>/dev/null && [[ -s "$bar" ]]; then
+        seed_file "$bar" "$DATA/kxmlgui5/dolphin/dolphinui.rc"
+    else
+        NOTES+=("Dolphin's toolbar keeps its split view buttons: its built-in layout could not be read (kde/dolphin-toolbar.py)")
+    fi
+    rm -f -- "$bar"
+}
+
+# Firefox draws its window buttons itself and fills a disc under each one
+# hovered, the close one's red (the user, 2026-11-06: change it); only a
+# profile's own style sheet reaches them (firefox/userChrome.css), and only
+# with user style sheets switched on (firefox/user.js). Both seeded into
+# every profile profiles.ini lists, at Firefox's newer place and its older
+# one; a profile's own copy of either is left alone, and said.
+firefox_profiles() {
+    local ini=$1 base line path="" rel=1 profile=0
+    base=$(dirname -- "$ini")
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        line=${line%$'\r'}
+        if [[ "$line" == "["*"]" ]]; then
+            (( profile )) && [[ -n "$path" ]] && { [[ "$rel" == 1 ]] && printf '%s\n' "$base/$path" || printf '%s\n' "$path"; }
+            path="" rel=1 profile=0
+            [[ "$line" == "[Profile"* ]] && profile=1
+            continue
+        fi
+        case $line in
+            Path=*) path=${line#Path=} ;;
+            IsRelative=*) rel=${line#IsRelative=} ;;
+        esac
+    done <"$ini"
+    (( profile )) && [[ -n "$path" ]] && { [[ "$rel" == 1 ]] && printf '%s\n' "$base/$path" || printf '%s\n' "$path"; }
+    return 0
+}
+
+firefox_look() {
+    local ini dir
+    for ini in "$CONFIG/mozilla/firefox/profiles.ini" "$HOME/.mozilla/firefox/profiles.ini"; do
+        [[ -f "$ini" ]] || continue
+        while IFS= read -r dir; do
+            [[ -d "$dir" ]] || continue
+            seed_file "$SRC/firefox/user.js" "$dir/user.js"
+            seed_file "$SRC/firefox/userChrome.css" "$dir/chrome/userChrome.css"
+            if ! grep -qs 'toolkit.legacyUserProfileCustomizations.stylesheets", true' "$dir/user.js"; then
+                NOTES+=("Firefox's window buttons keep its own look in $(tilde "$dir"): its own user.js lacks user_pref(\"toolkit.legacyUserProfileCustomizations.stylesheets\", true);")
+            fi
+        done < <(firefox_profiles "$ini")
+    done
+}
+
+# --------------------------------------------------------- Qt widget style --
+
+# The style is one key of kdeglobals, and kdeglobals is a seed: KDE programs
+# keep their own settings in that file (file dialog sizes, recent colours),
+# so it is seeded once and left alone after. The one key this repository
+# decides is set by itself: Kvantum, where its Qt 6 style is installed, so Qt
+# programs draw with kde/Kvantum's theme. KDE reads the key from [KDE] only;
+# without Kvantum it is left as it is, and Breeze stands in.
+kde_style() {
+    local file="$CONFIG/kdeglobals" dir now plugin=0
+    for dir in /usr/lib /usr/lib64 /usr/lib/x86_64-linux-gnu /usr/lib/aarch64-linux-gnu; do
+        [[ -e "$dir/qt6/plugins/styles/libkvantum.so" ]] && plugin=1
+    done
+    (( plugin )) || return 0
+    command -v kreadconfig6 >/dev/null 2>&1 && command -v kwriteconfig6 >/dev/null 2>&1 || return 0
+    now=$(kreadconfig6 --file "$file" --group KDE --key widgetStyle 2>/dev/null) || now=""
+    if [[ "$now" == kvantum ]]; then
+        same
+        return 0
+    fi
+    if (( CHECK )); then
+        todo "${YELLOW}Qt programs draw with ${now:-Breeze}, not Kvantum ($(tilde "$file") [KDE] widgetStyle)$RESET"
+        return 0
+    fi
+    kwriteconfig6 --file "$file" --group KDE --key widgetStyle kvantum \
+        || stop "could not set the Qt widget style in $(tilde "$file")"
+    branch "$GREEN✓$RESET Qt programs draw with Kvantum ($(tilde "$file") [KDE] widgetStyle)"
+}
+
+# ------------------------------------------------------------ Dolphin entry --
+
+# Dolphin's places panel is padded by a Qt style sheet (kde/dolphin.qss says
+# why), and Qt reads one only from -stylesheet at start, so every way Dolphin
+# starts passes it: this entry (the launcher, xdg-open), the Super+E binding
+# (hypr/config/keybinds.lua) and a drop-in for plasma-dolphin.service (D-Bus
+# activation). The entry is the installed one with the argument added, built
+# again whenever that one changes, so a Dolphin update reaches it; it goes
+# when Dolphin does. A Dolphin started by hand in a terminal goes without,
+# until the running one is closed.
+dolphin_entry() {
+    local system=/usr/share/applications/org.kde.dolphin.desktop
+    local to="$DATA/applications/org.kde.dolphin.desktop" qss="$CONFIG/dolphin.qss" built line added=0
+    if [[ ! -f "$system" ]]; then
+        if [[ -f "$to" ]] && ours "$to"; then
+            retire "$to" "$(tilde "$to") (Dolphin is not installed)"
+        fi
+        return 0
+    fi
+    # Desktop entries quote with double quotes, and in them escape \ " ` $.
+    qss=${qss//\\/\\\\}; qss=${qss//\"/\\\"}; qss=${qss//\`/\\\`}; qss=${qss//\$/\\\$}
+    built=$(mktemp) || stop "could not make a temporary file"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" == "Exec=dolphin" || "$line" == "Exec=dolphin "* ]]; then
+            line="Exec=dolphin -stylesheet \"$qss\"${line#Exec=dolphin}"
+            added=1
+        fi
+        printf '%s\n' "$line"
+    done <"$system" >"$built"
+    if (( ! added )); then
+        rm -f -- "$built"
+        stop "$system has no Exec=dolphin line to hand the style sheet to"
+    fi
+    mirror_file "$built" "$to" "$(tilde "$to") (Dolphin, with its style sheet)"
+    rm -f -- "$built"
+}
+
 # ------------------------------------------------------------- cursor theme --
 
 # XCursor themes are bitmaps, so the colour is baked in at build time; the
@@ -1097,6 +1283,7 @@ doctor() {
         "magick:wallpapers other than PNG, from the picker and wallpaper.sh"
         "kcmshell6:the control centre's network and Bluetooth settings (a terminal program without it)"
         "powerprofilesctl:the control centre's power mode"
+        "kvantummanager:the Qt widget style (Breeze stands in without it)"
     )
     for tool in "${tools[@]}"; do
         command -v "${tool%%:*}" >/dev/null 2>&1 || missing+=("${tool%%:*} (${tool#*:})")
@@ -1361,6 +1548,27 @@ fi
 unset _old_clips
 group_close
 
+group_open "Qt and GTK look"
+# The Kvantum theme Qt programs draw with, as kde/Kvantum/build.py writes it.
+mirror_dir "$SRC/kde/Kvantum/SpaceduckDark" "$CONFIG/Kvantum/SpaceduckDark"
+# GTK's colours in the same roles, read over Breeze GTK by GTK 3 and 4.
+mirror_file "$SRC/gtk/gtk-3.0.css" "$CONFIG/gtk-3.0/gtk.css"
+mirror_file "$SRC/gtk/colors.css" "$CONFIG/gtk-3.0/colors.css"
+mirror_file "$SRC/gtk/gtk-4.0.css" "$CONFIG/gtk-4.0/gtk.css"
+mirror_file "$SRC/gtk/colors.css" "$CONFIG/gtk-4.0/colors.css"
+# The close button's glyph (GTK 4 draws the icon theme's).
+mirror_file "$SRC/gtk/buttons/close-symbolic.svg" "$CONFIG/gtk-3.0/buttons/close-symbolic.svg"
+# Dolphin's sidebar face and padding, and the entry that hands them over.
+mirror_file "$SRC/kde/dolphin.qss" "$CONFIG/dolphin.qss"
+dolphin_entry
+# Line icons for the places, the files and the common actions (the user,
+# 2026-11-06: in the manner of Lucide's), as kde/icons/build.py
+# writes them from Lucide; Breeze draws every other name.
+icon_theme
+file_icons
+mime_package
+group_close
+
 group_open "cursor theme"
 cursor_theme
 group_close
@@ -1375,9 +1583,14 @@ seed "$SRC/fcitx5/conf" "$CONFIG/fcitx5/conf"
 seed "$SRC/gtk/gtk-3.0-settings.ini" "$CONFIG/gtk-3.0/settings.ini"
 seed "$SRC/gtk/gtk-4.0-settings.ini" "$CONFIG/gtk-4.0/settings.ini"
 seed "$SRC/kde/kdeglobals" "$CONFIG/kdeglobals"
+kde_style
 seed "$SRC/kde/kded5rc" "$CONFIG/kded5rc"
 seed "$SRC/kde/baloofilerc" "$CONFIG/baloofilerc"
 seed "$SRC/kde/SpaceduckDark.colors" "$DATA/color-schemes/SpaceduckDark.colors"
+# Which Kvantum theme draws: Kvantum Manager writes a choice made there.
+seed "$SRC/kde/Kvantum/kvantum.kvconfig" "$CONFIG/Kvantum/kvantum.kvconfig"
+dolphin_look
+firefox_look
 # Seeded by older versions under the name kded6 never reads; gone when it is
 # still the copy this repository wrote.
 if [[ -f "$CONFIG/kded6rc" ]] && ours "$CONFIG/kded6rc"; then

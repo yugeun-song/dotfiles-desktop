@@ -1,0 +1,64 @@
+/* Firefox draws its window buttons itself, from the GTK icon theme's glyph,
+ * and with a Breeze GTK theme fills a disc under each one hovered, the
+ * close one's pink-red (browser.css, -moz-gtk-theme-family: breeze); no GTK
+ * style reaches them. Here they look as GTK's do everywhere else
+ * (gtk/gtk-3.0.css): the x alone, never a disc (the user, 2026-11-06: no
+ * red on hover), solid white at rest and dimmed only while pressed, a little
+ * under the toolbar's icons, further in from the window's edge, and drawn here
+ * in GTK's heavier stroke (the same day: it read as faint and blurred; match
+ * Chrome); left to itself it takes the theme's thin glyph and the tabs' grey.
+ * install.sh seeds this into each Firefox profile with firefox/user.js,
+ * which turns these style sheets on; a profile's own is left alone. */
+.titlebar-button > .toolbarbutton-icon {
+  background-color: transparent !important;
+  background-size: 16px !important;
+  color: #ffffff !important;
+  opacity: 1;
+  transition: opacity 150ms ease-out !important;
+}
+
+.titlebar-button:hover > .toolbarbutton-icon,
+.titlebar-button:hover:active > .toolbarbutton-icon {
+  background-color: transparent !important;
+  color: #ffffff !important;
+}
+
+.titlebar-button:hover:active > .toolbarbutton-icon {
+  opacity: 0.55;
+}
+
+.titlebar-close > .toolbarbutton-icon {
+  width: 16px !important;
+  height: 16px !important;
+}
+
+/* A hand under the pointer (the user, 2026-11-06), as on what else can be clicked. */
+.titlebar-button {
+  cursor: pointer !important;
+}
+
+.titlebar-close {
+  padding-inline-end: 28px !important;
+  list-style-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 16 16'%3E%3Crect x='1' y='6.8' width='14' height='2.4' rx='1.2' fill='%23ffffff' transform='rotate(45 8 8)'/%3E%3Crect x='1' y='6.8' width='14' height='2.4' rx='1.2' fill='%23ffffff' transform='rotate(-45 8 8)'/%3E%3C/svg%3E") !important;
+}
+
+/* The selected tab in a plain cream, its words dark on it, so that it stands
+ * apart from the browser's black and white at a glance (the user, 2026-11-07:
+ * the grey it takes from the toolbar is faint; a white with a clear yellow in it,
+ * on that tab and not on the words). Square, not a pill or, with the side tabs
+ * collapsed, a disc (the same day), and the hover's the same shape. Chrome cannot
+ * have either: gtk/gtk-3.0.css. */
+.tabbrowser-tab {
+  --tab-background-color-selected: #fff0b8 !important;
+  --tab-text-color-selected: #141416 !important;
+  --tab-selected-color-scheme: light !important;
+}
+
+.tabbrowser-tab[selected] > .tab-stack > .tab-background {
+  background-color: #fff0b8 !important;
+  background-image: none !important;
+}
+
+.tab-background {
+  border-radius: 0 !important;
+}

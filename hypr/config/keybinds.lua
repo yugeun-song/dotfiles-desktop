@@ -20,7 +20,9 @@ local player    = launch .. " 'playerctl"
 
 local app = {
     browser  = launch .. " 'google-chrome-stable' 'firefox' 'chromium' 'brave' 'librewolf'",
-    files    = launch .. " 'dolphin' 'nautilus' 'nemo' 'thunar' '" .. terminal .. " -e yazi'",
+    -- Dolphin with its places panel padded (kde/dolphin.qss, install.sh's
+    -- dolphin_entry); launch.sh's sh expands the variables.
+    files    = launch .. " 'dolphin -stylesheet \"${XDG_CONFIG_HOME:-$HOME/.config}/dolphin.qss\"' 'nautilus' 'nemo' 'thunar' '" .. terminal .. " -e yazi'",
     code     = launch .. " 'code' 'codium' 'cursor' 'zed' 'kate' '" .. terminal .. " -e nvim'",
     editor   = launch .. " 'kate' 'gnome-text-editor' '" .. terminal .. " -e nvim'",
     office   = launch .. " 'onlyoffice-desktopeditors' 'libreoffice' 'wps'",

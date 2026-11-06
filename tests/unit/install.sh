@@ -567,6 +567,134 @@ run
 same "an old per-machine file becomes the local one" "$T/home/$C/hypr/monitor_settings.local.lua" <(echo 'return { scale = 2 }')
 same "and the preset takes its place" "$T/home/$C/hypr/monitor_settings.lua" "$T/repo/hypr/monitor_settings.lua"
 
+# ---- Firefox's profiles ----
+setup
+ff="$T/home/$C/mozilla/firefox"
+mkdir -p "$ff/abc.default-release" "$ff/own.default" "$T/elsewhere/abs"
+printf '[Profile0]\nName=default-release\nIsRelative=1\nPath=abc.default-release\n\n[Profile1]\nName=own\nIsRelative=1\nPath=own.default\n\n[Profile2]\nName=abs\nIsRelative=0\nPath=%s\n\n[Install4F96]\nDefault=abc.default-release\nLocked=1\n' \
+    "$T/elsewhere/abs" >"$ff/profiles.ini"
+echo 'user_pref("browser.startup.page", 3);' >"$ff/own.default/user.js"
+run
+same "a profile gets the window buttons' style sheet" "$ff/abc.default-release/chrome/userChrome.css" "$T/repo/firefox/userChrome.css"
+same "and the switch that turns style sheets on" "$ff/abc.default-release/user.js" "$T/repo/firefox/user.js"
+same "a profile at an absolute path too" "$T/elsewhere/abs/chrome/userChrome.css" "$T/repo/firefox/userChrome.css"
+same "a profile's own user.js is left alone" "$ff/own.default/user.js" <(echo 'user_pref("browser.startup.page", 3);')
+has "and the switch it lacks is named" "$out" "toolkit.legacyUserProfileCustomizations.stylesheets"
+absent "the install section is no profile" "$ff/Install4F96"
+
+# ---- the line icons, checked against upstream before they go in ----
+setup
+icons=$T/home/.local/share/icons/SpaceduckLines
+glyph=scalable/places/folder.svg
+run
+has "the icons are checked before they go in" "$(calls)" "verify-icons"
+same "and installed once they pass" "$icons/$glyph" "$T/repo/kde/icons/SpaceduckLines/$glyph"
+: >"$T/calls"
+run
+is "nothing new, nothing asked of the network" "$(grep -c verify-icons "$T/calls")" 0
+: >"$T/calls"
+run --force
+has "--force asks again" "$(calls)" "verify-icons"
+: >"$T/calls"
+echo tampered >>"$icons/$glyph"
+echo extra >"$icons/extra.svg"
+run
+same "an installed icon changed by hand is put back" "$icons/$glyph" "$T/repo/kde/icons/SpaceduckLines/$glyph"
+absent "and a file that is not the theme's goes" "$icons/extra.svg"
+has "and that is said" "$out" "were not the ones verified; replaced"
+is "without asking the network" "$(grep -c verify-icons "$T/calls")" 0
+: >"$T/calls"
+echo '<!-- new -->' >>"$T/repo/kde/icons/SpaceduckLines/$glyph"
+run --check
+has "--check says a new theme is not verified" "$out" "not verified against Lucide's repository yet"
+is "and asks nothing of the network" "$(grep -c verify-icons "$T/calls")" 0
+echo 3 >"$T/verify-code"
+run
+has "no answer from upstream asks the run again" "$out" "the line icons, once Lucide's repository can be reached"
+is "and the run says it left that undone" "$code" 1
+if cmp -s "$icons/$glyph" "$T/repo/kde/icons/SpaceduckLines/$glyph"; then fail "no answer: the new theme went in"; else pass; fi
+echo tampered >>"$icons/$glyph"
+run
+absent "no answer, but the installed ones changed since they passed: gone" "$icons"
+echo 2 >"$T/verify-code"
+mkdir -p "$icons"; echo old >"$icons/old.svg"
+run
+absent "a mismatch removes the installed theme" "$icons"
+has "and says so" "$out" "do not match Lucide's official repository"
+has "and why" "$out" "a stand-in's mismatch"
+is "and the run fails" "$code" 1
+if command -v kreadconfig6 >/dev/null 2>&1; then
+    is "and KDE goes back to Breeze" "$(kreadconfig6 --file "$T/home/.config/kdeglobals" --group Icons --key Theme)" breeze-dark
+fi
+rm -f -- "$T/verify-code"
+run
+same "once it passes they are back" "$icons/$glyph" "$T/repo/kde/icons/SpaceduckLines/$glyph"
+if command -v kreadconfig6 >/dev/null 2>&1; then
+    is "and KDE draws them again, the file icons over them" "$(kreadconfig6 --file "$T/home/.config/kdeglobals" --group Icons --key Theme)" SpaceduckFiles
+fi
+
+# ---- what opens a file: a terminal KIO can find, and Neovim ----
+setup
+run
+if command -v kreadconfig6 >/dev/null 2>&1; then
+    is "programs in a terminal run in kitty" "$(kreadconfig6 --file "$T/home/.config/kdeglobals" --group General --key TerminalApplication)" kitty
+    is "by its entry too" "$(kreadconfig6 --file "$T/home/.config/kdeglobals" --group General --key TerminalService)" kitty.desktop
+    is "the sidebar's icons are small" "$(kreadconfig6 --file "$T/home/.config/dolphinrc" --group PlacesPanel --key IconSize)" 18
+fi
+
+# ---- the file icons: built at install, from what passed against upstream ----
+setup
+files=$T/home/.local/share/icons/SpaceduckFiles
+inner=scalable/mimetypes/text-x-csrc.svg
+kde_icons() { kreadconfig6 --file "$T/home/.config/kdeglobals" --group Icons --key Theme; }
+run
+has "the file icons are checked before they go in" "$(calls)" "verify-files"
+if [[ -f "$files/$inner" ]]; then pass; else fail "and go in once they pass"; fi
+if command -v kreadconfig6 >/dev/null 2>&1; then is "and KDE draws them" "$(kde_icons)" SpaceduckFiles; fi
+same "the types they need go in" "$T/home/.local/share/mime/packages/code-files.xml" "$T/repo/kde/mime/code-files.xml"
+: >"$T/calls"
+run
+is "nothing new, nothing asked of the network" "$(grep -c verify-files "$T/calls")" 0
+: >"$T/calls"
+run --force
+has "--force asks again" "$(calls)" "verify-files"
+: >"$T/calls"
+echo tampered >>"$files/$inner"
+run --check
+is "--check asks nothing of the network" "$(grep -c verify-files "$T/calls")" 0
+has "and says so" "$out" "the file icons are not built and verified"
+run
+has "an icon changed by hand asks again" "$(calls)" "verify-files"
+same "and is put back" "$files/$inner" <(printf '<svg/>\n')
+echo 3 >"$T/verify-files-code"
+echo tampered >>"$files/$inner"
+run
+absent "no answer, but the installed ones changed since they passed: gone" "$files"
+is "and the run says it left that undone" "$code" 1
+has "and names it" "$out" "the file icons, once their repository can be reached"
+if command -v kreadconfig6 >/dev/null 2>&1; then is "and KDE is back on the line icons" "$(kde_icons)" SpaceduckLines; fi
+rm -f -- "$T/verify-files-code"
+run
+if [[ -f "$files/$inner" ]]; then pass; else fail "once it answers they are back"; fi
+if command -v kreadconfig6 >/dev/null 2>&1; then is "and KDE draws them again" "$(kde_icons)" SpaceduckFiles; fi
+echo 2 >"$T/verify-files-code"
+: >"$T/calls"
+echo '# new' >>"$T/repo/kde/icons/files.py"
+run
+absent "a mismatch removes them" "$files"
+has "and says so" "$out" "do not match their official repository"
+is "and the run fails" "$code" 1
+if command -v kreadconfig6 >/dev/null 2>&1; then is "and KDE is back on the line icons" "$(kde_icons)" SpaceduckLines; fi
+rm -f -- "$T/verify-files-code"
+run
+if [[ -f "$files/$inner" ]]; then pass; else fail "and passing brings them back"; fi
+echo 2 >"$T/verify-code"
+echo '<!-- new -->' >>"$T/repo/kde/icons/SpaceduckLines/scalable/places/folder.svg"
+run
+absent "they go with the line icons" "$files"
+if command -v kreadconfig6 >/dev/null 2>&1; then is "and KDE is back on Breeze" "$(kde_icons)" breeze-dark; fi
+rm -f -- "$T/verify-code"
+
 if (( failed )); then
     echo "FAIL  install: $failed of $((passed + failed)) checks"
     exit 1

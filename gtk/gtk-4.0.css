@@ -1,0 +1,75 @@
+/* GTK 4 reads this file over its theme (Breeze-Dark, gtk/gtk-4.0-settings.ini);
+ * the colours are gtk/colors.css, installed beside it. */
+@import 'colors.css';
+
+/* libadwaita programs (zenity here) draw Adwaita whatever the theme, and
+ * take their colours from these variables only (libadwaita 1.6 on, its
+ * documented way to recolour), so the same roles are given to them again. */
+:root {
+  --accent-color: #7aa2f7;
+  --accent-bg-color: #7aa2f7;
+  --accent-fg-color: #0f111b;
+  --window-bg-color: #0f111b;
+  --window-fg-color: #ecf0c1;
+  --view-bg-color: #0f111b;
+  --view-fg-color: #ecf0c1;
+  --headerbar-bg-color: #161926;
+  --headerbar-fg-color: #ecf0c1;
+  --headerbar-backdrop-color: #161926;
+  --sidebar-bg-color: #0f111b;
+  --sidebar-fg-color: #ecf0c1;
+  --secondary-sidebar-bg-color: #0f111b;
+  --secondary-sidebar-fg-color: #ecf0c1;
+  --card-bg-color: #161926;
+  --card-fg-color: #ecf0c1;
+  --dialog-bg-color: #0f111b;
+  --dialog-fg-color: #ecf0c1;
+  --popover-bg-color: #0f111b;
+  --popover-fg-color: #ecf0c1;
+  --overview-bg-color: #0f111b;
+  --overview-fg-color: #ecf0c1;
+  --thumbnail-bg-color: #161926;
+  --thumbnail-fg-color: #ecf0c1;
+  --success-bg-color: #9ece6a;
+  --success-fg-color: #0f111b;
+  --warning-bg-color: #e0af68;
+  --warning-fg-color: #0f111b;
+  --error-bg-color: #f7768e;
+  --error-fg-color: #0f111b;
+  --destructive-bg-color: #f7768e;
+  --destructive-fg-color: #0f111b;
+}
+
+/* Window buttons as in gtk/gtk-3.0.css: the x alone, solid at rest and
+ * dimmed only while pressed, never a disc. GTK 4 stretches the button
+ * to the header bar's height and libadwaita draws its disc on the icon, so
+ * both lose their backgrounds and the icon theme's x takes the colours;
+ * Breeze GTK's background image on the button goes. */
+windowcontrols > button {
+  min-width: 0;
+  min-height: 0;
+  margin: 0 24px 0 4px;
+  padding: 0 2px;
+  border: none;
+  box-shadow: none;
+  background: none;
+}
+
+windowcontrols > button > image {
+  min-width: 16px;
+  min-height: 16px;
+  padding: 7px;
+  box-shadow: none;
+  background: none;
+  color: #ecf0c1;
+  -gtk-icon-size: 15px;
+  transition: color 150ms ease-out;
+}
+
+windowcontrols > button:hover > image {
+  color: #ecf0c1;
+}
+
+windowcontrols > button:active > image {
+  color: rgba(236, 240, 193, 0.55);
+}

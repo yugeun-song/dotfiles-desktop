@@ -1,0 +1,25 @@
+/* Dolphin's places panel, as the sidebar of the dark look the user chose
+ * (2026-11-06): a face of its own, the raised surface (Theme.qml surfaceBg's
+ * #161926) beside the view's darker ground, its words at the view's size
+ * (dolphinrc's ViewFont, 10 pt, 13 px), not the system's 11.
+ * KIO lays its rows 4 px into the view and gives the view no frame
+ * (kfileplacesview.cpp: s_lateralMargin, NoFrame), so they sat against the
+ * window's edge (the user, 2026-11-06: too far left, give it padding; then,
+ * more room on the left to move them right) and no
+ * widget style can move them. Qt takes a style sheet only from -stylesheet
+ * at start: install.sh's dolphin_entry says how every way Dolphin starts
+ * passes this one. Kvantum draws the rest. */
+KFilePlacesView {
+  padding: 8px 10px 8px 20px;
+  background-color: #161926;
+  font-size: 10pt;
+  /* What fills a drive's capacity bar, and nothing else here: KIO draws that bar
+   * under every drive and offers no way to turn it off (CapacityBarRecommendedRole),
+   * so it takes the panel's one colour rather than the accent. Near full it still
+   * turns red. Kvantum draws the selection. */
+  selection-background-color: #8b8d84;
+}
+
+QDockWidget#placesDock {
+  background-color: #161926;
+}

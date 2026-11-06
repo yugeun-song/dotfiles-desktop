@@ -45,3 +45,7 @@ set_key "$I" font-name      "Inter 11"
 set_key "$I" monospace-font-name "CaskaydiaCove Nerd Font Mono 11"
 # Surfaces as the portal's org.freedesktop.appearance color-scheme (GTK4/libadwaita).
 set_key "$I" color-scheme   "prefer-dark"
+# Window buttons, close alone, as gtk/gtk-{3,4}.0-settings.ini: on Wayland GTK,
+# libadwaita and the browsers' GTK mode read this key, which KDE's gtkconfig
+# once set to its own minimize, maximize and close.
+set_key org.gnome.desktop.wm.preferences button-layout ":close"

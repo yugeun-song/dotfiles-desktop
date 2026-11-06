@@ -1,0 +1,180 @@
+/* GTK 3 reads this file over its theme (Breeze-Dark, gtk/gtk-3.0-settings.ini);
+ * the colours are gtk/colors.css, installed beside it. */
+@import 'colors.css';
+
+/* Window buttons: close alone (the layout is gtk/gtk-3.0-settings.ini's and
+ * hypr/scripts/gsettings-apply.sh's): Hyprland minimizes nothing and drops
+ * a client's maximize (hypr/config/rules.lua), so those two did nothing.
+ * The x alone, never a disc behind it (the user, 2026-11-06), solid at rest
+ * and dimmed only while pressed (the user: it read as faint and blurred, so
+ * no transparency and a heavier stroke); as large as the toolbars' icons
+ * beside it, less a little (the user: the 14 px one was absurdly small, then:
+ * 18 a little too large, then 16 still a little too large: 15), and further in
+ * from the window's right edge (the user, three times: move it left). No hand
+ * under the pointer in Chrome: GTK's CSS has no cursor, and Chrome draws its own
+ * buttons with its own arrow (tried 2026-11-06); Firefox's is in
+ * firefox/userChrome.css.
+ * The x's file declares 15 px, no more than half this 30 px button, on purpose:
+ * on a fractional screen Chrome has GTK draw at the next whole scale and, when
+ * the picture comes out larger than the button, adds background-size: contain
+ * (the rule is in its binary). At 16 px declared the x filled the button on a
+ * 1.5 screen whatever the size here: 21 px wide at 6, 10 and 15 (measured
+ * 2026-11-07), and at 15 declared it follows this size, 10 px at both scales.
+ * Breeze GTK paints these as background images over a hidden icon, and so
+ * does this, which is also what Chrome and Firefox read in their GTK mode.
+ * GTK recolours an image only when its name ends in -symbolic.svg. */
+headerbar button.titlebutton,
+.titlebar button.titlebutton {
+  min-width: 30px;
+  min-height: 30px;
+  margin: 0 24px 0 4px;
+  padding: 0;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background-color: transparent;
+  background-position: center;
+  background-repeat: no-repeat;
+  background-size: 15px 15px;
+  color: #ecf0c1;
+  transition: color 150ms ease-out;
+}
+
+headerbar button.titlebutton.close,
+.titlebar button.titlebutton.close {
+  background-image: -gtk-recolor(url("buttons/close-symbolic.svg"));
+}
+
+headerbar button.titlebutton:hover,
+.titlebar button.titlebutton:hover {
+  background-color: transparent;
+  color: #ecf0c1;
+}
+
+headerbar button.titlebutton:active,
+.titlebar button.titlebutton:active {
+  background-color: transparent;
+  color: rgba(236, 240, 193, 0.55);
+}
+
+/* Chrome and Firefox in their GTK mode, and only what they read: Chrome
+ * (Electron too) tags every node it looks up with .chromium, and Firefox
+ * builds its widgets inside a window named MozillaGtkWidget. Neither shows
+ * on a real GTK window, which keeps the theme's colours.
+ *
+ * Chrome in black and white (the user, 2026-11-06): its selected tab is
+ * painted in its toolbar's colour, the two one surface, so the selected tab
+ * could not lighten alone ("then redesign it in a less dark family", "black
+ * and white"). The frame and the tabs behind are near black, the toolbar,
+ * the bookmarks under it and the selected tab one lighter grey, the address
+ * field a dark inset in it (the new tab page takes the field's colour),
+ * words and icons in one colour, the tabs behind too, told apart by their ground
+ * (the user, the same day: the grey read badly in the side tabs, whatever else
+ * has to change). Neutral, every one of them.
+ *
+ * So the selected tab cannot take a colour of its own here, as Firefox's does
+ * (firefox/userChrome.css; the user asked for cream on it alone, 2026-11-07).
+ * Tried that day: no GTK colour feeds it but this window's (the kColorNative*
+ * names in the binary); a cream window paints the toolbar and every bubble too,
+ * and Chrome's bubble icons wash out on it; side tabs draw no stroke, even with
+ * this window a shade off the frame, whatever colour the header's borders are. */
+window.background.chromium {
+  background-color: #2c2c2f;
+  color: #f2f2f2;
+}
+
+/* Chrome lays the x out by the header bar's padding and ignores the button's own
+ * margin (measured 2026-11-06: 14 px or 24 px, it did not move a pixel), so that
+ * is what takes it in from the edge, level with Firefox's. */
+headerbar.chromium,
+headerbar.chromium:backdrop {
+  padding-right: 17px;
+  background-color: #141416;
+  background-image: none;
+}
+
+.chromium label {
+  color: #f2f2f2;
+}
+
+headerbar.chromium label.title.chromium,
+headerbar.chromium:backdrop label.title.chromium {
+  color: #f2f2f2;
+}
+
+.chromium textview.view,
+textview.view.chromium {
+  background-color: #1c1c1f;
+}
+
+.chromium textview text {
+  color: #f2f2f2;
+}
+
+.chromium menu,
+menu.chromium {
+  background-color: #232326;
+  color: #f2f2f2;
+}
+
+.chromium menu menuitem:hover,
+menu.chromium menuitem:hover {
+  background-color: #38383c;
+}
+
+.chromium button.titlebutton,
+.chromium button.titlebutton:hover {
+  color: #ffffff;
+}
+
+/* Firefox in Chrome's black and white above (the user, 2026-11-06: match
+ * Chrome's colours and feel). Firefox paints its toolbar and selected tab one
+ * surface, as Chrome does, but mixes it from this window's colour, 85 parts
+ * to 15 of white: #07070a comes out as Chrome's #2c2c2f. Its own findbar and
+ * notices take the same mix. The tab strip is its title bar's colour, the
+ * tabs behind in that bar's words; the address field sits a shade darker over
+ * the toolbar by itself and takes the entry's colour once focused. */
+window#MozillaGtkWidget.background {
+  background-color: #07070a;
+  color: #f2f2f2;
+}
+
+#MozillaTitlebar headerbar,
+#MozillaTitlebar headerbar:backdrop,
+#MozillaMaximizedTitlebar headerbar,
+#MozillaMaximizedTitlebar headerbar:backdrop,
+#MozillaGtkWidget headerbar,
+#MozillaGtkWidget headerbar:backdrop {
+  background-color: #141416;
+  background-image: none;
+  color: #f2f2f2;
+}
+
+#MozillaGtkWidget entry,
+#MozillaGtkWidget textview.view,
+#MozillaGtkWidget textview text {
+  background-color: #1c1c1f;
+  color: #f2f2f2;
+}
+
+#MozillaGtkWidget menu {
+  background-color: #232326;
+  color: #f2f2f2;
+}
+
+#MozillaGtkWidget menu menuitem:hover {
+  background-color: #38383c;
+}
+
+/* Text dragged over in a page (the user, 2026-11-06). Chrome lays this
+ * colour over the page at 60 to 80% opacity, worked out to look true on
+ * white, and paints the text in the selection's own colour: the accent
+ * with ink turned navy with ink on dark pages, unreadable. A pale grey with
+ * near black reads either way, 13:1 on white and about 5:1 over dark pages,
+ * and stands about 4:1 off them; grey, as the rest of Chrome is now.
+ * Firefox paints the accent opaque, so it keeps the accent with ink that
+ * everything else selects with. */
+.chromium selection {
+  background-color: #d9d9d9;
+  color: #121212;
+}

@@ -8,10 +8,14 @@
 # in full and identical to kde/SpaceduckDark.colors. Official packages only.
 
 [General]
+# The terminal for programs whose entry says Terminal=true, Neovim among them. KIO
+# asks for Konsole unless told (desktopexecparser.cpp), which this desktop does not
+# have (the user, 2026-11-06: "Terminal konsole not found"). install.sh sets these
+# in an older seed too.
+TerminalApplication=kitty
+TerminalService=kitty.desktop
 ColorScheme=SpaceduckDark
 Name=Spaceduck Dark
-# Breeze: the only compiled widget style in the official repos; shapes only.
-widgetStyle=Breeze
 font=Inter,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 fixed=CaskaydiaCove Nerd Font Mono,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
 menuFont=Inter,11,-1,5,400,0,0,0,0,0,0,0,0,0,0,1
@@ -147,10 +151,15 @@ IntensityAmount=0
 IntensityEffect=0
 
 [Icons]
-# From breeze-icons (official repos).
-Theme=breeze-dark
+# Line icons from Lucide over breeze-icons (kde/icons/build.py); install.sh
+# sets this in an older seed too.
+Theme=SpaceduckLines
 
 [KDE]
+# The widget style, read from this group only: Kvantum (extra) drawing
+# kde/Kvantum's theme; a Qt that cannot load it falls back to Breeze.
+# install.sh sets this one key in a kdeglobals seeded before.
+widgetStyle=kvantum
 SingleClick=false
 AnimationDurationFactor=0.5
 

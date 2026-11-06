@@ -15,7 +15,7 @@ reported; outside it, the installer refuses rather than half-apply.
 | Compositor | Hyprland 0.56 or later, which reads `hyprland.lua` (hypridle, hyprlock and hyprpaper still read hyprlang `.conf` files) |
 | Shell | quickshell (`qs`) for the bar and every panel |
 | Terminal | kitty, configured by [dotfiles-terminal](https://github.com/yugeun-song/dotfiles-terminal) |
-| KDE pieces | Breeze (GTK theme, icons), plasma-integration (Qt platform theme), the SpaceduckDark colour scheme; hyprpolkitagent or polkit-kde-agent |
+| KDE pieces | Breeze (GTK theme, icons), plasma-integration (Qt platform theme), Kvantum (Qt widget style), the SpaceduckDark colour scheme; hyprpolkitagent or polkit-kde-agent |
 | Also expected | fcitx5 (Hangul), PipeWire, Inter, Pretendard and CaskaydiaCove Nerd Font |
 
 `./install.sh` stops before writing anything when the distribution is not
@@ -203,6 +203,24 @@ stored. The installer removes a history an older setup left in
 
     journalctl --user -u bar.service -f
     journalctl --user -t session-start
+
+## Look
+
+Qt programs draw with Kvantum, in the theme `kde/Kvantum/build.py` writes
+from the bar's colours (run it after a colour change); GTK 3 and 4 take the
+same roles over Breeze GTK from `gtk/colors.css`, libadwaita from
+`gtk/gtk-4.0.css`. Chrome and Firefox follow them when set to their GTK or
+system theme; Qt 5 programs need plasma5-integration and kvantum-qt5.
+Header bars carry a close button alone (`gtk/gtk-3.0.css`, `gtk-4.0.css`):
+Hyprland minimizes nothing and drops a client's maximize. Qt programs draw
+no title bar (`QT_WAYLAND_DISABLE_WINDOWDECORATION`); `Super+Q` closes any
+window. The browsers' black and white and drag selection are set there too,
+for them alone, Firefox's window buttons in its profiles
+(`firefox/userChrome.css`). Text opens in Neovim, in kitty (`kde/default-editor.py`,
+`bin/xdg-terminal-exec`). Dolphin opens dark: list view, a
+sidebar face (`kde/dolphin.qss`), a trimmed toolbar
+(`kde/dolphin-toolbar.py`), line icons (`kde/icons/`), seeded once by
+`install.sh`.
 
 ## The bar
 

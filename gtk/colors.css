@@ -1,0 +1,102 @@
+/* GTK's colours in the bar's roles (quickshell/bar/services/Theme.qml; the
+ * KDE scheme in kde/kdeglobals and kde/Kvantum/build.py name the same), under
+ * the names Breeze GTK draws with (theme/DESIGN.md maps them). Started from
+ * what KDE's gtkconfig wrote from that scheme before kde/kded5rc turned it
+ * off, so a new install has it too, then put in step with the Qt theme:
+ * - tooltips on the ground with a hairline; edges in the hairline;
+ * - the accent in place of the scheme's cyan where Breeze GTK marks hover,
+ *   which also fills what is on (a switch, a slider, a progress bar: a
+ *   neutral grey there read as off);
+ * - disabled text in the scheme's inactive grey; a window out of focus left
+ *   as it was (Kvantum's no_inactiveness);
+ * - the two names Breeze GTK reads and KDE never wrote:
+ *   unfocused_insensitive_color (the disabled grey) and
+ *   print_paper_backdrop (the fill).
+ * Header bars keep the raised face: a browser that follows GTK draws its tab
+ * strip from them, and the ground there would hide which tab is open. */
+@define-color borders_breeze #252728;
+@define-color content_view_bg_breeze #0f111b;
+@define-color error_color_backdrop_breeze #f7768e;
+@define-color error_color_breeze #f7768e;
+@define-color error_color_insensitive_backdrop_breeze #603443;
+@define-color error_color_insensitive_breeze #603443;
+@define-color insensitive_base_color_breeze #0f111b;
+@define-color insensitive_base_fg_color_breeze #686f9a;
+@define-color insensitive_bg_color_breeze #0f111b;
+@define-color insensitive_borders_breeze #1e2127;
+@define-color insensitive_fg_color_breeze #686f9a;
+@define-color insensitive_selected_bg_color_breeze #0f111b;
+@define-color insensitive_selected_fg_color_breeze #686f9a;
+@define-color insensitive_unfocused_bg_color_breeze #0f111b;
+@define-color insensitive_unfocused_fg_color_breeze #686f9a;
+@define-color insensitive_unfocused_selected_bg_color_breeze #0f111b;
+@define-color insensitive_unfocused_selected_fg_color_breeze #686f9a;
+@define-color link_color_breeze #7dcfff;
+@define-color link_visited_color_breeze #bb9af7;
+@define-color print_paper_backdrop_breeze #ecf0c1;
+@define-color success_color_backdrop_breeze #9ece6a;
+@define-color success_color_breeze #9ece6a;
+@define-color success_color_insensitive_backdrop_breeze #415337;
+@define-color success_color_insensitive_breeze #415337;
+@define-color theme_base_color_breeze #0f111b;
+@define-color theme_bg_color_breeze #0f111b;
+@define-color theme_button_background_backdrop_breeze #161926;
+@define-color theme_button_background_backdrop_insensitive_breeze #161926;
+@define-color theme_button_background_insensitive_breeze #161926;
+@define-color theme_button_background_normal_breeze #161926;
+@define-color theme_button_decoration_focus_backdrop_breeze #7aa2f7;
+@define-color theme_button_decoration_focus_backdrop_insensitive_breeze #39496f;
+@define-color theme_button_decoration_focus_breeze #7aa2f7;
+@define-color theme_button_decoration_focus_insensitive_breeze #39496f;
+@define-color theme_button_decoration_hover_backdrop_breeze #7aa2f7;
+@define-color theme_button_decoration_hover_backdrop_insensitive_breeze #39496f;
+@define-color theme_button_decoration_hover_breeze #7aa2f7;
+@define-color theme_button_decoration_hover_insensitive_breeze #39496f;
+@define-color theme_button_foreground_active_backdrop_breeze #0f111b;
+@define-color theme_button_foreground_active_backdrop_insensitive_breeze #686f9a;
+@define-color theme_button_foreground_active_breeze #0f111b;
+@define-color theme_button_foreground_active_insensitive_breeze #686f9a;
+@define-color theme_button_foreground_backdrop_breeze #ecf0c1;
+@define-color theme_button_foreground_backdrop_insensitive_breeze #686f9a;
+@define-color theme_button_foreground_insensitive_breeze #686f9a;
+@define-color theme_button_foreground_normal_breeze #ecf0c1;
+@define-color theme_fg_color_breeze #ecf0c1;
+@define-color theme_header_background_backdrop_breeze #161926;
+@define-color theme_header_background_breeze #161926;
+@define-color theme_header_background_light_breeze #0f111b;
+@define-color theme_header_foreground_backdrop_breeze #ecf0c1;
+@define-color theme_header_foreground_breeze #ecf0c1;
+@define-color theme_header_foreground_insensitive_backdrop_breeze #ecf0c1;
+@define-color theme_header_foreground_insensitive_breeze #ecf0c1;
+@define-color theme_hovering_selected_bg_color_breeze #8eb0f8;
+@define-color theme_selected_bg_color_breeze #7aa2f7;
+@define-color theme_selected_fg_color_breeze #0f111b;
+@define-color theme_text_color_breeze #ecf0c1;
+@define-color theme_titlebar_background_backdrop_breeze #161926;
+@define-color theme_titlebar_background_breeze #161926;
+@define-color theme_titlebar_background_light_breeze #0f111b;
+@define-color theme_titlebar_foreground_backdrop_breeze #ecf0c1;
+@define-color theme_titlebar_foreground_breeze #ecf0c1;
+@define-color theme_titlebar_foreground_insensitive_backdrop_breeze #ecf0c1;
+@define-color theme_titlebar_foreground_insensitive_breeze #ecf0c1;
+@define-color theme_unfocused_base_color_breeze #0f111b;
+@define-color theme_unfocused_bg_color_breeze #0f111b;
+@define-color theme_unfocused_fg_color_breeze #ecf0c1;
+@define-color theme_unfocused_selected_bg_color_alt_breeze #7aa2f7;
+@define-color theme_unfocused_selected_bg_color_breeze #7aa2f7;
+@define-color theme_unfocused_selected_fg_color_breeze #0f111b;
+@define-color theme_unfocused_text_color_breeze #ecf0c1;
+@define-color theme_unfocused_view_bg_color_breeze #0f111b;
+@define-color theme_unfocused_view_text_color_breeze #ecf0c1;
+@define-color theme_view_active_decoration_color_breeze #7aa2f7;
+@define-color theme_view_hover_decoration_color_breeze #7aa2f7;
+@define-color tooltip_background_breeze #0f111b;
+@define-color tooltip_border_breeze #252728;
+@define-color tooltip_text_breeze #ecf0c1;
+@define-color unfocused_borders_breeze #252728;
+@define-color unfocused_insensitive_borders_breeze #1e2127;
+@define-color unfocused_insensitive_color_breeze #686f9a;
+@define-color warning_color_backdrop_breeze #e0af68;
+@define-color warning_color_breeze #e0af68;
+@define-color warning_color_insensitive_backdrop_breeze #584836;
+@define-color warning_color_insensitive_breeze #584836;

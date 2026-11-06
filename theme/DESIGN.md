@@ -1,6 +1,10 @@
 <!--
 A design, not an implementation: bin/theme, theme/palettes/ and
 theme/templates/ do not exist yet; colours live where the tables below say.
+Meanwhile written by hand from these roles: gtk/colors.css (the GTK mapping
+below) and gtk/gtk-4.0.css, whose libadwaita colours are CSS variables since
+libadwaita 1.6, not the named colours the libadwaita table lists; and
+kde/Kvantum/build.py, which names each role once for Qt's widget theme.
 Surveyed 2026-08-26 from every place a colour is written, re-checked against
 the tree 2026-10-14. References name files and symbols, not line numbers.
 -->
