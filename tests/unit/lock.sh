@@ -43,6 +43,7 @@ cp "$REPO/hypr/hyprlock.conf" "$WORK/config/hypr/hyprlock.conf"
 cat >"$WORK/bin/hyprlock" <<EOF
 #!/bin/sh
 grep '^SigIgn:' /proc/\$\$/status >"$WORK/sigign"
+ulimit -S -c >"$WORK/hyprlock-core"
 ls "$WORK/run" >"$WORK/run-at-start"
 EOF
 printf '#!/bin/sh\necho 1\n' >"$WORK/bin/fcitx5-remote"
@@ -68,6 +69,7 @@ case "\$*" in
 esac
 echo \$\$ >"$WORK/qs.pid"
 echo "\$LOCK_SPEC" >"$WORK/qs-spec"
+ulimit -S -c >"$WORK/qs-core"
 ls "$WORK/run" >"$WORK/qs-run-at-start"
 case "\$(cat "$WORK/qs-mode" 2>/dev/null)" in
     hold) echo 1 >"\$LOCK_READY"; sleep 0.3; exit 0 ;;
@@ -108,6 +110,7 @@ if [[ -s "$WORK/sigign" ]]; then
 else
     fail "the hyprlock stand-in never ran"
 fi
+if [[ "$(cat "$WORK/hyprlock-core" 2>/dev/null)" == 0 ]]; then pass; else fail "hyprlock may leave a core file with the password in it"; fi
 if [[ ! -e "$WORK/qs-spec" ]]; then pass; else fail "the Quickshell lock ran without a spec"; fi
 if grep -q -E '^(hyprlock-island-|lock-island.json)' "$WORK/run-at-start" 2>/dev/null; then
     fail "the island's files of an earlier lock were still there as hyprlock started"
@@ -124,6 +127,7 @@ code=$?
 if [[ $code -eq 0 ]]; then pass; else fail "lock.sh exited $code after the Quickshell lock ended well"; fi
 if [[ -s "$WORK/qs-spec" && "$(cat "$WORK/qs-spec")" == "$WORK/run/lock-spec.json" ]]; then pass
 else fail "the Quickshell lock was not given the spec ($(cat "$WORK/qs-spec" 2>/dev/null))"; fi
+if [[ "$(cat "$WORK/qs-core" 2>/dev/null)" == 0 ]]; then pass; else fail "the Quickshell lock may leave a core file with the password in it"; fi
 if grep -qx lock-spec.json "$WORK/qs-run-at-start" 2>/dev/null; then pass; else fail "no spec was written before the lock"; fi
 if [[ ! -e "$WORK/sigign" ]]; then pass; else fail "hyprlock ran although the Quickshell lock held the session"; fi
 if [[ ! -e "$WORK/run/lock-spec.json" && ! -e "$WORK/run/lock-ready" ]]; then pass; else fail "the spec or the sign outlived the lock"; fi

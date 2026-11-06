@@ -91,7 +91,10 @@ ready="$RT/lock-ready"
 rm -f -- "$ready"
 rc=1 held=0
 if [[ -n "$spec" && -r "$QS_LOCK" ]] && command -v qs >/dev/null 2>&1; then
-    LOCK_SPEC="$spec" LOCK_READY="$ready" qs -n -p "$QS_LOCK" >/dev/null 2>&1 9>&- &
+    # No core file and no detailed log, as bin/bar says why: this process has held
+    # the password, and dropping a string does not clear its bytes. exec, so that
+    # $! is the lock screen itself.
+    ( ulimit -S -c 0; LOCK_SPEC="$spec" LOCK_READY="$ready" exec qs --no-detailed-logs -n -p "$QS_LOCK" ) >/dev/null 2>&1 9>&- &
     qpid=$!
     for _ in $(seq "$LOCK_WAIT"); do
         [[ -s "$ready" ]] && break
@@ -142,7 +145,7 @@ rm -f -- "$ready" "$RT/lock-spec.json"
 # read the bar's files when hyprlock draws them anyway.
 if (( ! held )); then
     trap '' USR2
-    hyprlock "${fitted[@]}" "$@" 9>&-
+    ( ulimit -S -c 0; exec hyprlock "${fitted[@]}" "$@" ) 9>&-
     rc=$?
     trap - USR2
 fi

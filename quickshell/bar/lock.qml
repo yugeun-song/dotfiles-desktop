@@ -205,6 +205,9 @@ ShellRoot {
                 root.unlock();
                 return;
             }
+            // onError has said so: a broken stack is not a wrong password.
+            if (result === PamResult.Error)
+                return;
             // pam_faillock's refusal names the lock; a plain failure says
             // nothing worth showing.
             root.fail(/lock/i.test(root.message) ? root.message : "Wrong password");
@@ -410,6 +413,11 @@ ShellRoot {
     // Without a spec there is nothing to draw: gone at once, and lock.sh
     // locks with hyprlock instead.
     Component.onCompleted: {
+        // Never reload on a file changing, as an install does: a new generation
+        // starts with the lock not yet wanted (capturing), and takes the old one's
+        // lock only to let it go, so the session stood open without a password
+        // for as long as its capture took (found 2026-11-07, e2e 30).
+        Quickshell.watchFiles = false;
         if (root.spec === null) {
             console.warn("[lock] no spec in LOCK_SPEC; leaving the lock to hyprlock");
             Qt.exit(2);

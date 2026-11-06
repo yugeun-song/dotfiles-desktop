@@ -1992,6 +1992,18 @@ print(right - left + 1, bars, foot)
 EOF
 }
 qs_unlocked() { [[ "$(n locked)" == false ]] && ! kill -0 "$LOCK_PID" 2>/dev/null; }
+# A file of the lock's changing under it, as an install does. Quickshell reloads
+# on that by default, and a new generation starts with the lock not yet wanted:
+# the session opens for as long as its capture takes, the keys going to whatever
+# had focus. Asked every 50 ms, so that a short opening is seen.
+lock_holds_a_file_change() {
+    printf '\n// e2e\n' >> "$WORK/bar/modules/LockLabel.qml"
+    local i
+    for i in $(seq 60); do
+        [[ "$(n locked)" == true ]] || return 1
+        sleep 0.05
+    done
+}
 qs_lock_quiet() {
     local w
     w=$(grep -E "WARN scene|ERROR" "$WORK/qslock.out" | grep -v -E "portal|Could not register")
@@ -2044,6 +2056,7 @@ EOF
         wait_for 10 qs_lock_shows
     read -r b l c v u o < <(lock_pixels)
     echo "e2e: Quickshell lock pixels: island ${b:-?}, lock ${l:-?}, clock ${c:-?}, cover ${v:-?}, unlock ${u:-?}, toggle off the clock's ink by ${o:-?}"
+    check "a file changing under the lock does not open the session" lock_holds_a_file_change
     qs_lock_island "$(printf '\U000F02CB')" "" "$(printf '\U000F05E0')" "#37a3de"
     check "an event on its island: the glyph leading, the mark trailing" wait_for 5 island_is device
     qs_lock_island "$(printf '\U000F140B')" "100%" "" "#37c058"
