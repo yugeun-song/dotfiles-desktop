@@ -871,7 +871,7 @@ acquire_sudo() {
         system_current "$src" "$dst" "$mode" || want+=("$src:$dst:$mode")
     done < <(system_files)
     # The tests' root never installs a package.
-    if [[ -z "$ROOT" ]] && "$SRC/packages/apply.sh" --pending 9>&-; then packages=1; fi
+    if [[ -z "$ROOT" ]] && bash "$SRC/packages/apply.sh" --pending 9>&-; then packages=1; fi
     (( ${#want[@]} || packages )) || return 0
     command -v sudo >/dev/null 2>&1 || return 0
     if (( ${#want[@]} )) && root_plan "${want[@]}"; then files=1; fi
@@ -1563,7 +1563,7 @@ if [[ -z "$ROOT" ]]; then
     printf '%spackages%s\n' "$BOLD" "$RESET"
     _status=0
     TERMINAL_LIST=${TERMINAL_DIR:+$TERMINAL_DIR/packages.txt} \
-        "$SRC/packages/apply.sh" "${_args[@]}" 9>&- || _status=$?
+        bash "$SRC/packages/apply.sh" "${_args[@]}" 9>&- || _status=$?
     case $_status in
         0) ;;
         1) if (( CHECK )); then DRIFT=1; else stop "the packages did not install; no file was written"; fi ;;

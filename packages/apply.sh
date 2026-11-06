@@ -123,7 +123,10 @@ bootstrap_yay() {
         rm -rf -- "${dir:?}"
         return 1
     fi
-    cat -- "$dir/yay-bin/PKGBUILD"
+    # With its control characters shown, which could hide a line from this
+    # review, the one check there is: the sums come from the same PKGBUILD. Its
+    # install script too, since makepkg -i runs that as root.
+    cat -v -- "$dir/yay-bin/PKGBUILD" "$dir"/yay-bin/*.install 2>/dev/null
     printf 'Build and install yay-bin from this PKGBUILD? [y/N] ' >/dev/tty
     IFS= read -r answer </dev/tty || answer=""
     case ${answer,,} in
