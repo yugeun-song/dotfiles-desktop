@@ -191,6 +191,20 @@ echo "{\"place\": \"Test\", \"fetched\": 1, \"live\": $live, \"code\": 0, \"temp
 EOF
 chmod +x "$WORK/bar/scripts/weather.sh"
 
+# /sys/class/drm as the system widget reads it (modules/GpuProbe.qml): an
+# integrated card's carve-out, a discrete card's 8 GiB with a quarter used
+# and its load in per cent, and a card that reports no memory but its idle
+# time, as Intel's do; the load in per cent is the one taken.
+for c in card0 card1 card2; do mkdir -p "$WORK/drm/$c/device/power"; done
+echo 536870912 > "$WORK/drm/card0/device/mem_info_vram_total"
+echo 268435456 > "$WORK/drm/card0/device/mem_info_vram_used"
+echo 8589934592 > "$WORK/drm/card1/device/mem_info_vram_total"
+echo 2147483648 > "$WORK/drm/card1/device/mem_info_vram_used"
+echo 37 > "$WORK/drm/card1/device/gpu_busy_percent"
+echo active > "$WORK/drm/card1/device/power/runtime_status"
+mkdir -p "$WORK/drm/card2/device/tile0/gt0/gtidle"
+echo 1000 > "$WORK/drm/card2/device/tile0/gt0/gtidle/idle_residency_ms"
+
 # pw-dump: a screen the portal made, taken by one program no desktop entry
 # names, so the share's lookup (scripts/share-apps.py) has one to find
 # without reading this machine's PipeWire.
@@ -243,6 +257,7 @@ out="$WORK/out"
     CAMERA_SWITCH_FILE="$WORK/camera/state/off" \
     CAMERA_TEST_DIR="$WORK/camera" \
     WEATHER_TEST_DIR="$WORK/weather" \
+    BAR_DRM_DIR="$WORK/drm" \
     QML_TEST_LOCK_GO="$WORK/lock-go" \
     KEYFEED_SYSTEM="$WORK/keyfeed/reader" \
     KEYFEED_TEST_DIR="$WORK/keyfeed" \

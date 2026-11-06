@@ -4,7 +4,12 @@ import QtQuick
 import Quickshell
 import qs.services
 
-// The month, opened by hovering the clock. Built like MediaPopup.
+// The month, opened by hovering the clock. Built like MediaPopup. Its card is
+// the desktop's large calendar widget, so the two read as one design (the
+// user, 2026-11-05: the bar's month and the widget looked unalike), scaled so
+// its cells are 25 of the bar's pixels on the screen's fit, a little larger
+// than the 22 the bar's month first drew them at (the user, 2026-11-06); the
+// day under the pointer and its distance come with it.
 Item {
     id: root
 
@@ -15,8 +20,6 @@ Item {
     property bool cardHovered: false
 
     readonly property bool active: root.anchorHovered || root.cardHovered
-
-    readonly property int edge: Theme.barAtBottom ? Edges.Top : Edges.Bottom
 
     property bool shown: false
 
@@ -43,45 +46,73 @@ Item {
         sourceComponent: PopupWindow {
             id: popup
 
-            // The card's share of the bar's screen, as on the reference output.
-            readonly property real fit: Theme.fit(root.QsWindow.window?.screen)
+            readonly property var screen: root.QsWindow.window?.screen ?? null
+            readonly property real fit: Theme.fit(popup.screen)
+            readonly property real k: Theme.px(25) * popup.fit / Math.max(1, month.cellSize)
+
+            // Its top right corner where the other panels at the top right
+            // stand (ControlCentre, NotificationCentre): notifBarGap below the
+            // bar and edgeMarginRight + menuItemPadX in from the screen's
+            // edge; under the clock it touched the bar and almost the edge
+            // (the user, 2026-11-06: more room above and to the right). Taken
+            // into the clock's own coordinates, which the bar scales, when the
+            // card opens; the clock holds its place (StatusItems.clockSlack).
+            readonly property point corner: {
+                const win = root.QsWindow.window;
+                const item = root.anchorItem;
+                if (!win || !item)
+                    return Qt.point(0, 0);
+                const x = win.width - (Theme.edgeMarginRight + Theme.menuItemPadX) * popup.fit;
+                const y = Theme.barAtBottom ? -Theme.notifBarGap * popup.fit : win.height + Theme.notifBarGap * popup.fit;
+                return item.mapFromItem(null, x, y);
+            }
 
             visible: true
             color: "transparent"
             grabFocus: false
-            implicitWidth: Math.round(card.implicitWidth * popup.fit)
-            implicitHeight: Math.round(card.implicitHeight * popup.fit)
+            implicitWidth: Math.round(card.width)
+            implicitHeight: Math.round(card.height)
 
             anchor {
                 window: root.QsWindow.window
                 item: root.anchorItem
-                rect.x: 0
-                rect.y: 0
-                rect.width: root.anchorItem?.width ?? 0
-                rect.height: root.anchorItem?.height ?? 0
-                edges: root.edge
-                gravity: root.edge
+                rect.x: popup.corner.x
+                rect.y: popup.corner.y
+                rect.width: 1
+                rect.height: 1
+                edges: Edges.Top | Edges.Left
+                gravity: (Theme.barAtBottom ? Edges.Top : Edges.Bottom) | Edges.Left
+                adjustment: PopupAdjustment.None
             }
 
             Rectangle {
                 id: card
 
-                scale: popup.fit
-                transformOrigin: Item.TopLeft
-                implicitWidth: month.implicitWidth + Theme.popupPad * 2
-                implicitHeight: month.implicitHeight + Theme.popupPad * 2
-                radius: Theme.surfaceRadius
+                width: month.width * popup.k
+                height: month.height * popup.k
+                radius: Math.round(Theme.widgetRadius * popup.k)
                 color: Theme.surfaceBg
                 border.width: Theme.surfaceBorder
                 border.color: Theme.surfaceLine
 
-                CalendarMonth {
+                CalendarWidget {
                     id: month
 
-                    anchors.centerIn: parent
+                    width: 2 * Widgets.smallRef + Widgets.gapRef
+                    height: 2 * Widgets.smallRef + Widgets.gapRef
+                    scale: popup.k
+                    transformOrigin: Item.TopLeft
+                    size: "large"
+                    options: Widgets.optionDefaults.calendar
+                    pointer: hover.hovered ? Qt.point(hover.point.position.x / popup.k, hover.point.position.y / popup.k) : null
                 }
 
+                // A hand over a day, as the bar's month gave one: the pointer
+                // there reads its distance (the user, 2026-11-05).
                 HoverHandler {
+                    id: hover
+
+                    cursorShape: month.hoveredDay > 0 ? Qt.PointingHandCursor : Qt.ArrowCursor
                     onHoveredChanged: root.cardHovered = hovered
                 }
             }

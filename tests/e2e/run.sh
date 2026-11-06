@@ -663,8 +663,10 @@ EOF
 )
 }
 # Below the bar, where the menu opens; picker.py reads it against a capture
-# taken while the menu was closed.
-PICKER_AREA="0,40 760x560"
+# taken while the menu was closed. No taller than the menu: under it are the
+# desktop's widgets, whose graphs move between the two captures and would read
+# as part of what opened.
+PICKER_AREA="0,40 760x365"
 picker_open() { shot -g "$PICKER_AREA" "$WORK/picker.png" && python3 "$REPO/tests/e2e/picker.py" "$WORK/picker-closed.png" "$WORK/picker.png" > "$WORK/picker.json"; }
 picker_closed() { shot -g "$PICKER_AREA" "$WORK/picker-now.png"; python3 "$REPO/tests/e2e/picker.py" "$WORK/picker-closed.png" "$WORK/picker-now.png" >/dev/null; [[ $? == 1 ]]; }
 badge_is() { [[ "$(ipc e2e badge | jq -r .choice)" == "$1" ]]; }
@@ -695,6 +697,7 @@ else
         check "the pick is kept" file_is "$WORK/state/quickshell/bar/badge" void
         reload_bar
         check "and outlives a reload" badge_is void
+        shot -g "$PICKER_AREA" "$WORK/picker-closed.png"
         if open_picker; then
             read -r ax ay < <(jq -r '.automatic | "\(.[0]) \(.[1] + 40)"' "$WORK/picker.json")
             input move "$ax" "$ay" sleep 200 click sleep 100
@@ -1104,6 +1107,31 @@ a, b = shape(sys.argv[1]), shape(sys.argv[2])
 print(f"{len(a & b) * 100 // max(1, len(a | b))} {min(len(a), len(b))}")
 EOF
 }
+# The box the clock's month takes (x0 y0 x1 y1, in the external's pixels):
+# what hovering the clock from $1 to $2 changes in the right half from y 41
+# down, any channel by more than 4, so the card's edge counts and not its
+# words alone. The left half has the desktop's own changes, and the pointer
+# waits below.
+month_box() {
+    input move 2000 1000 sleep 400
+    shot -g "1280,41 1280x560" "$WORK/month-away.png" 2>/dev/null || return 1
+    input move "$(( ($1 + $2) / 2 ))" 16 sleep 700
+    shot -g "1280,41 1280x560" "$WORK/month-hover.png" 2>/dev/null || return 1
+    box=$(python3 - "$WORK/month-away.png" "$WORK/month-hover.png" <<'EOF'
+import sys
+from PIL import Image, ImageChops
+a, b = (Image.open(p).convert("RGB") for p in sys.argv[1:3])
+bands = ImageChops.difference(a, b).split()
+mask = bands[0].point(lambda v: 255 if v > 4 else 0)
+for band in bands[1:]:
+    mask = ImageChops.lighter(mask, band.point(lambda v: 255 if v > 4 else 0))
+box = mask.getbbox()
+if not box:
+    sys.exit(1)
+print(box[0] + 1280, box[1] + 41, box[2] - 1 + 1280, box[3] - 1 + 41)
+EOF
+)
+}
 camera_stub() {
     printf '#!/bin/sh\necho %s\n' "'{\"switch\": \"$1\", \"busy\": false, \"cameras\": [$2], \"power_switches\": [], \"missing\": []}'" \
         > "$WORK/bin/camera-switch-stub"
@@ -1170,6 +1198,21 @@ else
     echo "e2e: changed pixels: month ${under:-none}; above the ink: clock ${lit:-none}," \
         "badge ${badge_lit:-none}, power ${power_lit:-none}, cameras off (${camera:-not found}) ${camera_lit:-none}"
     check "hovering the clock opens the month" test "${under:-0}" -gt 500
+    # The month's card at the corner the control centre and the notification
+    # centre stand at: notifBarGap under the bar, edgeMarginRight +
+    # menuItemPadX in from the edge (the user, 2026-11-06: more room above
+    # and to the right). Its box is what the hover changes from y 41 down,
+    # below the pointer's reach, set against the corner the bar computes.
+    if month_box "${clock%:*}" "${clock#*:}"; then
+        place=$(ipc e2e monthPlace)
+        echo "e2e: the month's card: $box; its corner belongs at $(jq -c . <<<"$place")"
+        read -r bx0 by0 bx1 _ <<<"$box"
+        dx=$(( bx1 + 1 - $(jq .right <<<"$place") )) dy=$(( by0 - $(jq .top <<<"$place") ))
+        check "the month opens at the corner of the other top right panels" \
+            test "$dx" -ge -2 -a "$dx" -le 2 -a "$dy" -ge -2 -a "$dy" -le 2 -a "$(( bx1 - bx0 ))" -gt 200
+    else
+        fail "the month's card: no capture, or nothing changed under the clock"
+    fi
     check "the clock lights up under the pointer, as the badge and the power button do" \
         test "${lit:-0}" -gt 8 -a "${badge_lit:-0}" -gt 8 -a "${power_lit:-0}" -gt 8
     check "a plain readout does not" test -n "$camera" -a "${camera_lit:-99}" -le 2
@@ -1199,7 +1242,7 @@ else
     check "the cameras-off glyph goes again" wait_for 5 camera_is on
     input move 2000 600 sleep 400
     check "the hovered files raised no QML warning" \
-        quiet_since "$mark" '[@/](StatusItems?|CalendarPopup|CalendarMonth|MediaChip|SystemBadge|AppTitle|Workspaces|Bar)\.qml'
+        quiet_since "$mark" '[@/](StatusItems?|CalendarPopup|CalendarWidget|HeroText|MediaChip|SystemBadge|AppTitle|Workspaces|Bar)\.qml'
 fi
 
 # 23. A click on the speaker mutes or unmutes the output, as the mute key
@@ -1894,6 +1937,66 @@ im.save(sys.argv[1])' "$WORK/wall.png"
     fi
     stop_tree "$MPRIS_PID"
     MPRIS_PID=""
+fi
+
+# 31. The desktop widgets (modules/WidgetDesk.qml, WidgetScreen.qml; the
+# user's rules, 2026-11-04 and 05): on an empty workspace each screen shows
+# its widgets, the user's default layout from the top left under the bar, in
+# one window round them all under the windows; a cell of 150 px on both
+# screens (an eighth of the shorter side, no more than the panel's, the size
+# the user accepted on 2026-11-06), the gap 16 to its 170. A tiled window
+# hides them and their window goes, a floating one leaves them in view, and
+# they come back when it closes; the edit mode puts the editor in their
+# place and gives them back. After 30, which unlocks: a compositor left
+# locked would hide them.
+mark=$(output_mark)
+widget_box() { ipc e2e widgetBox "$1"; }
+# The widgets' layer on a monitor: x y w h in that monitor's logical pixels.
+widget_layer() {
+    n layers -j | jq -r --arg m "$1" --argjson ox "$2" \
+        '[.[$m].levels[][] | select(.namespace == "quickshell:widgets")] | first | if . then "\(.x - $ox) \(.y) \(.w) \(.h)" else empty end'
+}
+plainwin_pid() { n clients -j | jq -r '[.[] | select(.class == "plainwin") | .pid] | first // empty'; }
+plainwin_up() { [[ -n "$(plainwin_pid)" ]]; }
+plainwin_floating() { [[ "$(n clients -j | jq -r '[.[] | select(.class == "plainwin") | .floating] | first')" == true ]]; }
+widgets_on_both() { has_layer quickshell:widgets HEADLESS-1 && has_layer quickshell:widgets HEADLESS-2; }
+editor_in_their_place() { has_layer quickshell:widget-editor && lacks_layer quickshell:widgets HEADLESS-2; }
+if [[ "$(n locked)" == true ]]; then
+    fail "desktop widgets: the nested compositor is still locked after 30"
+else
+    input move 1280 900 sleep 300
+    check "each screen shows its widgets on an empty workspace" wait_for 8 widgets_on_both
+    b1=$(widget_box HEADLESS-1) b2=$(widget_box HEADLESS-2)
+    echo "e2e: widgets laid out: HEADLESS-1 $b1; HEADLESS-2 $b2"
+    check "a cell of 150 px on both screens, the gap 16 to its 170" \
+        test "$(jq -c '[.cell, .gap]' <<<"$b1")" = "[150,14]" -a "$(jq -c '[.cell, .gap]' <<<"$b2")" = "[150,14]"
+    check "at the grid's top left under the bar: a gap in from the edge, a gap under the bar" \
+        test "$(jq '.x == .gap and .y == .top + .gap and .count == 4' <<<"$b2")" = true
+    read -r lx ly lw lh < <(widget_layer HEADLESS-2 0)
+    echo "e2e: the widgets' window on HEADLESS-2: ${lx:-?},${ly:-?} ${lw:-?}x${lh:-?}"
+    check "in one window just round them" \
+        test "${lx:-x} ${ly:-x} ${lw:-x} ${lh:-x}" = "$(jq -r '"\(.x) \(.y) \(.w) \(.h)"' <<<"$b2")"
+    n dispatch "hl.dsp.exec_cmd('python3 -I $REPO/tests/e2e/plainwin.py')" >/dev/null
+    if wait_for 10 plainwin_up; then
+        check "a tiled window hides them, and their window goes" wait_for 5 lacks_layer quickshell:widgets HEADLESS-2
+        check "the other screen's stay" has_layer quickshell:widgets HEADLESS-1
+        n dispatch "hl.dsp.focus({ window = 'class:plainwin' })" >/dev/null
+        n dispatch "hl.dsp.window.float({ action = 'toggle' })" >/dev/null
+        if wait_for 5 plainwin_floating; then
+            check "a floating window leaves them in view" wait_for 5 has_layer quickshell:widgets HEADLESS-2
+        else
+            fail "desktop widgets: the plain window did not float"
+        fi
+        kill "$(plainwin_pid)" 2>/dev/null
+        check "and they are there once it closes" wait_for 5 has_layer quickshell:widgets HEADLESS-2
+    else
+        fail "desktop widgets: the plain window did not open"
+    fi
+    ipc widgets edit >/dev/null
+    check "the edit mode puts the editor in their place" wait_for 5 editor_in_their_place
+    ipc widgets close >/dev/null
+    check "and gives them back" wait_for 5 has_layer quickshell:widgets HEADLESS-2
+    check "the widgets' files raised no QML warning" quiet_since "$mark" '[@/](Widget[A-Za-z]*|CalendarWidget|ClockWidget|WeatherWidget|SystemWidget)\.qml'
 fi
 
 check "no session action or hardware write was even attempted" no_writes

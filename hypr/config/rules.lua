@@ -44,6 +44,11 @@ hl.layer_rule({ match = { namespace = "^(quickshell:wallpaper-preview)$" }, no_a
 -- for a screen plugged in), and there or not as hyprpaper's picture is.
 hl.layer_rule({ match = { namespace = "^(quickshell:video-wallpaper)$" }, order = -1, no_anim = true })
 
+-- The desktop widgets come and go with the windows over them, and fade in
+-- on their own; the edit mode covers the screen, where a pop-in would
+-- scale every widget at once.
+hl.layer_rule({ match = { namespace = "^(quickshell:widgets|quickshell:widget-editor)$" }, no_anim = true })
+
 -- Hyprland draws the layers of a level by descending order, so the lowest
 -- order is drawn last, on top (0.56.2, Renderer.cpp arrangeLayersForMonitor).
 

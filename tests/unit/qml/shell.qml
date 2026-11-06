@@ -60,6 +60,10 @@ ShellRoot {
         check("shorten: short", Theme.shorten("kitty", 8), "kitty");
         check("shorten: long", Theme.shorten("abcdefghij", 5), "abcd…");
         check("fit: no screen", Theme.fit(null), 1);
+        check("fit: the laptop panel and the desk monitor alike", [Theme.fit({ width: 1920, height: 1200 }),
+              Theme.fit({ width: 2560, height: 1440 })], [1, 1]);
+        check("fit: a larger screen by its area", Theme.fit({ width: 3840, height: 2160 }), 1.5);
+        check("fit: capped", Theme.fit({ width: 7680, height: 4320 }), 2);
     }
 
     function testNotifications() {
@@ -578,6 +582,88 @@ ShellRoot {
         ];
     }
 
+    // The system widget against the stand-in /sys/class/drm of
+    // tests/unit/qml.sh (two cards report VRAM, an integrated one's carve-out
+    // and a discrete one's 8 GiB, a quarter used, the discrete one its load
+    // in per cent; a third only its idle time), its parsers on given text,
+    // and the calendar's day under the pointer.
+    readonly property string drmDir: Quickshell.env("BAR_DRM_DIR") ?? ""
+    property var vramWidget: null
+    property var calendarWidget: null
+    property var heroes: []
+
+    function vramSteps() {
+        const widget = 'import QtQuick; import qs.modules; SystemWidget { width: 356; height: 170; size: "medium"; '
+            + 'options: ({ cpu: true, gpu: true, memory: false, vram: true, battery: false, disk: false, tmpfs: false, network: true }) }';
+        return [
+            { wait: 0, run: () => {
+                root.vramWidget = Qt.createQmlObject(widget, root, "vram");
+                root.calendarWidget = Qt.createQmlObject('import QtQuick; import qs.modules; CalendarWidget { width: 356; height: 170; '
+                    + 'size: "medium"; options: ({ mondayFirst: true }) }', root, "calendar");
+                root.heroes = [["08", "00", 138, 65], ["5", "00", 138, 96], ["-12°", "00°", 138, 92]].map(h =>
+                    Qt.createQmlObject(`import QtQuick; import qs.modules; HeroText { text: "${h[0]}"; probe: "${h[1]}"; width: ${h[2]}; height: ${h[3]} }`,
+                                       root, "hero"));
+            } },
+            { wait: 2600, run: () => {
+                const w = SystemReadings;
+                const rows = root.vramWidget.rows;
+                check("system: the rows asked for, in the user's order; VRAM from the card with the most, a quarter used; its load in per cent",
+                      [rows.map(r => r.label), rows.find(r => r.key === "vram")?.value, w.vramDir.endsWith("/card1/device"),
+                       w.busyKind, rows.find(r => r.key === "gpu")?.value, (w.trails.gpu?.v ?? []).length > 1, w.users],
+                      [["CPU", "Network Rx", "Network Tx", "GPU load", "VRAM"], 0.25, true, "percent", 0.37, true, 1]);
+                check("system: /proc/net/dev without the loopback and the virtual links",
+                      w.netTotals("Inter-|   Receive |  Transmit\n face |bytes packets\n    lo: 100 1 0 0 0 0 0 0 100 1 0 0 0 0 0 0\n"
+                                  + "  wlo1: 5000 10 0 0 0 0 0 0 700 5 0 0 0 0 0 0\n docker0: 9 9 0 0 0 0 0 0 9 9 0 0 0 0 0 0\n"
+                                  + "  eth0: 1000 1 0 0 0 0 0 0 300 1 0 0 0 0 0 0\n"),
+                      { rx: 6000, tx: 1000 });
+                check("system: df's root and a tmpfs /tmp; a /tmp on disk is no tmpfs",
+                      [w.mounts("Type 1B-blocks Used Mounted on\nbtrfs 1000 250 /\ntmpfs 400 100 /tmp\n"),
+                       w.mounts("Type 1B-blocks Used Mounted on\nbtrfs 1000 250 /\nbtrfs 1000 250 /tmp\n").tmp],
+                      [{ disk: { size: 1000, used: 250 }, tmp: { size: 400, used: 100 } }, null]);
+                check("system: sizes as df -h writes them, rates in three figures at most",
+                      [w.bytes(511017222144), w.bytes(8119660544), w.bytes(512), w.rate(0), w.rate(1536), w.rate(999.6 * 1024),
+                       w.rate(12.4 * 1048576)],
+                      ["476G", "7.6G", "512B", { text: "0", unit: "B/s" }, { text: "1.5", unit: "K/s" }, { text: "1.0", unit: "M/s" },
+                       { text: "12", unit: "M/s" }]);
+                const c = root.calendarWidget;
+                const g = c.grid;
+                const at = day => {
+                    const i = c.leading + day - 1;
+                    return Qt.point(g.x + (i % 7 + 0.4) * g.pitch, g.y + (Math.floor(i / 7) + 0.4) * g.pitch);
+                };
+                const read = p => { c.pointer = p; return c.hoveredDay; };
+                check("calendar: the day under the pointer, none off the month or without one",
+                      [read(at(1)), read(at(c.days)), read(Qt.point(20, 80)), read(null)], [1, c.days, 0, 0]);
+                check("calendar: its distance in D-day notation",
+                      [c.dayOffset(c.today), c.dayOffset(c.today + 3), c.dayOffset(c.today - 2)], ["D-Day", "D+3", "D-2"]);
+                c.pointer = at(1);
+                c.pointer = null;
+                check("calendar: the distance read last stays as the pointer leaves, to fade out as it was",
+                      [c.hoveredDay, c.lastOffset], [0, c.dayOffset(1)]);
+                const fits = root.heroes.map(h => h.fitSize > 0 && h.inkHeight <= h.height + 0.5);
+                check("hero: every figure inside its box", fits, [true, true, true]);
+                check("hero: a short figure takes the height its probe allows, a wide one shrinks",
+                      [root.heroes[0].inkHeight > 55, root.heroes[2].fitSize < root.heroes[1].fitSize], [true, true]);
+                root.vramWidget.destroy();
+                root.vramWidget = null;
+                root.calendarWidget.destroy();
+                root.calendarWidget = null;
+            } },
+            { wait: 200, run: () => {
+                const w = SystemReadings;
+                const kept = (w.trails.gpu?.v ?? []).length;
+                check("system: hidden, nothing is read but the charts stay", [w.users, w.sampling, kept > 1], [0, false, true]);
+                w.trim(Date.now() + w.span + 1);
+                check("system: past the charts' span they hold nothing", Object.keys(w.trails).length, 0);
+                w.forget(true);
+                check("system: with no system widget placed everything goes", [w.probed, w.vramFound, w.busyFound], [false, false, false]);
+                for (const h of root.heroes)
+                    h.destroy();
+                root.heroes = [];
+            } }
+        ];
+    }
+
     readonly property string weatherDir: Quickshell.env("WEATHER_TEST_DIR") ?? ""
     property int weatherCallCount: 0
 
@@ -710,6 +796,105 @@ ShellRoot {
             }
             root.runSteps();
         }
+    }
+
+    function testWidgets() {
+        check("widgets: unknown option keys dropped, booleans kept",
+              Widgets.validOptions("clock", { hours24: false, seconds: true, evil: 1 }), { hours24: false });
+        check("widgets: no options for a kind there is not", [Widgets.validOptions("stocks", {}), Widgets.validOptions("evil", {})],
+              [null, null]);
+
+        const W = 1920, H = 1080, top = 40;
+        const apart = list => !list.some((a, i) => list.some((b, j) => i < j && Widgets.overlaps(a, b, 0)));
+        const inside = (list, w, h) => list.every(a => a.x >= 0 && a.y >= top && a.x + a.w <= w && a.y + a.h <= h);
+        const r = Widgets.rects(Widgets.defaults.layout, W, H, top);
+        check("widgets: every default drawn, apart, inside", [r.length, apart(r), inside(r, W, H)],
+              [Widgets.defaults.layout.length, true, true]);
+        check("widgets: a cell is an eighth of the shorter side", r.find(a => a.size === "small").h, Math.round(H * 0.125));
+        const g = Widgets.grid(2560, 1440, 37);
+        check("widgets: the reference screen's grid", [g.cell, g.gap, g.pitch, g.x0, g.y0, g.cols, g.rows],
+              [150, 14, 164, 14, 51, 15, 8]);
+        check("widgets: a cell the laptop panel's at the bar's fit, an eighth of a smaller screen's side",
+              [[2560, 1440], [1920, 1200], [3840, 2160], [1366, 768]].map(s => Widgets.grid(s[0], s[1], 37).cell),
+              [150, 150, 225, 96]);
+        const ids = list => ["calendar", "weather", "clock", "system"].map(id => list.find(a => a.id === id));
+        const ref = ids(Widgets.rects(Widgets.defaults.layout, 2560, 1440, 37));
+        check("widgets: the defaults on the reference screen, a gap from the edges and the bar",
+              [ref[0].x, ref[0].y, ref[0].w, ref[1].y, ref[2].x, ref[3].y, ref[3].w], [14, 51, 314, 379, 178, 543, 314]);
+        const lined = list => [list[1].y - (list[0].y + list[0].h), list[2].x - (list[1].x + list[1].w),
+                               list[3].y - (list[1].y + list[1].h), list[0].x + list[0].w === list[2].x + list[2].w,
+                               list[3].x + list[3].w === list[0].x + list[0].w, list[1].y === list[2].y];
+        check("widgets: the defaults one gap apart, their edges in line", lined(ref), [14, 14, 14, true, true, true]);
+        const panel = ids(Widgets.rects(Widgets.defaults.layout, 1920, 1200, 31));
+        check("widgets: carried to the laptop's panel, the same grid smaller",
+              [panel[1].w, panel[0].x, panel[0].y].concat(lined(panel)), [150, 14, 45, 14, 14, 14, true, true, true]);
+        const spans = (w, h) => {
+            const s = Widgets.rects([{ id: "s", kind: "calendar", size: "small", col: 0, row: 0 },
+                                     { id: "m", kind: "calendar", size: "medium", col: 0, row: 1 },
+                                     { id: "l", kind: "calendar", size: "large", col: 0, row: 2 }], w, h, 30);
+            const gap = Widgets.grid(w, h, 30).gap;
+            return [s[1].w, s[2].w, s[2].h].every(v => v === 2 * s[0].w + gap) && s[1].h === s[0].h;
+        };
+        check("widgets: a medium or large one spans two cells and their gap", [spans(2560, 1440), spans(1920, 1200)], [true, true]);
+        const p = Widgets.rects(Widgets.defaults.layout, 1080, 1920, top);
+        check("widgets: carried to a portrait screen, apart, inside", [p.length, apart(p), inside(p, 1080, 1920)],
+              [Widgets.defaults.layout.length, true, true]);
+        const edge = Widgets.rects([{ id: "e", kind: "clock", size: "small", col: -1, row: -1 },
+                                    { id: "f", kind: "clock", size: "medium", col: -1, row: 0 }], 2560, 1440, 37);
+        check("widgets: counted from the right and the bottom, flush with those margins on any width",
+              [2560 - (edge[0].x + edge[0].w), 1440 - (edge[0].y + edge[0].h), 2560 - (edge[1].x + edge[1].w),
+               1920 - (Widgets.rects([{ id: "e", kind: "clock", size: "small", col: -1, row: 0 }], 1920, 1200, 31)[0].x + 150)],
+              [14, 14, 14, 14]);
+        const two = Widgets.rects([{ id: "a", kind: "clock", size: "small", col: 1, row: 1 },
+                                   { id: "b", kind: "clock", size: "small", col: 1, row: 1 }], W, H, top);
+        check("widgets: of two at one place the later moves, the first stays",
+              [two[0].col, two[0].row, apart(two), Math.abs(two[1].x - two[0].x) + Math.abs(two[1].y - two[0].y) <= Widgets.grid(W, H, top).pitch],
+              [1, 1, true, true]);
+        const far = Widgets.rects([{ id: "z", kind: "clock", size: "medium", col: 40, row: -40 }], W, H, top)[0];
+        check("widgets: a place past the grid comes to its last cell", [far.col, far.row, inside([far], W, H)],
+              [Widgets.grid(W, H, top).cols - 2, -Widgets.grid(W, H, top).rows, true]);
+
+        check("widgets: the clock placed by default", Widgets.placed("clock"), true);
+        check("widgets: no such kind", Widgets.placed("evil"), false);
+        Widgets.adopt(JSON.stringify({ mode: "rm -rf", layout: [{ id: "x", kind: "evil", size: "small", col: 0, row: 0 },
+            { id: "c", kind: "clock", size: "huge", col: 0, row: 0 }, { id: "ok", kind: "clock", size: "small", col: 3, row: -2 },
+            { id: "s", kind: "stocks", size: "medium", col: 0, row: 1 }, { id: "n", kind: "clock", size: "small", col: 0.5, row: 1 },
+            { id: "o", kind: "clock", size: "small", col: 999, row: 1, options: { hours24: "rm -rf", evil: 1 } }] }));
+        check("widgets: a bad or retired kind, a bad size or place dropped, far places bounded",
+              Widgets.layout.map(it => [it.id, it.col, it.row]), [["ok", 3, -2], ["o", 63, 1]]);
+        check("widgets: options that are not switches fall back, unknown ones go", Widgets.optionsOf(Widgets.layout[1]),
+              { hours24: true });
+        check("widgets: a bad mode ignored", Widgets.mode, "mirror");
+        Widgets.adopt(JSON.stringify({ version: 1, mode: "mirror", layout: [
+            { id: "clock", kind: "clock", size: "small", x: 0.008203125, y: 0.18958333333333333, moved: true },
+            { id: "calendar", kind: "calendar", size: "medium", x: 0.008203125, y: 0.04375, moved: true },
+            { id: "weather", kind: "weather", size: "small", x: 0.090234375, y: 0.18958333333333333, moved: true },
+            { id: "system", kind: "system", size: "medium", x: 0.008203125, y: 0.33541666666666664, moved: true },
+            { id: "corner", kind: "clock", size: "small", x: 0.92, y: 0.86, moved: true }] }));
+        check("widgets: version 1's shares taken to the nearest places, from the nearer edges",
+              Widgets.layout.map(it => [it.id, it.col, it.row]),
+              [["clock", 0, 1], ["calendar", 0, 0], ["weather", 1, 1], ["system", 0, 3], ["corner", -1, -1]]);
+        Widgets.adopt(JSON.stringify({ mode: "mirror", layout: [
+            { id: "clock", kind: "clock", size: "medium", col: 5, row: 5, options: { hours24: false } },
+            { id: "calendar", kind: "calendar", size: "small", col: -2, row: 3, moved: true }] }));
+        check("widgets: one never moved stands where and as large as the defaults put it, its options kept",
+              [Widgets.layout[0].col, Widgets.layout[0].row, Widgets.layout[0].size, Widgets.optionsOf(Widgets.layout[0]).hours24],
+              [1, 2, "small", false]);
+        check("widgets: one moved keeps its place and size", [Widgets.layout[1].col, Widgets.layout[1].row, Widgets.layout[1].size, Widgets.layout[1].moved],
+              [-2, 3, "small", true]);
+        Widgets.layout = Widgets.defaults.layout;
+        const drop = (x, y) => Widgets.landing(Quickshell.screens[0]?.name ?? "", "clock", x, y, 2560, 1440, 37);
+        const leftTop = drop(220, 460);
+        const rightBottom = drop(2560 - 190, 1440 - 200);
+        check("widgets: a drop snaps to the nearest place, counted from the nearer edges",
+              [leftTop.col, leftTop.row, rightBottom.col, rightBottom.row, rightBottom.x + rightBottom.w, rightBottom.y + rightBottom.h],
+              [1, 2, -1, -1, 2546, 1426]);
+        const onCalendar = drop(20, 60);
+        check("widgets: a drop on another widget goes to the free place nearest", apart(Widgets.rects(Widgets.defaults.layout, 2560, 1440, 37)
+              .filter(it => it.id !== "clock").concat([onCalendar])), true);
+        Widgets.layout = Widgets.layout.filter(it => it.id === "clock");
+        check("widgets: a removed kind no longer placed", [Widgets.placed("clock"), Widgets.placed("system")], [true, false]);
+        Widgets.layout = Widgets.defaults.layout;
     }
 
     function testBadge() {
@@ -1322,7 +1507,9 @@ ShellRoot {
 
         onTriggered: {
             const suites = [root.testTheme, root.testNotifications, root.testScreensaver, root.testKeyFeed,
-                            root.testBrightness, root.testCamera, root.testBadge, root.testApps, root.testTray,
+                            root.testBrightness, root.testCamera, root.testBadge, root.testControls, root.testSurfaces,
+                            root.testShortcuts, root.testWidgets, root.testLockout,
+                            root.testApps, root.testTray, root.testBarOptions,
                             root.testScreenShare, root.testIsland];
             if (modules.item)
                 suites.push(() => modules.item.testLauncher(root.check), () => modules.item.testDisplays(root.check));
@@ -1345,7 +1532,10 @@ ShellRoot {
                 .concat(root.islandSteps())
                 .concat(root.camDir !== "" ? root.cameraSteps() : [])
                 .concat(root.weatherDir !== "" ? root.weatherSteps() : [])
-                .concat(root.trayDir !== "" ? root.traySteps() : []);
+                .concat(root.drmDir !== "" ? root.vramSteps() : [])
+                .concat(root.trayDir !== "" ? root.traySteps() : [])
+                // Its programs are looked for as it starts, in a process.
+                .concat(modules.item ? [{ wait: 800, run: () => modules.item.testSessionMenu(root.check) }] : []);
             if (root.camDir === "")
                 console.log("[test] SKIP camera events: no CAMERA_TEST_DIR");
             if (root.keyDir === "")
@@ -1354,6 +1544,8 @@ ShellRoot {
                 console.log("[test] SKIP input method: no IME_TEST_DIR");
             if (root.weatherDir === "")
                 console.log("[test] SKIP weather: no WEATHER_TEST_DIR");
+            if (root.drmDir === "")
+                console.log("[test] SKIP system VRAM: no BAR_DRM_DIR");
             if (root.trayDir === "")
                 console.log("[test] SKIP tray hiders: no TRAY_TEST_DIR");
             root.runSteps();

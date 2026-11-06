@@ -322,6 +322,45 @@ probe = '''
             Calls.found = list;
         }
 
+        // A screen's desktop widgets as the bar lays them out: the grid's cell
+        // and gap, the bar's height they start under, and the box round them
+        // all, in that screen's pixels.
+        function widgetBox(name: string): string {
+            let screen = null;
+            for (let i = 0; i < Quickshell.screens.length; i++) {
+                if (Quickshell.screens[i].name === name)
+                    screen = Quickshell.screens[i];
+            }
+            if (!screen)
+                return "{}";
+            const top = Math.ceil(Theme.barHeight * Theme.fit(screen));
+            const g = Widgets.grid(screen.width, screen.height, top);
+            const rs = Widgets.rects(Widgets.itemsFor(name), screen.width, screen.height, top);
+            let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+            for (const r of rs) {
+                x0 = Math.min(x0, r.x);
+                y0 = Math.min(y0, r.y);
+                x1 = Math.max(x1, r.x + r.w);
+                y1 = Math.max(y1, r.y + r.h);
+            }
+            return JSON.stringify({ cell: g.cell, gap: g.gap, top: top, count: rs.length, loaded: Widgets.loaded,
+                                    x: Math.round(x0), y: Math.round(y0), w: Math.round(x1 - x0), h: Math.round(y1 - y0) });
+        }
+
+        // Where the clock's month belongs on HEADLESS-2, in its pixels: the
+        // corner the other panels at the top right stand at (CalendarPopup).
+        function monthPlace(): string {
+            for (let i = 0; i < e2eBars.instances.length; i++) {
+                const bar = e2eBars.instances[i];
+                if (bar.screen && bar.screen.name === "HEADLESS-2") {
+                    const fit = Theme.fit(bar.screen);
+                    return JSON.stringify({ right: Math.round(bar.width - (Theme.edgeMarginRight + Theme.menuItemPadX) * fit),
+                                            top: Math.round(bar.height + Theme.notifBarGap * fit) });
+                }
+            }
+            return "{}";
+        }
+
         // HEADLESS-2's status items, left to right, as boxes in that screen's
         // pixels: a glyph and its value are one box, for the gap check.
         function statusBoxes(): string {

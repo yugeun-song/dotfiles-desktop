@@ -10,6 +10,8 @@ Singleton {
     // -1 = not sampled yet; 0% is a real reading.
     property real cpuUsage: -1
     property real memUsage: -1
+    // In bytes, for the system widget's memory size; 0 until read.
+    property real memTotal: 0
     property var previousCpu: null
 
     // Separate stamps for Theme.stale(): the two files can fail independently.
@@ -57,6 +59,7 @@ Singleton {
         if (total > 0 && availableField) {
             const available = Number(availableField[1]);
             root.memUsage = (total - available) / total;
+            root.memTotal = total * 1024;
             root.memAsOf = Date.now();
         }
 

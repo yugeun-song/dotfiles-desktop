@@ -240,7 +240,9 @@ Row {
         onActivated: Weather.togglePanel(weatherItem.QsWindow.window?.screen ?? null)
     }
 
-    // No glyph.
+    // No glyph. Hovered, the month opens under it (CalendarPopup), taken out
+    // for the desktop's calendar widget and back the same day (the user,
+    // 2026-11-05).
     StatusItem {
         id: clockItem
 

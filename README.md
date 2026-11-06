@@ -256,6 +256,13 @@ session dialog, the Displays panel and the wallpaper picker
 set through `hypr/scripts/wallpaper.sh`). Only the session dialog dims the
 screen; which panels may stand together is `services/Surfaces.qml`.
 
+Desktop widgets (`modules/WidgetDesk.qml`, rules in `services/Widgets.qml`):
+a clock, a calendar, the weather and the machine, drawn only on a screen
+whose desktop is in view and holding nothing while hidden. `Super+Alt+W`
+moves and resizes them, `Super+Ctrl+W` holds the layout mode and the resets,
+and a click opens a widget's own options; the layout is kept in
+`~/.local/state/quickshell/bar/widgets.json`.
+
 The bar writes no core file when it crashes and keeps no detailed log
 (window titles, track titles); `systemctl --user set-environment
 BAR_DETAILED_LOGS=1` and `bar --restart` bring the log back for chasing a

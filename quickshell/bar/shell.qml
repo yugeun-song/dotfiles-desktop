@@ -58,6 +58,9 @@ ShellRoot {
         id: weatherPanel
     }
 
+    // The desktop widgets: windows only on a screen whose desktop is in view.
+    WidgetDesk {}
+
     // A video wallpaper where wallpaper.sh linked one; nothing without it.
     VideoWallpaper {}
 

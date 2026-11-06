@@ -30,7 +30,11 @@ Singleton {
     // minFit: below it the bar went unreadable (0.79 on the 1920x1200 panel,
     // an 11 px label); capped against a huge logical screen. Keep in step with
     // config/monitors.lua, which uses the same factor and bounds; the lock
-    // screen keeps its own proportions (hypr/scripts/lock-fit.sh).
+    // screen keeps its own proportions (hypr/scripts/lock-fit.sh). So the
+    // laptop panel and the desk monitor draw the bar alike in pixels, and the
+    // desktop widgets follow it (Widgets.grid): the user's call (2026-11-05)
+    // after the panel's share of the desk monitor's height drew it there a
+    // fifth larger.
     readonly property real minFit: 1
     readonly property real maxFit: 2
 
@@ -130,9 +134,9 @@ Singleton {
     readonly property color menuHover:   Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.12)
 
     // ---------------------------------------------------------------------
-    // Floating surfaces (menus, the calendar, toasts, overlays) use the bar's
-    // own colours so they read as the bar, not as another program; the island
-    // has its own (below).
+    // Floating surfaces (menus, the calendar, the desktop widgets, toasts,
+    // overlays) use the bar's own colours so they read as the bar, not as
+    // another program; the island has its own (below).
     // ---------------------------------------------------------------------
     readonly property color surfaceBg:    root.bg
     readonly property color surfaceLine:  root.menuBarLine
@@ -332,7 +336,6 @@ Singleton {
     // (hypr/scripts/lock-media.py, the user, 2026-10-26): keep the two in step.
     readonly property int mediaCardWidth:  root.px(540)
     // No height token: popups are content plus popupPad on all four sides.
-    // Shared with the calendar.
     readonly property int popupPad: root.px(18)
 
     readonly property int mediaArtSize:   root.px(52)
@@ -358,16 +361,6 @@ Singleton {
     readonly property int mediaControlEdge: root.px(21)
     readonly property int mediaControlCell: root.px(32)
     readonly property int mediaControlGap:  root.px(18)
-
-    // Calendar popup. The heading-to-grid gap sets its width; the day is at
-    // display size so the date reads at a glance.
-    readonly property int calendarGap:         root.px(30)
-    readonly property int calendarCellSize:    root.px(22)
-    readonly property int calendarMonthSize:   root.px(20)
-    readonly property int calendarTodaySize:   root.px(32)
-    readonly property int calendarTodayLabel:  root.px(13)
-    readonly property int calendarDaySize:     root.px(13)
-    readonly property int calendarWeekdaySize: root.px(11)
 
     readonly property int chipSpacing: root.px(3)
 
@@ -545,6 +538,23 @@ Singleton {
     // The cheatsheet's keycaps (modules/ShortcutChord.qml): the key overlay's
     // caps at this share, a list's size.
     readonly property real shortcutCapSize: 0.62
+
+    // ---------------------------------------------------------------------
+    // Desktop widgets (modules/WidgetDesk.qml). Their content is drawn in
+    // the reference pixels of a 170 px small widget and scaled by the share
+    // of the screen a widget takes (Widgets.scaleFor), so these are not
+    // px(): the card's share of the screen is its size.
+    // ---------------------------------------------------------------------
+    readonly property int widgetRadius: 22
+    readonly property int widgetPad: 16
+    readonly property int widgetTitleSize: 13
+    readonly property int widgetSmallText: 11
+    // The editor's and the modals' controls.
+    readonly property int widgetEditorBar: root.px(44)
+    readonly property int widgetOptionsWidth: root.px(440)
+    readonly property string iconPlus:       String.fromCodePoint(0xF0415)  // md-plus
+    readonly property string iconMinus:      String.fromCodePoint(0xF0374)  // md-minus
+    readonly property string iconWidgets:    String.fromCodePoint(0xF056E)  // md-view_dashboard
 
     // ---------------------------------------------------------------------
     // The key overlay (modules/KeyOverlay.qml): a strip of fixed size.
