@@ -424,10 +424,24 @@ Icons are [Nerd Fonts](https://github.com/ryanoasis/nerd-fonts) glyphs,
 written here as code points and drawn from the installed font: Material
 Design Icons (Pictogrammers Free License, Apache-2.0), Font Awesome Free
 (icons CC BY 4.0), Octicons (MIT) and, for the badge,
-[Font Logos](https://github.com/Lukas-W/font-logos) (Unlicense). No glyph or
-logo artwork is copied here. Each badge mark is its owner's trademark and
+[Font Logos](https://github.com/Lukas-W/font-logos) (Unlicense). No font glyph
+or logo artwork is copied here. Each badge mark is its owner's trademark and
 stands only for that distribution, as Font Logos asks; no endorsement is
 implied.
+
+The file manager's line icons (`kde/icons/SpaceduckLines`, written by
+`kde/icons/build.py`) are [Lucide](https://lucide.dev)'s (ISC; partly from
+Feather, MIT), their paths unchanged and recoloured for KDE; Lucide's
+licence is kept beside them. `install.sh` installs them only once
+`kde/icons/verify.py` has checked them by hash against Lucide's official Git
+repository (`kde/icons/upstream.lock`), and removes them on a mismatch.
+
+Its file icons, while folders stay the line ones, are
+[Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme)'s
+(MIT). They hold other projects' logos, so they are not in this repository:
+`install.sh` fetches them from its official Git repository, checks them by hash
+(`kde/icons/files.lock`) and writes the theme with `kde/icons/files.py`;
+`kde/mime/code-files.xml` gives types to the files the system cannot tell apart.
 
 Weather data comes from [Open-Meteo](https://open-meteo.com) under CC BY
 4.0, through its free API for non-commercial use; the place search is its
@@ -435,6 +449,9 @@ geocoding, on [GeoNames](https://www.geonames.org) data (CC BY 4.0).
 
 `tests/e2e/vinput/` holds two Wayland protocol files (virtual keyboard,
 wlroots virtual pointer), each under its own MIT licence, notices intact.
+
+`THIRD_PARTY_NOTICES.md` lists the files here that are others' work and where
+their licence texts are.
 
 Programs and services are named only to say what this configuration works
 with; their names belong to their owners.

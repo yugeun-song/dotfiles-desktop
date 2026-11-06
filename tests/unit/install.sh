@@ -98,6 +98,27 @@ FILL = "#1d89e4"
 sys.exit(1 if os.path.exists("$T/pointer-fails") else 0)
 EOF
     printf 'import sys\nsys.exit(0)\n' >"$T/repo/theme/cursor/emphasise.py"
+    # A theme of a few icons: every run below would compare them all, of some 900.
+    find "$T/repo/kde/icons/SpaceduckLines" -name '*.svg' ! -path '*/scalable/places/folder*.svg' -delete
+    # The icons' check goes to the network; a stand-in logs it, and answers
+    # with the code in $T/verify-code (tests/unit/icons.sh tests the real one).
+    cat >"$T/repo/kde/icons/verify.py" <<EOF
+import os, sys
+if "--builder" in sys.argv:
+    open("$T/calls", "a").write("verify-files\\n")
+    code = int(open("$T/verify-files-code").read()) if os.path.exists("$T/verify-files-code") else 0
+    print({0: "icons: verified", 2: "icons: WRONG: a stand-in's mismatch", 3: "icons: could not ask upstream: a stand-in's silence"}[code])
+    if code == 0:
+        out = sys.argv[sys.argv.index("--out") + 1]
+        os.makedirs(out + "/scalable/mimetypes")
+        open(out + "/index.theme", "w").write("[Icon Theme]\\nName=SpaceduckFiles\\n")
+        open(out + "/scalable/mimetypes/text-x-csrc.svg", "w").write("<svg/>\\n")
+    sys.exit(code)
+open("$T/calls", "a").write("verify-icons\\n")
+code = int(open("$T/verify-code").read()) if os.path.exists("$T/verify-code") else 0
+print({0: "icons: verified", 2: "icons: WRONG: a stand-in's mismatch", 3: "icons: could not ask upstream: a stand-in's silence"}[code])
+sys.exit(code)
+EOF
     git -C "$T/repo" init -q
     git -C "$T/repo" add -A
     git -C "$T/repo" -c user.name=test -c user.email=test@test commit -qm initial

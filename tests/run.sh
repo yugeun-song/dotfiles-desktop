@@ -105,6 +105,7 @@ tests/unit/lock.sh || failed=1
 tests/unit/wallpaper.sh || failed=1
 tests/unit/install.sh || failed=1
 tests/unit/kvantum.sh || failed=1
+tests/unit/icons.sh || failed=1
     if out=$(python3 -I "tests/unit/test_$name.py" 2>&1); then
         echo "PASS  $name: $(grep -oE '^Ran [0-9]+ tests' <<<"$out" | sed 's/^Ran //')"
     else

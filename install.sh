@@ -1054,6 +1054,131 @@ seed_key() {
 # Only the installed copy is ever removed, never the checkout's: the next run
 # checks that again, and it stays out until it passes.
 ICONS_VERIFIED="$STATE/dotfiles-desktop/icons-verified"
+tree_hash() {
+    [[ -d "$1" ]] || return 0
+    (cd -- "$1" && find . \( -type f -o -type l \) -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum | sha256sum | cut -d' ' -f1)
+}
+icon_theme() {
+    local from="$SRC/kde/icons/SpaceduckLines" to="$DATA/icons/SpaceduckLines"
+    local want have key seen="" seen_tree="" why code=0
+    want=$(tree_hash "$from")
+    have=$(tree_hash "$to")
+    key=$(cat -- "$SRC/kde/icons/upstream.lock" "$SRC/kde/icons/build.py" "$SRC/kde/icons/verify.py" | sha256sum | cut -d' ' -f1)
+    if [[ -r "$ICONS_VERIFIED" ]]; then read -r seen seen_tree <"$ICONS_VERIFIED" || :; fi
+    if (( CHECK )); then
+        if [[ "$seen" != "$key" || "$seen_tree" != "$want" ]]; then
+            todo "${YELLOW}the line icons are not verified against Lucide's repository yet (an install does it)$RESET"
+        fi
+        if [[ "$have" == "$want" ]]; then same; else mirror_dir "$from" "$to"; fi
+        return 0
+    fi
+    if (( FORCE_ALL )) || [[ "$seen" != "$key" || "$seen_tree" != "$want" ]]; then
+        why=$(python3 -I "$SRC/kde/icons/verify.py" 2>&1) || code=$?
+        case $code in
+            0)
+                mkdir -p -- "${ICONS_VERIFIED%/*}"
+                printf '%s %s\n' "$key" "$want" >"$ICONS_VERIFIED"
+                branch "$GREEN✓$RESET $why"
+                ;;
+            2)
+                rm -rf -- "$to"
+                rm -f -- "$ICONS_VERIFIED"
+                branch "$RED✗ the line icons do not match Lucide's official repository; the installed ones were removed$RESET"
+                LEFT+=("$why")
+                return 0
+                ;;
+            *)
+                # No answer says nothing against what passed before, but what
+                # has changed since it passed is no longer that.
+                if [[ -n "$seen_tree" && -n "$have" && "$have" != "$seen_tree" ]]; then
+                    rm -rf -- "$to"
+                    branch "$RED✗ the installed line icons are not the ones verified; removed$RESET"
+                fi
+                branch "${YELLOW}the line icons could not be verified, so nothing new of them is installed$RESET"
+                LEFT+=("the line icons, once Lucide's repository can be reached: ./install.sh (${why##*$'\n'})")
+                return 0
+                ;;
+        esac
+    fi
+    # Only what passed stays: a changed or extra file goes with the rest.
+    if [[ -n "$have" && "$have" != "$want" ]]; then
+        rm -rf -- "$to"
+        if [[ "$have" != "$seen_tree" ]]; then
+            branch "${YELLOW}the installed line icons were not the ones verified; replaced$RESET"
+        fi
+    fi
+    # The same tree, file for file: nothing to compare one by one, of some 900.
+    if [[ "$have" == "$want" ]]; then
+        same
+        return 0
+    fi
+    mirror_dir "$from" "$to"
+}
+
+# Each kind of file in its own icon (the user, 2026-11-06: as an editor's icon
+# theme does; kde/icons/files.py says whose and why). Its drawings are not in
+# this repository, so the theme is written here, from the files verify.py has
+# fetched from the official Git repository and checked by hash against
+# kde/icons/files.lock: only when the lock, the table, the MIME database they name
+# or the installed copy is new, or after --force, so an install with nothing new
+# asks nothing of the network. A mismatch removes it; no answer installs nothing
+# new. KDE then stays on the line icons, the theme this one sits over and copies a
+# few of, so without those it goes too.
+FILE_ICONS_VERIFIED="$STATE/dotfiles-desktop/file-icons-verified"
+file_icons() {
+    local to="$DATA/icons/SpaceduckFiles" have key seen="" seen_tree="" why code=0 tmp
+    if [[ ! -d "$DATA/icons/SpaceduckLines" ]]; then
+        if (( ! CHECK )) && [[ -e "$to" ]]; then
+            rm -rf -- "$to"
+            rm -f -- "$FILE_ICONS_VERIFIED"
+            branch "${YELLOW}the file icons went with the line icons they sit over$RESET"
+        fi
+        return 0
+    fi
+    have=$(tree_hash "$to")
+    key=$( { cat -- "$SRC/kde/icons/files.lock" "$SRC/kde/icons/files.py" "$SRC/kde/icons/verify.py"
+             tree_hash "$SRC/kde/icons/SpaceduckLines"
+             cat -- /usr/share/mime/types /usr/share/mime/generic-icons 2>/dev/null || :; } | sha256sum | cut -d' ' -f1)
+    if [[ -r "$FILE_ICONS_VERIFIED" ]]; then read -r seen seen_tree <"$FILE_ICONS_VERIFIED" || :; fi
+    if [[ -n "$have" && "$seen" == "$key" && "$seen_tree" == "$have" ]] && { (( CHECK )) || (( ! FORCE_ALL )); }; then
+        same
+        return 0
+    fi
+    if (( CHECK )); then
+        todo "${YELLOW}the file icons are not built and verified against their repository yet (an install does it)$RESET"
+        return 0
+    fi
+    tmp=$(mktemp -d) || stop "could not make a temporary directory"
+    why=$(python3 -I "$SRC/kde/icons/verify.py" --builder "$SRC/kde/icons/files.py" --lock "$SRC/kde/icons/files.lock" --out "$tmp/theme" 2>&1) || code=$?
+    case $code in
+        0)
+            rm -rf -- "$to"
+            mkdir -p -- "${to%/*}" "${FILE_ICONS_VERIFIED%/*}"
+            mv -- "$tmp/theme" "$to" || stop "could not install $(tilde "$to")"
+            printf '%s %s\n' "$key" "$(tree_hash "$to")" >"$FILE_ICONS_VERIFIED"
+            wrote "$(tilde "$to"): $why"
+            ;;
+        2)
+            rm -rf -- "$to"
+            rm -f -- "$FILE_ICONS_VERIFIED"
+            branch "$RED✗ the file icons do not match their official repository; the installed ones were removed$RESET"
+            LEFT+=("$why")
+            ;;
+        *)
+            if [[ -n "$have" && "$have" != "$seen_tree" ]]; then
+                rm -rf -- "$to"
+                branch "$RED✗ the installed file icons are not the ones verified; removed$RESET"
+            fi
+            branch "${YELLOW}the file icons could not be verified, so nothing new of them is installed$RESET"
+            LEFT+=("the file icons, once their repository can be reached: ./install.sh (${why##*$'\n'})")
+            ;;
+    esac
+    rm -rf -- "$tmp"
+}
+
+# What opens text, once Neovim is there: kde/default-editor.py says why each type
+# is named, and leaves one anybody has named. Nothing to ask of the network, and
+# no rebuild of KDE's service cache: it looks at this file itself.
 dolphin_look() {
     local rc="$CONFIG/dolphinrc" font="Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" bar
     command -v dolphin >/dev/null 2>&1 || return 0
@@ -1584,6 +1709,25 @@ seed "$SRC/gtk/gtk-3.0-settings.ini" "$CONFIG/gtk-3.0/settings.ini"
 seed "$SRC/gtk/gtk-4.0-settings.ini" "$CONFIG/gtk-4.0/settings.ini"
 seed "$SRC/kde/kdeglobals" "$CONFIG/kdeglobals"
 kde_style
+# KDE's icon theme: the file icons over the line icons, over the Breeze an older
+# seed named; the next one down when one is not there (not verified, or removed
+# above). A theme the user chose in KDE's settings is left alone.
+if command -v kreadconfig6 >/dev/null 2>&1 && command -v kwriteconfig6 >/dev/null 2>&1; then
+    icons_now=$(kreadconfig6 --file "$CONFIG/kdeglobals" --group Icons --key Theme 2>/dev/null) || icons_now=""
+    if [[ -d "$DATA/icons/SpaceduckLines" && -d "$DATA/icons/SpaceduckFiles" ]]; then
+        seed_key "$CONFIG/kdeglobals" Icons Theme SpaceduckFiles "$([[ "$icons_now" == breeze-dark ]] && echo breeze-dark || echo SpaceduckLines)"
+    elif [[ -d "$DATA/icons/SpaceduckLines" ]]; then
+        if [[ "$icons_now" == SpaceduckFiles ]]; then
+            (( CHECK )) || { kwriteconfig6 --file "$CONFIG/kdeglobals" --group Icons --key Theme SpaceduckLines \
+                && wrote "$(tilde "$CONFIG/kdeglobals") [Icons] Theme back to the line icons"; }
+        else
+            seed_key "$CONFIG/kdeglobals" Icons Theme SpaceduckLines breeze-dark
+        fi
+    elif (( ! CHECK )) && [[ "$icons_now" == SpaceduckLines || "$icons_now" == SpaceduckFiles ]]; then
+        kwriteconfig6 --file "$CONFIG/kdeglobals" --group Icons --key Theme breeze-dark \
+            && wrote "$(tilde "$CONFIG/kdeglobals") [Icons] Theme back to breeze-dark"
+    fi
+fi
 seed "$SRC/kde/kded5rc" "$CONFIG/kded5rc"
 seed "$SRC/kde/baloofilerc" "$CONFIG/baloofilerc"
 seed "$SRC/kde/SpaceduckDark.colors" "$DATA/color-schemes/SpaceduckDark.colors"
