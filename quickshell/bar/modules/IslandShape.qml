@@ -10,7 +10,9 @@ import qs.services
 // Top corners round (`round`, the pill's) or flared into the screen's top
 // edge (`ear`, the grown island's, as a notch flares into the bezel), never
 // both; lower corners `bottomRound`. Black to its edge with no rim, as in the
-// user's references (Theme.islandShadow sets it off). Laid out in the
+// user's references (Theme.islandShadow sets it off); `fill` lifts the grown
+// island to a dark grey where it hangs over a ground too dark for black
+// (MediaPopup, Appearance.islandFill; the user, 2026-11-11). Laid out in the
 // parent's coordinates, the flares outside the body; turned over for a bar at
 // the bottom.
 Shape {
@@ -23,6 +25,7 @@ Shape {
     property real round: 0
     property real ear: 0
     property real bottomRound: 0
+    property color fill: Theme.islandColor
 
     readonly property real w: Math.max(0, root.bodyWidth)
     readonly property real h: Math.max(0, root.bodyHeight)
@@ -49,7 +52,7 @@ Shape {
     }
 
     ShapePath {
-        fillColor: Theme.islandColor
+        fillColor: root.fill
         strokeWidth: -1
         startX: root.x0
         startY: root.y0 + root.corner

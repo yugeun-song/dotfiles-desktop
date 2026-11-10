@@ -154,7 +154,9 @@ def describe(block):
     if kind == "shape":
         return "island", {
             "size": numbers(keys.get("size", "0, 0")) or [0, 0],
-            "color": colour(keys.get("color", "")) or "#ff0f111b",
+            # Black, as hyprlock.conf's $island_fill is before lock-colours.py
+            # fills it in.
+            "color": colour(keys.get("color", "")) or "#ff000000",
             "rounding": number(keys.get("rounding"), 0),
             "position": numbers(keys.get("position", "0, 0")) or [0, 0],
             "halign": keys.get("halign", "center"),

@@ -304,6 +304,11 @@ Item {
                     readonly property real pillTop: Theme.islandInset
                     readonly property real pillHeight: Theme.islandHeight
                     readonly property real t: stage.openness
+                    // Black in the bar, the ground's fill as it grows over the
+                    // desktop below (Appearance.islandFill: grey over a dark
+                    // wallpaper, black over windows).
+                    readonly property color fill: Appearance.mix(Theme.islandColor,
+                        Appearance.islandFill(root.QsWindow.window?.screen?.name ?? ""), stage.clamp01(hit.t))
 
                     readonly property real bodyX: hit.pillX * (1 - hit.t)
                     readonly property real bodyWidth: popup.islandWidth + (popup.cardWidth - popup.islandWidth) * hit.t
@@ -354,6 +359,7 @@ Item {
                         ear: Theme.islandEarRadius * stage.flare
                         bottomRound: hit.pillHeight / 2
                             + (Theme.islandPanelRadius - hit.pillHeight / 2) * stage.clamp01(hit.t)
+                        fill: hit.fill
                     }
 
                     // The card at its own size, uncovered as the island grows
@@ -385,6 +391,7 @@ Item {
                                 MediaPlayer {
                                     width: parent.width
                                     visible: root.showPlayer
+                                    cut: hit.fill
                                 }
 
                                 IslandActivities {

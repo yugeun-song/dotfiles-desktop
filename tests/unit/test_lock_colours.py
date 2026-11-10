@@ -273,6 +273,22 @@ class LockColoursTest(unittest.TestCase):
         self.assertIn(f'const bg = root.rgb("#{lock_colours.BAR_BG}");', black)
         self.assertIn(f'fg: root.rgb("#{lock_colours.BEIGE}")', black)
 
+    # The notch (the user, 2026-11-11: lifted to a dark grey where black would
+    # vanish): black over a light top, a dark grey over a black one, judged
+    # apart from the text, which keeps the colours it had.
+    def test_the_notch_is_lifted_to_grey_only_over_a_dark_top(self):
+        light = self.fit(self.wallpaper("light.png", (1600, 900), (1, (235, 228, 220))))
+        self.assertEqual(widget(light, "TEST-A", type="shape")["color"], "rgba(000000ff)")
+        black = self.fit(self.wallpaper("black.png", (1600, 900), (1, (0, 0, 0))))
+        for name in ("TEST-A", "TEST-B"):
+            grey = widget(black, name, type="shape")["color"]
+            found = re.fullmatch(r"rgba\(([0-9a-f]{2})\1\1ff\)", grey)
+            self.assertIsNotNone(found, grey)
+            level = int(found.group(1), 16)
+            self.assertGreater(level, 0x20, grey)
+            self.assertLessEqual(level, round(lock_colours.encode(lock_colours.FILL_MOST) * 255), grey)
+            self.assertEqual(widget(black, name, text="$TIME")["color"], BEIGE)
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=1, argv=sys.argv[:1])

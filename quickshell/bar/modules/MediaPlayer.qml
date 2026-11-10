@@ -17,6 +17,9 @@ Item {
     id: root
 
     readonly property var player: Media.player
+    // What the play-pause's marks are cut in: the island's own fill (black, or
+    // its grey over a dark ground; MediaPopup).
+    property color cut: Theme.islandColor
     // Held through a seek or a change of track, as the island is (Media);
     // play and pause show the player's state as it is, at once.
     readonly property bool hasMedia: Media.steadyPresent
@@ -315,7 +318,7 @@ Item {
                                         height: Math.round(Theme.mediaDiscGlyph * 0.86)
                                         radius: Math.max(1, width / 4)
                                         antialiasing: true
-                                        color: Theme.islandColor
+                                        color: root.cut
                                     }
                                 }
                             }
@@ -335,8 +338,8 @@ Item {
                                 preferredRendererType: Shape.CurveRenderer
 
                                 ShapePath {
-                                    fillColor: Theme.islandColor
-                                    strokeColor: Theme.islandColor
+                                    fillColor: root.cut
+                                    strokeColor: root.cut
                                     // Rounds the corners, as Spotify's are.
                                     strokeWidth: playMark.inset * 2
                                     joinStyle: ShapePath.RoundJoin

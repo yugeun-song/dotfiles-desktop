@@ -13,7 +13,8 @@ shows it on that screen: cut to cover the screen, dimmed by the
 background's brightness. The kinds are ink (hyprlock's rgba), soft (the same
 at the strength of secondary text), hex (for markup), paint (lock-media.py's
 card: its ink, pane and edge), halo and glow (a label's shadow passes and
-colour).
+colour), and fill (a shape's colour, judged apart from the text: the notch,
+black but grey on a ground too dark for black).
 
 The beige stays where most of the picture behind a group is dark enough for
 it. A light sky over dark hills can give the clock the dark and the foot the
@@ -96,12 +97,23 @@ BUSY_SPREAD = 0.5
 # of text leave no ink that reads on both.
 BUSY_DARKEST = 0.35
 
+# A fill (the notch's, $island_fill) is no text: it is judged on its own, on
+# the background as the screen finally shows it, and never moves a group's
+# ink. Black where black reads round the notch to FILL_READS; below that the
+# darkest grey that does, never lighter than FILL_MOST (the user, 2026-11-11:
+# lifted to a dark grey). The ground is the notch's box widened by
+# FILL_MARGIN of its size on each side. quickshell/bar/scripts/wall-tone.py
+# lifts the bar's grown island by the same rule; keep the two in step.
+FILL_READS = 1.6
+FILL_MOST = 0.09
+FILL_MARGIN = 0.5
+
 # A label's text is not known before hyprlock draws it: four of its sizes
 # wide, about the clock's, the widest; one line high.
 LABEL_EMS = 4
 LINE = 1.25
 
-TOKEN = re.compile(r"\$([a-z]+)_(ink|soft|hex|paint|halo|glow)\b")
+TOKEN = re.compile(r"\$([a-z]+)_(ink|soft|hex|paint|halo|glow|fill)\b")
 BACK = re.compile(r"^(\s*(blur_passes|brightness)\s*=\s*)[0-9.]+")
 # lock-fit.sh's line for each screen, with its two factors.
 SCREEN = re.compile(r"^# (\S+) (\d+)x(\d+) fit ([0-9.]+) wide ([0-9.]+)$")
@@ -170,8 +182,8 @@ def bare(line):
 
 def parse(lines):
     """The screens lock-fit.sh sized, by name: width and height; and each
-    widget block: its first and last line, type, keys and the groups its
-    tokens name."""
+    widget block: its first and last line, type, keys, the groups its text
+    tokens name and the groups its fill tokens name."""
     screens, blocks = {}, []
     depth, start, kind, keys = 0, 0, "", {}
     for i, line in enumerate(lines):
@@ -188,8 +200,10 @@ def parse(lines):
         elif s == "}" and depth > 0:
             depth -= 1
             if depth == 0 and kind in WIDGETS:
-                groups = {m.group(1) for j in range(start, i + 1) for m in TOKEN.finditer(lines[j])}
-                blocks.append((start, i, kind, keys, groups))
+                found = [m for j in range(start, i + 1) for m in TOKEN.finditer(lines[j])]
+                groups = {m.group(1) for m in found if m.group(2) != "fill"}
+                fills = {m.group(1) for m in found if m.group(2) == "fill"}
+                blocks.append((start, i, kind, keys, groups, fills))
         elif depth == 1 and "=" in s:
             key, value = s.split("=", 1)
             keys[key.strip()] = value.strip()
@@ -325,6 +339,15 @@ def dark_ink(patches):
         big_l = max(DARK_L[1], big_l - 0.02)
 
 
+def fill_of(ground):
+    """A fill's hex: black where it reads over the ground, else the darkest
+    grey that does, up to FILL_MOST."""
+    if contrast(0.0, ground) >= FILL_READS:
+        return "000000"
+    v = round(encode(min(FILL_MOST, FILL_READS * (ground + 0.05) - 0.05)) * 255)
+    return f"{v:02x}{v:02x}{v:02x}"
+
+
 def under(y, alpha, pane):
     """A pixel's luminance under a pane (0 black, 1 white) at alpha, blended
     as hyprlock blends: in stored values, not in light."""
@@ -444,7 +467,7 @@ def stamp(text, blocks):
             digest.update(script.read_bytes())
         except OSError:
             pass
-    for path in sorted({wallpaper_of(keys) for _, _, kind, keys, _ in blocks if kind == "background"} - {None}):
+    for path in sorted({wallpaper_of(keys) for _, _, kind, keys, *_ in blocks if kind == "background"} - {None}):
         try:
             st = os.stat(path)
             digest.update(f"\0{path}\0{st.st_size}\0{st.st_mtime_ns}".encode())
@@ -480,11 +503,14 @@ def ink(text, screens, blocks):
         if pictures[path] is None:
             continue
         small = backdrop(pictures[path], w, h, background)
-        areas, sizes = {}, {}
-        for _, _, kind, keys, groups in mine:
+        areas, sizes, fill_areas = {}, {}, {}
+        for _, _, kind, keys, groups, fills in mine:
             area = box(kind, keys, w, h, aspect)
             if area is None:
                 continue
+            for g in fills:
+                mx, my = (area[2] - area[0]) * FILL_MARGIN, (area[3] - area[1]) * FILL_MARGIN
+                fill_areas[g] = (area[0] - mx, area[1] - my, area[2] + mx, area[3] + my)
             for g in groups:
                 old = areas.get(g, area)
                 areas[g] = (min(old[0], area[0]), min(old[1], area[1]), max(old[2], area[2]), max(old[3], area[3]))
@@ -495,21 +521,27 @@ def ink(text, screens, blocks):
             spread = BUSY_SPREAD * ((numbers(background, "blur_size") or [0.0])[0])
             base = (numbers(background, "brightness") or [1.0])[0]
             applied = base if (numbers(background, "blur_passes") or [0.0])[0] > 0 else 1.0
-            judged[name] = (path, small, areas, sizes, chosen, spread, applied, base)
+            judged[name] = (path, small, areas, sizes, chosen, spread, applied, base, fill_areas)
     if not judged:
         return None
     # One picture, one blur: busy behind the text on any screen, it is
     # blurred and darkened on every screen that shows it.
     busier = {j[0] for j in judged.values() if busy(*j[1:5])}
-    for name, (path, small, areas, sizes, chosen, spread, applied, base) in judged.items():
+    for name, (path, small, areas, sizes, chosen, spread, applied, base, fill_areas) in judged.items():
+        ground = small
         if path in busier:
             level, dim = darkened(small.filter(ImageFilter.GaussianBlur(spread)), areas, applied, base)
             again = judge(dim, areas, sizes)
             if again is not None:
                 chosen = again
                 chosen["back"] = {"blur_passes": str(BUSY_PASSES), "brightness": f"{level:.2f}"}
+            ground = dim
+        for g, area in fill_areas.items():
+            p = patch(ground, area)
+            if p:
+                chosen.setdefault(g, {})["fill"] = f"rgba({fill_of(p['mid'])}ff)"
         values[name] = chosen
-    for start, end, kind, keys, _ in blocks:
+    for start, end, kind, keys, *_ in blocks:
         chosen = values.get(keys.get("monitor"))
         if chosen is None:
             continue

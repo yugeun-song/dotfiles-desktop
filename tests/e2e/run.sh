@@ -1477,8 +1477,10 @@ fi
 # its cover and a line of text: there while a player has a track, paused too
 # until the player closes (the user, 2026-10-26), gone when Super+M switches
 # it off (kept in the bar's state). A hover grows the pill itself into the
-# player, black from the screen's edge over the desktop's grey (#111111),
-# nothing of it left in the bar, which runs on beside it; the card
+# player from the screen's edge, in the island's fill (Appearance.islandFill,
+# the user, 2026-11-11): over this run's desktop, too dark for black, the
+# darkest grey that shows. Nothing of the pill is left in the bar, which runs
+# on beside it; the card
 # stays while its play-pause pauses and goes when the pointer leaves or the
 # switch turns it off. Then what plays as wide as it needs and no wider than
 # the music island's most (half the bar's idle width), an event as wide as it
@@ -1487,15 +1489,20 @@ fi
 # the bar or the rows asked for.
 # mprisapp.py plays on the suite's bus; its cover is a magenta square.
 mark=$(output_mark)
+# The grown island's fill as the bar has it for this screen, "#rrggbb".
+grown_fill() { ipc appearance island HEADLESS-2; }
+# The pill's count is of its colour, the second argument: black, as the pill
+# in the bar stays, unless the grown island's fill is asked for.
 island_pixels() {
     shot -g "820,0 900x${1:-34}" "$WORK/island.png" 2>/dev/null || return 1
     python3 -c 'import sys; from PIL import Image
 im = Image.open(sys.argv[1]).convert("RGB"); px = list(im.tobytes())
 rgb = [px[i:i + 3] for i in range(0, len(px), 3)]
+fill = [int(sys.argv[2][i:i + 2], 16) for i in (1, 3, 5)]
 ink = sum(1 for r, g, b in rgb if r > 150 and g > 150 and b > 100)
 cover = sum(1 for r, g, b in rgb if r > 180 and g < 90 and b > 110)
-pill = sum(1 for r, g, b in rgb if r < 6 and g < 6 and b < 6)
-print(ink, cover, pill)' "$WORK/island.png"
+pill = sum(1 for c in rgb if all(abs(a - b) < 6 for a, b in zip(c, fill)))
+print(ink, cover, pill)' "$WORK/island.png" "${2:-#000000}"
 }
 island_shows() { local t c p; read -r t c p < <(island_pixels) && (( t > 100 && c > 40 && p > 2000 )); }
 island_gone() { local t c p; read -r t c p < <(island_pixels) && (( t < 5 && c < 5 && p < 5 )); }
@@ -1509,16 +1516,19 @@ rgb = [px[i:i + 3] for i in range(0, len(px), 3)]
 bar = [abs(r - 15) <= 3 and abs(g - 17) <= 3 and abs(b - 27) <= 3 for r, g, b in rgb]
 print(sum(bar[1000:1560]), sum(bar[200:900]))' "$WORK/row.png"
 }
-# Under the bar, once the island has grown: its black over the desktop,
-# and the cover on it.
+# Under the bar, once the island has grown: its fill over the desktop, and
+# the cover on it.
 card_pixels() {
+    local fill
+    fill=$(grown_fill) || return 1
     shot -g "880,38 800x240" "$WORK/card.png" 2>/dev/null || return 1
     python3 -c 'import sys; from PIL import Image
 im = Image.open(sys.argv[1]).convert("RGB"); px = list(im.tobytes())
 rgb = [px[i:i + 3] for i in range(0, len(px), 3)]
-black = sum(1 for r, g, b in rgb if r < 6 and g < 6 and b < 6)
+fill = [int(sys.argv[2][i:i + 2], 16) for i in (1, 3, 5)]
+grown = sum(1 for c in rgb if all(abs(a - b) < 6 for a, b in zip(c, fill)))
 cover = sum(1 for r, g, b in rgb if r > 180 and g < 90 and b > 110)
-print(black, cover)' "$WORK/card.png"
+print(grown, cover)' "$WORK/card.png" "$fill"
 }
 card_open() { local b c; read -r b c < <(card_pixels) && (( b > 20000 )); }
 card_closed() { local b c; read -r b c < <(card_pixels) && (( b < 500 )); }
@@ -1548,13 +1558,16 @@ else
     check "Super+M brings it back" wait_for 3 island_shows
     input move 2000 600 sleep 300 move 1280 16 sleep 900
     read -r below cover < <(card_pixels)
-    echo "e2e: the grown island: ${below:-?} of its black under the bar, ${cover:-?} of the cover"
+    fill=$(grown_fill)
+    echo "e2e: the grown island: ${below:-?} of its fill (${fill:-?}) under the bar, ${cover:-?} of the cover"
     check "hovering the island grows it into the player under the bar" \
         test "${below:-0}" -gt 20000 -a "${cover:-0}" -gt 1500
+    check "in a grey that shows over this desktop, too dark for black" \
+        test -n "$fill" -a "$fill" != "#000000"
     # Above the grown card, whose padding (20 px) starts at the screen's edge:
     # the rows the pill's cover and title cross, its own cover and title not.
-    read -r ink small pill < <(island_pixels 20)
-    echo "e2e: the bar's middle meanwhile: ink ${ink:-?}, cover ${small:-?}, black ${pill:-?}"
+    read -r ink small pill < <(island_pixels 20 "$fill")
+    echo "e2e: the bar's middle meanwhile: ink ${ink:-?}, cover ${small:-?}, fill ${pill:-?}"
     check "and the pill in the bar has given way to it: none of its cover or text is left there" \
         test "${small:-999}" -lt 5 -a "${ink:-999}" -lt 5 -a "${pill:-0}" -gt 2000
     read -r joint beside < <(bar_row_pixels)
