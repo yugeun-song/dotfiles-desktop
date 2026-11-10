@@ -678,6 +678,24 @@ if command -v kreadconfig6 >/dev/null 2>&1; then
     is "the sidebar's rows have their own icon size" "$(kreadconfig6 --file "$T/home/.config/dolphinrc" --group PlacesPanel --key IconSize)" 21
 fi
 
+# ---- Dolphin's view, once Dolphin holds it (the user, 2026-11-11) ----
+# Dolphin moves the seeded view properties into the global folder's extended
+# attribute and removes the file; a run after that must not seed it again,
+# which brought back the list view over the user's own choice.
+setup
+run
+props=$T/home/.local/share/dolphin/view_properties/global
+if command -v dolphin >/dev/null 2>&1 && command -v kreadconfig6 >/dev/null 2>&1; then
+    same "Dolphin's view is seeded" "$props/.directory" "$T/repo/kde/dolphin/global.directory"
+    if python3 -I -c 'import os, sys; os.setxattr(sys.argv[1], "user.kde.fm.viewproperties#1", b"[Dolphin]\nVersion=4\n")' "$props" 2>/dev/null; then
+        rm -f -- "$props/.directory"
+        run
+        absent "and not again once Dolphin holds its own" "$props/.directory"
+    else
+        echo "SKIP  install: no extended attributes under $T"
+    fi
+fi
+
 # ---- the file icons: built at install, from what passed against upstream ----
 setup
 files=$T/home/.local/share/icons/SpaceduckFiles

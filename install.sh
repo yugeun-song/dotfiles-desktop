@@ -1233,11 +1233,23 @@ mime_package() {
 # the toolbar's buttons without words, and without the split view's two
 # (kde/dolphin-toolbar.py); the sidebar's face is kde/dolphin.qss's. Each a
 # seed: a change made in Dolphin afterwards stays.
+#
+# Dolphin keeps the one view of every folder (its default since 24.x) in an
+# extended attribute of the global folder, and removes the .directory it read
+# them from (26.08, seen 2026-11-11). Seeded again over that, the file came
+# back on the next run and Dolphin took it in over the user's own choice of
+# details or icons (the user, 2026-11-11: it must stay). So it is seeded only
+# while Dolphin holds no view of its own there.
+dolphin_props_held() {
+    python3 -I -c 'import os, sys; os.getxattr(sys.argv[1], "user.kde.fm.viewproperties#1")' "$1" 2>/dev/null
+}
+
 dolphin_look() {
     local rc="$CONFIG/dolphinrc" font="Inter,10,-1,5,400,0,0,0,0,0,0,0,0,0,0,1" bar
+    local props="$DATA/dolphin/view_properties/global"
     command -v dolphin >/dev/null 2>&1 || return 0
     command -v kreadconfig6 >/dev/null 2>&1 && command -v kwriteconfig6 >/dev/null 2>&1 || return 0
-    seed "$SRC/kde/dolphin/global.directory" "$DATA/dolphin/view_properties/global/.directory"
+    dolphin_props_held "$props" || seed "$SRC/kde/dolphin/global.directory" "$props/.directory"
     seed_key "$rc" General ShowStatusBar 1
     seed_key "$rc" DetailsMode IconSize 22
     seed_key "$rc" DetailsMode PreviewSize 22
