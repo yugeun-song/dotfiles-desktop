@@ -62,10 +62,19 @@ hl.config({
             -- The bar is opaque; blur behind it is a wasted pass per frame.
             special = false,
         },
+        -- Windows float over the desktop and over one another, so each casts a
+        -- soft shadow a little downward, as from a light above, the focused one
+        -- deeper than the rest, after the desktop the user named as the
+        -- reference (2026-11-11). Hyprland draws none for layers: the bar
+        -- lies flat, and the bar's floating panels draw their own
+        -- (quickshell/bar/modules/SurfaceShadow.qml).
         shadow = {
             enabled = true,
-            range = 12,
-            render_power = 2,
+            range = 22,
+            render_power = 3,
+            offset = "0 7",
+            color = "rgba(00000066)",
+            color_inactive = "rgba(00000030)",
         },
         -- Full strength: the bar's screensaver blacks a display out with a
         -- dim_around layer rule (rules.lua), an exact #000000 Hyprland draws

@@ -669,10 +669,11 @@ EOF
 )
 }
 # Below the bar, where the menu opens; picker.py reads it against a capture
-# taken while the menu was closed. No taller than the menu: under it are the
-# desktop's widgets, whose graphs move between the two captures and would read
-# as part of what opened.
-PICKER_AREA="0,40 760x365"
+# taken while the menu was closed. No taller than the menu, its foot's line
+# left out: under it are the desktop's widgets, whose graphs move between the
+# two captures and which the menu's shadow darkens, either read as part of
+# what opened.
+PICKER_AREA="0,40 760x356"
 picker_open() { shot -g "$PICKER_AREA" "$WORK/picker.png" && python3 "$REPO/tests/e2e/picker.py" "$WORK/picker-closed.png" "$WORK/picker.png" > "$WORK/picker.json"; }
 picker_closed() { shot -g "$PICKER_AREA" "$WORK/picker-now.png"; python3 "$REPO/tests/e2e/picker.py" "$WORK/picker-closed.png" "$WORK/picker-now.png" >/dev/null; [[ $? == 1 ]]; }
 badge_is() { [[ "$(ipc e2e badge | jq -r .choice)" == "$1" ]]; }

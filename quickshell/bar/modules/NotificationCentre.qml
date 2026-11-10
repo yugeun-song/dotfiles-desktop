@@ -161,6 +161,16 @@ Scope {
                     onClicked: root.close()
                 }
 
+                // Floats over the desktop: a panel's shadow (Theme.shadowOf),
+                // moved in and out with the panel.
+                SurfaceShadow {
+                    target: panel
+                    kind: "panel"
+                    transform: Translate {
+                        x: panel.offset
+                    }
+                }
+
                 // Where the toasts stand, the cards held together in one panel
                 // rather than floating apart (the user, 2026-10-25); its padding
                 // is the cards' gap, its corners theirs at that distance.

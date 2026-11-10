@@ -213,6 +213,12 @@ Scope {
             }
 
             // Swallows clicks so a near miss does not hit the backdrop.
+            // Floats over the desktop: a dialog's shadow (Theme.shadowOf).
+            SurfaceShadow {
+                target: dialog
+                kind: "dialog"
+            }
+
             Rectangle {
                 id: dialog
 

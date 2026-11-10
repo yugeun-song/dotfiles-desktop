@@ -73,7 +73,15 @@ Scope {
                     onClicked: root.close()
                 }
 
+                // Floats over the desktop: a panel's shadow (Theme.shadowOf).
+                SurfaceShadow {
+                    target: card
+                    kind: "panel"
+                }
+
                 Rectangle {
+                    id: card
+
                     anchors.centerIn: parent
                     width: Math.min(parent.width - Theme.px(64), Theme.widgetOptionsWidth)
                     height: body.implicitHeight + Theme.displaysPad * 2

@@ -741,6 +741,12 @@ Scope {
                     onClicked: Controls.close()
                 }
 
+                // Floats over the desktop: a panel's shadow (Theme.shadowOf).
+                SurfaceShadow {
+                    target: panel
+                    kind: "panel"
+                }
+
                 Rectangle {
                     id: panel
 

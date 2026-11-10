@@ -116,6 +116,12 @@ Scope {
                     onClicked: root.close()
                 }
 
+                // Floats over the desktop: a panel's shadow (Theme.shadowOf).
+                SurfaceShadow {
+                    target: card
+                    kind: "panel"
+                }
+
                 Rectangle {
                     id: card
 

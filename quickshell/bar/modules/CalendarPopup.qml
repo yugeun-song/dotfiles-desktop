@@ -67,11 +67,26 @@ Item {
                 return item.mapFromItem(null, x, y);
             }
 
+            // Room for its shadow (Theme.shadowRoom) on the two sides away from
+            // the corner it hangs from: to its left and, under a bar at the
+            // top, below it. That corner stays where it was, so the card does
+            // too; the shadow's right and top, short at a light from above, are
+            // left out. Only the card takes the pointer (mask), so the hover
+            // that holds it open is the card's alone.
+            readonly property var room: Theme.shadowRoom("panel")
+            readonly property int side: Math.round(popup.room.side * popup.fit)
+            readonly property int below: Theme.barAtBottom ? 0 : Math.round(popup.room.bottom * popup.fit)
+
             visible: true
             color: "transparent"
             grabFocus: false
-            implicitWidth: Math.round(card.width)
-            implicitHeight: Math.round(card.height)
+            implicitWidth: popup.side + Math.round(card.width)
+            implicitHeight: Math.round(card.height) + popup.below
+            mask: Region {
+                x: popup.side
+                width: Math.round(card.width)
+                height: Math.round(card.height)
+            }
 
             anchor {
                 window: root.QsWindow.window
@@ -85,9 +100,15 @@ Item {
                 adjustment: PopupAdjustment.None
             }
 
+            SurfaceShadow {
+                target: card
+                kind: "panel"
+            }
+
             Rectangle {
                 id: card
 
+                x: popup.side
                 width: month.width * popup.k
                 height: month.height * popup.k
                 radius: Math.round(Theme.widgetRadius * popup.k)

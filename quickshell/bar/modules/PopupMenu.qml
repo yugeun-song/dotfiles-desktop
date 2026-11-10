@@ -111,8 +111,29 @@ Item {
 
             color: "transparent"
             grabFocus: true
-            implicitWidth: Math.round(body.implicitWidth * popup.fit)
-            implicitHeight: Math.round(body.implicitHeight * popup.fit)
+            // Room for its shadow (Theme.shadowRoom) on the two sides away from
+            // where it hangs: to its right and, under a bar at the top, below
+            // it. The corner it hangs from stays where it was, so the menu
+            // does too; the shadow's other sides, short at a light from above,
+            // are left out. Never past the screen's right edge, where the
+            // window would be slid in and the menu with it. Only the menu takes
+            // the pointer (mask), so a click on its shadow closes it as any
+            // click outside does.
+            readonly property var room: Theme.shadowRoom("menu")
+            readonly property int menuW: Math.round(body.implicitWidth * popup.fit)
+            readonly property int menuH: Math.round(body.implicitHeight * popup.fit)
+            readonly property real itemX: root.anchorItem?.mapToItem(null, 0, 0).x ?? 0
+            readonly property real screenW: root.QsWindow.window?.width ?? 0
+            readonly property int right: Math.max(0, Math.min(Math.round(popup.room.side * popup.fit),
+                                                             Math.floor(popup.screenW - popup.itemX - popup.menuW)))
+            readonly property int below: Theme.barAtBottom ? 0 : Math.round(popup.room.bottom * popup.fit)
+
+            implicitWidth: popup.menuW + popup.right
+            implicitHeight: popup.menuH + popup.below
+            mask: Region {
+                width: popup.menuW
+                height: popup.menuH
+            }
 
             // The item's left edge is the menu's, as the references hang a
             // menu from its title; slid along the bar, never flipped to the
@@ -127,6 +148,11 @@ Item {
                 edges: root.edge | Edges.Left
                 gravity: root.edge | Edges.Right
                 adjustment: PopupAdjustment.Slide
+            }
+
+            SurfaceShadow {
+                target: body
+                kind: "menu"
             }
 
             Rectangle {

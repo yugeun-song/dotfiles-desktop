@@ -88,7 +88,21 @@ Scope {
                 top: Math.round(Theme.notifBarGap * win.fit)
             }
 
-            implicitWidth: Math.round(Theme.notifWidth * win.fit)
+            // Room for the cards' shadows (Theme.shadowRoom) on the two sides
+            // away from the top right corner the window hangs from: to the left
+            // and below. That corner stays, so the cards do too; their shadows'
+            // right and top, short at a light from above, are left out. Only
+            // the cards take the pointer (mask).
+            readonly property var room: Theme.shadowRoom("toast")
+            readonly property int side: Math.round(win.room.side * win.fit)
+            readonly property int below: Math.round(win.room.bottom * win.fit)
+
+            implicitWidth: win.side + Math.round(Theme.notifWidth * win.fit)
+            mask: Region {
+                x: win.side
+                width: Math.round(Theme.notifWidth * win.fit)
+                height: win.held
+            }
             // Rounded up: Text reports fractional heights, and a surface a
             // fraction short clips the card's bottom border.
             readonly property int wanted: Math.max(1, Math.ceil(stack.implicitHeight * win.fit))
@@ -117,12 +131,13 @@ Scope {
                 onTriggered: win.held = win.wanted
             }
 
-            implicitHeight: win.held
+            implicitHeight: win.held + win.below
 
             // Laid out at the reference width and scaled to the window.
             Column {
                 id: stack
 
+                x: win.side
                 width: Theme.notifWidth
                 scale: win.fit
                 transformOrigin: Item.TopLeft
@@ -150,7 +165,9 @@ Scope {
 
                         width: parent.width
                         height: Math.ceil(card.implicitHeight)
-                        clip: true
+                        // Not clipped, or the card's shadow would be: what
+                        // the slot's collapse would cut is a card already
+                        // slid off past the screen's edge.
 
                         // The single exit: expiry, click, and released swipe.
                         SequentialAnimation {
@@ -180,6 +197,12 @@ Scope {
                             interval: slot.dwellMs
 
                             onTriggered: leaving.start()
+                        }
+
+                        // Floats over the desktop: a toast's shadow (Theme.shadowOf).
+                        SurfaceShadow {
+                            target: card
+                            kind: "toast"
                         }
 
                         Rectangle {

@@ -170,6 +170,28 @@ Singleton {
     // as the outermost line. Rows repeated down a list are told apart by a
     // fill, never by a line under each. Drawings keep their strokes.
     readonly property int surfaceBorder:  Math.max(1, root.px(1))
+
+    // Shadows, after the desktop the user named as the reference (2026-11-11):
+    // what floats over other things casts one, soft and a little downward, as
+    // from a light above, deeper the higher it stands: a menu least, then a
+    // toast, a panel, and the session dialog most. What lies flat on the screen
+    // casts none: the bar and the pill in it, the desktop widgets, the lock
+    // screen. A shadow shows little on the black tone's dark grounds and much
+    // on the white one, where it is the main sign of a surface's edge, so it
+    // is lighter there (modules/SurfaceShadow.qml draws it).
+    function shadowOf(kind: string): var {
+        const k = ({ menu: [18, 5, 0.30], toast: [24, 7, 0.30], panel: [40, 12, 0.36], dialog: [54, 16, 0.44] })[kind]
+                  ?? [40, 12, 0.36];
+        return { blur: root.px(k[0]), offset: root.px(k[1]),
+                 color: Qt.rgba(0, 0, 0, Appearance.palette.light ? k[2] * 0.6 : k[2]) };
+    }
+
+    // How far a shadow reaches past its surface, for a window sized to the
+    // surface: as wide as its blur beside, less the offset above, more below.
+    function shadowRoom(kind: string): var {
+        const r = root.shadowOf(kind);
+        return { side: r.blur, top: Math.max(0, r.blur - r.offset), bottom: r.blur + r.offset };
+    }
     readonly property color surfaceWell:  Appearance.palette.well
     readonly property color surfaceSeparator: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.07)
 
