@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="1 1.4 18 19.6">
+  <!-- The lock screen's Caps Lock mark (LockField): a filled arrow over a
+       bar, as a desktop's password field shows it. Drawn here because the
+       installed fonts carry the sign only in outline (U+21EA, md 0xF0632).
+       The stroke rounds the arrow's corners; the view box is the ink's own,
+       so the mark's size is its ink. The gap under the arrow is a ninth of
+       the height: narrower, it went grey on a 17 px mark (1x screen). Only
+       its alpha is used: LockInk gives it its colour. -->
+  <path d="M10 2.4 L18 10.2 H13.6 V14 H6.4 V10.2 H2 Z" fill="#fff" stroke="#fff" stroke-width="2" stroke-linejoin="round"/>
+  <rect x="5.4" y="17.2" width="9.2" height="3.8" rx="1" fill="#fff"/>
+</svg>

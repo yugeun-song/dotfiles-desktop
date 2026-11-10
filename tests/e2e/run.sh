@@ -1950,6 +1950,7 @@ fi
 # lock over (allow_session_lock_restore), says so (LOCK_READY), and draws the
 # same design from lock-spec.py's reading of 29's fitted copy, so 29's
 # pixels hold for it too; its island reads the bar's parts (lock-island.json);
+# Caps Lock's mark comes and goes with the run's own LED at the Caps Lock key;
 # its play-pause reaches the player. Then a PAM stack of the run's own, with
 # a password of the run's own and a tally of the run's own (never the user's
 # password nor their faillock): three wrong passwords lock it for its step,
@@ -1992,6 +1993,37 @@ print(right - left + 1, bars, foot)
 EOF
 }
 qs_unlocked() { [[ "$(n locked)" == false ]] && ! kill -0 "$LOCK_PID" 2>/dev/null; }
+# Caps Lock's mark (LockField; the user, 2026-11-11), from the run's own LED
+# (LOCK_LEDS), read at the Caps Lock key: beige past the field's words, in
+# the field's rows of HEADLESS-2. Given the column the words end at (0: none
+# yet), it prints the rightmost beige column, and of the columns past the
+# words' end the first and last with beige and the count of beige pixels.
+caps_led() {
+    printf '%s\n' "$1" > "$WORK/leds/input99::capslock/brightness.new"
+    mv -f "$WORK/leds/input99::capslock/brightness.new" "$WORK/leds/input99::capslock/brightness"
+}
+caps_mark() {
+    shot -o HEADLESS-2 "$WORK/caps.png" 2>/dev/null || return 1
+    python3 - "$WORK/caps.png" "$1" <<'EOF'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert("RGB")
+after = int(sys.argv[2])
+beige = lambda c: c[0] > 200 and c[1] > 200 and 150 < c[2] < 215
+cols = {x: sum(1 for y in range(917, 962) if beige(im.getpixel((x, y)))) for x in range(1100, 1500)}
+lit = [x for x, n in cols.items() if n]
+past = [x for x in lit if x > after + 2]
+print(max(lit, default=0), min(past, default=0), max(past, default=0), sum(cols[x] for x in past))
+EOF
+}
+# Lit: as wide as a mark, a gap from the words, and where the first one
+# stood when given (the mark stays put as dots come).
+caps_mark_on() {
+    local r f l c
+    read -r r f l c < <(caps_mark "$1") || return 1
+    (( c > 60 && f - $1 >= 5 && f - $1 <= 20 && l - f >= 9 && l - f <= 22 )) && [[ -z "${2:-}" || "$f" == "$2" ]]
+}
+caps_mark_off() { local r f l c; read -r r f l c < <(caps_mark "$1") && (( c == 0 )); }
 # A file of the lock's changing under it, as an install does. Quickshell reloads
 # on that by default, and a new generation starts with the lock not yet wanted:
 # the session opens for as long as its capture takes, the keys going to whatever
@@ -2017,7 +2049,8 @@ elif [[ -z "$WL" || "$WL" == "$WAYLAND_DISPLAY" || ! -S "$RT/$WL" ]]; then
 elif [[ ! -s "$WORK/hyprlock-fit.conf" ]]; then
     fail "Quickshell lock screen: scenario 29 left no fitted copy to draw"
 else
-    mkdir -p "$WORK/pam.d" "$WORK/tally" "$WORK/island"
+    mkdir -p "$WORK/pam.d" "$WORK/tally" "$WORK/island" "$WORK/leds/input99::capslock"
+    caps_led 0
     # pam_exec hands the password over on stdin, its NUL after it.
     cat > "$WORK/pam-check.sh" <<'EOF'
 #!/bin/sh
@@ -2048,7 +2081,7 @@ EOF
     chmod +x "$WORK/bin/lock-power"
     benv env LOCK_SPEC="$WORK/lock-spec.json" LOCK_READY="$WORK/lock-ready" LOCK_RUN="$WORK/island" \
         LOCK_PAM_SERVICE=locktest LOCK_PAM_DIR="$WORK/pam.d" LOCK_FAILLOCK_DIR="$WORK/tally" \
-        LOCK_PAM_STEPS="$WORK/pam.d/locktest" LOCK_SESSION_POWER="$WORK/bin/lock-power" \
+        LOCK_PAM_STEPS="$WORK/pam.d/locktest" LOCK_SESSION_POWER="$WORK/bin/lock-power" LOCK_LEDS="$WORK/leds" \
         qs -n -p "$WORK/bar/lock.qml" >"$WORK/qslock.out" 2>&1 &
     LOCK_PID=$!
     check "the Quickshell lock takes the lock over and says it holds it" wait_for 10 qs_lock_up
@@ -2068,6 +2101,21 @@ EOF
     check "music does not widen the notch: it keeps the shape's width" test "${nw:-0}" -ge 246 -a "${nw:-0}" -le 255
     check "and shows only a small square of bars at its right end" test "${nb:-0}" -gt 4
     check "nothing stands at the foot's middle where the status pills were" test "${nf:-1}" -eq 0
+    # The nested keyboard's own Caps Lock stays off: vinput locks no
+    # modifier, so the passwords below are typed as written.
+    read -r words_end _ < <(caps_mark 0)
+    check "no Caps Lock mark while its LED is dark" caps_mark_off "${words_end:-0}"
+    caps_led 1
+    input key 58
+    check "Caps Lock lit: its mark at the field's trailing end" wait_for 3 caps_mark_on "${words_end:-0}"
+    read -r _ mark_at _ mark_px < <(caps_mark "${words_end:-0}")
+    echo "e2e: Caps Lock mark: words end at ${words_end:-?}, mark from ${mark_at:-?}, ${mark_px:-?} beige pixels"
+    input type "abc" sleep 300
+    check "and it stays put as dots come" caps_mark_on "${words_end:-0}" "${mark_at:-0}"
+    input key 1 sleep 200
+    caps_led 0
+    input key 58
+    check "Caps Lock off: the mark goes" wait_for 3 caps_mark_off "${words_end:-0}"
     : > "$WORK/mpris.log"
     input move 1280 792 sleep 300 click sleep 300
     check "a click on its play-pause reaches the player" wait_for 4 logged "$WORK/mpris.log" Pause

@@ -111,6 +111,9 @@ Item {
 
         Keys.onPressed: event => {
             event.accepted = true;
+            // The field's Caps Lock mark follows the key (lock.qml).
+            if (event.key === Qt.Key_CapsLock)
+                root.lockRoot.readCaps(true);
             // The power panel takes the arrows, Enter and Escape while it is
             // open; anything typed closes it and goes to the password.
             if (power.open) {
@@ -136,6 +139,10 @@ Item {
                 root.lockRoot.clear();
             else if (event.text !== "" && event.text.charCodeAt(0) >= 32 && event.text.charCodeAt(0) !== 127)
                 root.lockRoot.type(event.text);
+        }
+        Keys.onReleased: event => {
+            if (event.key === Qt.Key_CapsLock)
+                root.lockRoot.readCaps(true);
         }
     }
 

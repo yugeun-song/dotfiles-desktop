@@ -230,6 +230,66 @@ ShellRoot {
         }
     }
 
+    // ---- Caps Lock --------------------------------------------------------
+    // Lit or not, for the field's mark (LockField; the user, 2026-11-11): any
+    // keyboard's Caps Lock LED, which Hyprland lights on every keyboard alike
+    // and the bar reads too (scripts/inputstate.py). Read once the lock holds
+    // and at each press and release of the key, never on a timer: while the
+    // session is locked every key comes here, and Hyprland sets the LED in
+    // the same pass that hands the key over (0.57.2,
+    // CInputManager::onKeyboardKey), so the press already reads the new
+    // state; the release reads it again. No LED to read shows no mark, never
+    // a guess. LOCK_LEDS is the tests' stand-in for /sys/class/leds.
+    readonly property string ledsDir: Quickshell.env("LOCK_LEDS") || "/sys/class/leds"
+    property var capsLeds: []
+    property bool capsLock: false
+
+    // The LED nodes, looked for again when none of them reads: a keyboard
+    // plugged in again comes back under another name.
+    Process {
+        id: capsFind
+
+        command: ["sh", "-c", 'for f in "$1"/*::capslock/brightness; do [ -r "$f" ] && printf "%s\\n" "$f"; done; exit 0', "sh", root.ledsDir]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                root.capsLeds = this.text.split("\n").filter(p => p !== "");
+                root.readCaps(false);
+            }
+        }
+    }
+
+    // One reader for every node in turn: a read blocks for the few bytes, so
+    // the key's own frame already has the answer.
+    FileView {
+        id: capsFile
+
+        blockAllReads: true
+        printErrors: false
+    }
+
+    function readCaps(findAgain: bool): void {
+        let known = false;
+        let lit = false;
+        for (const led of root.capsLeds) {
+            if (capsFile.path === led)
+                capsFile.reload();
+            else
+                capsFile.path = led;
+            const value = capsFile.text().trim();
+            if (value === "")
+                continue;
+            known = true;
+            if (value !== "0") {
+                lit = true;
+                break;
+            }
+        }
+        root.capsLock = lit;
+        if (!known && findAgain && !capsFind.running)
+            capsFind.running = true;
+    }
+
     // ---- a lockout --------------------------------------------------------
     // pam_faillock's steps from the stack the lock authenticates through,
     // and the user's tally as faillock lists it: read after each failure and
@@ -436,8 +496,13 @@ ShellRoot {
 
         locked: root.ready && !root.unlocking
         onSecureChanged: {
-            if (lock.secure && readyFile.path !== "")
+            if (!lock.secure)
+                return;
+            if (readyFile.path !== "")
                 readyFile.setText(`${Date.now()}\n`);
+            // Keys pressed before the lock held went elsewhere.
+            if (!capsFind.running)
+                capsFind.running = true;
         }
 
         WlSessionLockSurface {
