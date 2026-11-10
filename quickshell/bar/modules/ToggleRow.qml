@@ -51,7 +51,7 @@ Item {
         width: Theme.px(46)
         height: Theme.px(24)
         radius: height / 2
-        color: row.on ? Theme.accentIndigo : Theme.surfaceRaised
+        color: row.on ? Theme.menuHighlight : Theme.surfaceRaised
 
         Rectangle {
             width: parent.height - Theme.px(6)
@@ -59,7 +59,7 @@ Item {
             radius: width / 2
             anchors.verticalCenter: parent.verticalCenter
             x: row.on ? pill.width - width - Theme.px(3) : Theme.px(3)
-            color: row.on ? Theme.ink : Theme.fg
+            color: row.on ? Theme.menuHighlightText : Theme.fg
 
             Behavior on x {
                 NumberAnimation {

@@ -13,7 +13,23 @@ ShellRoot {
     // once at the end (below). A reload per write met a half-copied tree and,
     // while reloads still restarted the key overlay's reader, asked for its
     // password once per write (2026-10-25).
-    Component.onCompleted: Quickshell.watchFiles = false
+    // The tone (services/Appearance.qml) is the bar's alone: the lock screen
+    // and the video player keep the black one. Set here, before the first
+    // frame, so a white bar never starts black.
+    Component.onCompleted: {
+        Quickshell.watchFiles = false;
+        Appearance.active = true;
+    }
+
+    // Each screen's size and bar, for the tone's reading of the wallpaper
+    // (Appearance cannot read Theme, which reads it).
+    Binding {
+        target: Appearance
+        property: "screens"
+        value: Quickshell.screens.map(s => ({
+            name: s.name, width: s.width, height: s.height, bar: Math.ceil(Theme.barHeight * Theme.fit(s))
+        }))
+    }
 
     // One bar per screen, one of everything else: a second copy would register
     // the same global shortcut names twice.
@@ -36,6 +52,7 @@ ShellRoot {
         displays: () => displays.show(),
         mirror: () => Mirror.togglePanel(Screens.focused),
         wallpaper: () => wallpaperPicker.show(),
+        appearance: () => Appearance.togglePanel(Screens.focused),
         widgetEdit: () => Widgets.toggleEditing(),
         widgetSettings: () => Widgets.toggleSettings(),
         island: () => Media.toggleIsland(),
@@ -109,6 +126,9 @@ ShellRoot {
     // Only a Scope until it is asked for.
     MirrorPanel {}
 
+    // The tone's panel, as the mirror's: nothing until asked for.
+    AppearancePanel {}
+
     NotificationCentre {
         id: notificationCentre
     }
@@ -177,6 +197,13 @@ ShellRoot {
         description: "Show or hide the island at the top"
 
         onPressed: Media.toggleIsland()
+    }
+
+    GlobalShortcut {
+        name: "appearance"
+        description: "Colours of the bar and panels"
+
+        onPressed: Appearance.togglePanel(Screens.focused)
     }
 
     GlobalShortcut {

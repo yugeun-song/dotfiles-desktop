@@ -245,8 +245,8 @@ Scope {
                             font.family: Theme.uiFont
                             font.pixelSize: Theme.px(15)
                             color: Theme.fg
-                            selectionColor: Theme.accentIndigo
-                            selectedTextColor: Theme.ink
+                            selectionColor: Theme.menuHighlight
+                            selectedTextColor: Theme.menuHighlightText
                             clip: true
 
                             // Seeded once, never bound: a binding to root.query
@@ -347,7 +347,7 @@ Scope {
                             width: body.width
                             height: Theme.px(40)
                             radius: Theme.px(10)
-                            color: row.current ? Theme.accentIndigo : "transparent"
+                            color: row.current ? Theme.menuHighlight : "transparent"
 
                             Row {
                                 id: line
@@ -390,7 +390,7 @@ Scope {
                                         font.family: Theme.uiFont
                                         font.pixelSize: Theme.px(13)
                                         font.weight: Font.Medium
-                                        color: row.current ? Theme.ink : Theme.fg
+                                        color: row.current ? Theme.menuHighlightText : Theme.fg
                                     }
 
                                     Text {
@@ -401,7 +401,7 @@ Scope {
                                         textFormat: Text.PlainText
                                         font.family: Theme.uiFont
                                         font.pixelSize: Theme.px(10)
-                                        color: row.current ? Theme.ink : Theme.muted
+                                        color: row.current ? Theme.menuHighlightText : Theme.muted
                                     }
                                 }
                             }

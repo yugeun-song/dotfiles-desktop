@@ -172,9 +172,9 @@ PanelWindow {
         width: root.ghost?.w ?? 0
         height: root.ghost?.h ?? 0
         radius: Math.round(Theme.widgetRadius * root.k)
-        color: Qt.rgba(Theme.accentIndigo.r, Theme.accentIndigo.g, Theme.accentIndigo.b, 0.10)
+        color: Qt.rgba(Theme.menuHighlight.r, Theme.menuHighlight.g, Theme.menuHighlight.b, 0.10)
         border.width: Math.max(2, root.u(2))
-        border.color: Theme.accentIndigo
+        border.color: Theme.menuHighlight
     }
 
     Repeater {
@@ -254,7 +254,7 @@ PanelWindow {
                         width: root.u(28)
                         height: root.u(24)
                         radius: height / 2
-                        color: chip.current ? Theme.accentIndigo
+                        color: chip.current ? Theme.menuHighlight
                                             : (chipArea.containsMouse ? Theme.surfaceRaisedHover : Theme.surfaceRaised)
 
                         Text {
@@ -263,7 +263,7 @@ PanelWindow {
                             font.family: Theme.uiFont
                             font.pixelSize: root.u(12)
                             font.weight: Font.DemiBold
-                            color: chip.current ? Theme.ink : Theme.fg
+                            color: chip.current ? Theme.menuHighlightText : Theme.fg
                         }
 
                         MouseArea {

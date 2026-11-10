@@ -27,6 +27,7 @@ Singleton {
             { id: "displays", label: "Displays…", what: "Display settings" },
             { id: "mirror", label: "Tablet mirror…" },
             { id: "wallpaper", label: "Wallpaper…", what: "Pick the wallpaper" },
+            { id: "appearance", label: "Appearance…", what: "Colours of the bar and panels" },
             { id: "widgetEdit", label: "Edit desktop widgets", what: "Edit the desktop widgets" },
             { id: "widgetSettings", label: "Desktop widget settings…", what: "Desktop widget settings" }
         ],

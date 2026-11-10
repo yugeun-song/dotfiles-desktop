@@ -178,6 +178,13 @@ on the desktop while the desktop is in view (`modules/VideoWallpaper.qml`, a
 player process of its own, `videowall.qml`, paused when covered and ended
 after a minute of it) and under the lock screen's blur (`LockVideo.qml`).
 
+`Super+Shift+A` (or the control centre's Appearance tile, the bar's menu, the
+picker's Colours…) sets the tone of the bar, its widgets and panels: black,
+white, black or white after the wallpaper, or colours drawn from it and set
+by hand (`modules/AppearancePanel.qml`, `services/Appearance.qml`,
+`scripts/wall-tone.py`). The island stays black, lifted to grey over a dark
+wallpaper, as the lock screen's notch is (`lock-colours.py`).
+
 The lock screen is Quickshell's (`quickshell/bar/lock.qml`, a process of
 its own that `scripts/lock.sh` starts at a lock and that ends at the
 unlock): it draws `hypr/hyprlock.conf`'s design as `scripts/lock-spec.py`

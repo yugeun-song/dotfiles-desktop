@@ -383,6 +383,9 @@ hl.bind("SUPER + O", hl.dsp.global("quickshell:displays"),
 -- W for the wallpaper, as Super+W is the browser.
 hl.bind("SUPER + SHIFT + W", hl.dsp.global("quickshell:wallpaper"),
     { description = "Pick the wallpaper" })
+-- A for appearance: the bar's tone, black, white or after the wallpaper.
+hl.bind("SUPER + SHIFT + A", hl.dsp.global("quickshell:appearance"),
+    { description = "Colours of the bar and panels" })
 -- The desktop widgets: moved and resized only in the edit mode this turns
 -- on (the user, 2026-11-04), their settings and resets apart.
 hl.bind("SUPER + ALT + W", hl.dsp.global("quickshell:widgetEdit"),

@@ -259,7 +259,8 @@ Scope {
                 win.source !== null ? "mic" : "",
                 Camera.installed && Camera.state !== "none" && Camera.state !== "unknown" ? "camera" : "",
                 Controls.profilesAnswered ? "power" : "",
-                "tablet"
+                "tablet",
+                "appearance"
             ].filter(t => t !== "")
             readonly property var rows: {
                 const out = [];
@@ -339,6 +340,15 @@ Scope {
                         expandable: true,
                         opensOnly: true
                     };
+                case "appearance":
+                    return {
+                        icon: Theme.iconPalette,
+                        title: "Appearance",
+                        detail: ({ black: "Black", white: "White", custom: "Custom" })[Appearance.mode]
+                                ?? `Automatic · ${Appearance.tone === "light" ? "White" : "Black"}`,
+                        // Lit off the default, as the power mode is.
+                        active: Appearance.mode !== "black"
+                    };
                 case "power":
                     return {
                         icon: win.profile(PowerProfiles.profile).icon,
@@ -380,6 +390,14 @@ Scope {
                     else
                         Quickshell.execDetached([root.hyprScripts + "/camera.sh", "off"]);
                     break;
+                // The tone's own panel on this screen, the control centre
+                // closed first: two transient panels never stand together.
+                case "appearance": {
+                    const screen = win.screen;
+                    Controls.close();
+                    Appearance.togglePanel(screen);
+                    break;
+                }
                 }
             }
 

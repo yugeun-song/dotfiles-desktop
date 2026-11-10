@@ -143,7 +143,7 @@ benv() {
         XDG_DATA_DIRS="$WORK/data:${XDG_DATA_DIRS:-/usr/local/share:/usr/share}" \
         CAMERA_SWITCH_SYSTEM="$WORK/bin/camera-switch-stub" CAMERA_SWITCH_FILE="$WORK/camera-off" \
         KEYFEED_SYSTEM="$WORK/keyfeed-stub" PATH="$WORK/bin:$PATH" BAR_VIZ_DEMO=1 \
-        KEYFEED_SOCKET="$WORK/keyfeed/socket" KEYFEED_HOLD_DETACHED=1 \
+        KEYFEED_SOCKET="$WORK/keyfeed/socket" KEYFEED_HOLD_DETACHED=1 BAR_WALLPAPER="$WORK/desk.png" \
         BAR_TRAY_HIDERS="[{\"process\": \"e2e-hider\", \"entry\": \"e2e-hider\", \"name\": \"Hider\", \"icon\": \"$WORK/hider.png\"}]" "$@"
 }
 ipc() { benv qs -p "$WORK/bar" ipc call "$@" 2>/dev/null; }
@@ -375,6 +375,12 @@ EOF
 bus_out=$(dbus-daemon --config-file="$WORK/dbus.conf" --fork --print-address=1 --print-pid=1)
 BUS=$(sed -n 1p <<<"$bus_out")
 DBUS_PID=$(sed -n 2p <<<"$bus_out")
+
+# The desktop's picture as the bar's tones read it (BAR_WALLPAPER), dark
+# until scenario 34 lightens it: the run's own, never the session's.
+if (( PIL )); then
+    python3 -c 'import sys; from PIL import Image; Image.new("RGB", (2560, 1440), (10, 10, 12)).save(sys.argv[1])' "$WORK/desk.png"
+fi
 
 start_bar
 echo "e2e: nested session $SIG on $WL, bar pid $QS_PID"
@@ -2222,9 +2228,9 @@ else
     rows_of_bar_menu() { menu_rows 900 700 640 && [[ $(wc -w <<<"$rows") == "$1" ]]; }
     bar_row() { awk -v at="$1" '{print $at}' <<<"$rows"; }
     bar_is() { [[ "$(ipc e2e "$1")" == "$2" ]]; }
-    bar_menu_gone() { ! rows_of_bar_menu 15; }
+    bar_menu_gone() { ! rows_of_bar_menu 16; }
     right_click 900
-    if wait_for 5 rows_of_bar_menu 15; then
+    if wait_for 5 rows_of_bar_menu 16; then
         pass "a right click on the bar opens its menu, all its rows"
         y=$(bar_row 2)
         input move 910 "$y" sleep 200 click sleep 100
@@ -2233,8 +2239,8 @@ else
         input key 1 sleep 100
         wait_for 3 bar_is controls false
         right_click 900
-        if wait_for 5 rows_of_bar_menu 15; then
-            y=$(bar_row 15)
+        if wait_for 5 rows_of_bar_menu 16; then
+            y=$(bar_row 16)
             input move 910 "$y" sleep 200 click sleep 100
             check "its Session opens the session dialog, and only that" wait_for 3 bar_is session true
             input key 1 sleep 100
@@ -2330,6 +2336,67 @@ mirror_status on false
 check "and goes by itself when the mirror has ended" wait_for 8 mirror_card false
 check "taking the listening with it" wait_for 3 mirror_quiet
 check "the mirror's files raised no QML warning" quiet_since "$mark" '[@/](Mirror|MirrorPanel|MirrorWidget|MirrorChoice)[.]qml.*(WARN|ERROR)|(WARN|ERROR).*[@/](Mirror|MirrorPanel|MirrorWidget|MirrorChoice)[.]qml'
+
+# 34. The tones (services/Appearance.qml, modules/AppearancePanel.qml; the
+# user, 2026-11-11): Super+Shift+A opens their panel; black is the bar's own
+# palette, white turns the bar white; automatic follows the run's own
+# picture (BAR_WALLPAPER), in its tone or opposite it, read again at
+# wallpaper.sh's word; the island below the bar is lifted to grey over a
+# dark picture and black over a light one; the pick outlives a reload. The
+# bar's colour is read off an empty patch of HEADLESS-2's bar.
+bar_rgb() {
+    shot -o HEADLESS-2 "$WORK/tone.png" 2>/dev/null || return 1
+    python3 -c 'import sys; from PIL import Image; print(*Image.open(sys.argv[1]).convert("RGB").getpixel((1700, 3)))' "$WORK/tone.png"
+}
+bar_is() {
+    local r g b
+    read -r r g b < <(bar_rgb) || return 1
+    case $1 in
+        black) (( r < 30 && g < 30 && b < 40 )) ;;
+        white) (( r > 230 && g > 230 && b > 220 )) ;;
+    esac
+}
+tone_is() { [[ "$(ipc appearance state | jq -r .mode)" == "$1" ]]; }
+# A grey: its three channels alike (bash's regex has no back references).
+island_lifted() {
+    local f
+    f=$(ipc appearance island HEADLESS-2) || return 1
+    [[ "$f" =~ ^#[0-9a-f]{6}$ && "${f:1:2}" == "${f:3:2}" && "${f:1:2}" == "${f:5:2}" && "$f" != "#000000" ]]
+}
+island_black() { [[ "$(ipc appearance island HEADLESS-2)" == "#000000" ]]; }
+if (( ! PIL )); then
+    skip "the tones: python3-pillow is not installed"
+else
+    mark=$(output_mark)
+    focus_external
+    # An empty workspace: the island reads the wallpaper only where no
+    # window covers it.
+    n dispatch "hl.dsp.focus({ workspace = 9 })" >/dev/null
+    input key super shift 30
+    check "Super+Shift+A opens the tones' panel" wait_for 3 has_layer quickshell:appearance
+    input key 1 sleep 300
+    check "and Esc closes it" wait_for 3 lacks_layer quickshell:appearance
+    check "black is the bar's own colour" wait_for 3 bar_is black
+    ipc appearance mode white >/dev/null
+    check "white turns the bar white" wait_for 3 bar_is white
+    ipc appearance mode auto >/dev/null
+    check "automatic over a dark picture is black" wait_for 3 bar_is black
+    check "and the island below the bar is lifted to grey there" wait_for 3 island_lifted
+    python3 -c 'import sys; from PIL import Image; Image.new("RGB", (2560, 1440), (236, 232, 224)).save(sys.argv[1])' "$WORK/desk.png"
+    ipc wallpaper changed >/dev/null
+    check "a light picture, at wallpaper.sh's word, turns it white" wait_for 5 bar_is white
+    check "and leaves the island black" wait_for 3 island_black
+    ipc appearance rule opposite >/dev/null
+    check "opposite the picture, black again" wait_for 3 bar_is black
+    # Before the reload: its old generation's teardown may warn from any file.
+    check "the tones raised no QML warning" quiet_since "$mark" '[@/](Appearance|AppearancePanel|Theme)[.]qml.*(WARN|ERROR)|(WARN|ERROR).*[@/](Appearance|AppearancePanel|Theme)[.]qml'
+    reload_bar
+    check "the pick outlives a reload" tone_is auto
+    check "its rule too" wait_for 3 bar_is black
+    ipc appearance rule match >/dev/null
+    ipc appearance mode black >/dev/null
+    check "and black is back at the end" wait_for 3 bar_is black
+fi
 
 check "no session action or hardware write was even attempted" no_writes
 

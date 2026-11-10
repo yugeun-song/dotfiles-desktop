@@ -265,11 +265,13 @@ class LockColoursTest(unittest.TestCase):
     def test_the_card_is_measured_as_lock_media_draws_it(self):
         self.assertAlmostEqual(lock_colours.card_aspect(), lock_media.W / lock_media.H)
 
-    # Theme.fg and Theme.bg in the bar's Theme.qml: keep in step.
+    # The bar's black tone, where Theme.fg and Theme.bg come from
+    # (services/Appearance.qml): keep in step.
     def test_the_beige_and_the_dark_hue_are_the_bars(self):
-        theme = (REPO / "quickshell/bar/services/Theme.qml").read_text(encoding="utf-8")
-        self.assertIn(f'readonly property color fg:     "#{lock_colours.BEIGE}"', theme)
-        self.assertIn(f'readonly property color bg:     "#{lock_colours.BAR_BG}"', theme)
+        tones = (REPO / "quickshell/bar/services/Appearance.qml").read_text(encoding="utf-8")
+        black = tones[tones.index("function black()"):tones.index("function white()")]
+        self.assertIn(f'const bg = root.rgb("#{lock_colours.BAR_BG}");', black)
+        self.assertIn(f'fg: root.rgb("#{lock_colours.BEIGE}")', black)
 
 
 if __name__ == "__main__":

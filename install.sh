@@ -1490,7 +1490,7 @@ doctor() {
         command -v "${tool%%:*}" >/dev/null 2>&1 || missing+=("${tool%%:*} (${tool#*:})")
     done
     if command -v python3 >/dev/null 2>&1 && ! python3 -c 'import PIL' 2>/dev/null; then
-        missing+=("Pillow for python3 (the drawn arrow in the cursor theme, the lock screen's track card and colours)")
+        missing+=("Pillow for python3 (the drawn arrow in the cursor theme, the lock screen's track card and colours, the bar's tones after the wallpaper)")
     fi
     if command -v python3 >/dev/null 2>&1 \
         && ! python3 -c 'import gi, cairo; gi.require_version("PangoCairo", "1.0")' 2>/dev/null; then

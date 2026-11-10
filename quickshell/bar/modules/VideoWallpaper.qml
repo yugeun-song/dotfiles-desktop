@@ -62,9 +62,11 @@ Scope {
     IpcHandler {
         target: "wallpaper"
 
-        // wallpaper.sh: the desktop's picture, and with it its video, changed.
+        // wallpaper.sh: the desktop's picture, and with it its video, changed;
+        // the tone reads the picture again too (services/Appearance.qml).
         function changed(): void {
             root.read();
+            Appearance.refresh();
         }
     }
 

@@ -171,7 +171,7 @@ Item {
                 probe: "100"
                 horizontal: "right"
                 tabular: true
-                color: row.info.alert ? Theme.accentRed : Theme.fg
+                color: row.info.alert ? Theme.inkOn(Theme.accentRed) : Theme.fg
             }
 
             Text {

@@ -1062,7 +1062,7 @@ Scope {
                 scale: badgeWindow.fit
                 transformOrigin: Item.TopLeft
                 radius: Theme.px(18)
-                color: Theme.accentIndigo
+                color: Theme.menuHighlight
 
                 Column {
                     id: badgeColumn
@@ -1076,7 +1076,7 @@ Scope {
                         font.family: Theme.uiFont
                         font.pixelSize: Theme.px(64)
                         font.weight: Font.Bold
-                        color: Theme.ink
+                        color: Theme.menuHighlightText
                     }
 
                     Text {
@@ -1085,7 +1085,7 @@ Scope {
                         font.family: Theme.uiFont
                         font.pixelSize: Theme.px(14)
                         font.weight: Font.Medium
-                        color: Theme.ink
+                        color: Theme.menuHighlightText
                     }
                 }
             }
@@ -1135,7 +1135,7 @@ Scope {
         implicitWidth: chipText.implicitWidth + Theme.px(22)
         implicitHeight: Theme.px(30)
         radius: Theme.px(8)
-        color: chip.active ? Theme.accentIndigo
+        color: chip.active ? Theme.menuHighlight
                            : (chipHover.hovered && chip.enabled ? Theme.surfaceRaisedHover : Theme.surfaceRaised)
         opacity: chip.enabled ? 1 : 0.4
 
@@ -1147,7 +1147,7 @@ Scope {
             font.family: Theme.uiFont
             font.pixelSize: Theme.px(13)
             font.weight: Font.Medium
-            color: chip.active ? Theme.ink : Theme.fg
+            color: chip.active ? Theme.menuHighlightText : Theme.fg
         }
 
         HoverHandler {
@@ -1592,7 +1592,7 @@ Scope {
                                         // Told apart by their fill on the
                                         // well; one turned off by its
                                         // opacity and its "off".
-                                        color: box.active ? Theme.accentIndigo
+                                        color: box.active ? Theme.menuHighlight
                                                           : (boxHover.hovered ? Theme.surfaceRaisedHover : Theme.surfaceRaised)
                                         opacity: box.modelData.disabled ? 0.55 : 1
 
@@ -1606,7 +1606,7 @@ Scope {
                                                 font.family: Theme.uiFont
                                                 font.pixelSize: Theme.px(34)
                                                 font.weight: Font.DemiBold
-                                                color: box.active ? Theme.ink : Theme.fg
+                                                color: box.active ? Theme.menuHighlightText : Theme.fg
                                             }
 
                                             // Held to the box, which is
@@ -1620,14 +1620,14 @@ Scope {
                                                 font.family: Theme.uiFont
                                                 font.pixelSize: Theme.px(11)
                                                 font.weight: Font.Medium
-                                                color: box.active ? Theme.ink : Theme.muted
+                                                color: box.active ? Theme.menuHighlightText : Theme.muted
                                             }
                                         }
 
                                         // The edge it would join, in the state role's accent.
                                         Rectangle {
                                             visible: box.edge !== ""
-                                            color: Theme.accentIndigo
+                                            color: Theme.menuHighlight
                                             radius: width / 2
                                             x: box.edge === "right" ? box.width - width : 0
                                             y: box.edge === "below" ? box.height - height : 0
@@ -1780,7 +1780,7 @@ Scope {
                                         radius: Theme.px(12)
                                         color: tileHover.hovered ? Theme.surfaceRaisedHover : Theme.surfaceRaised
                                         border.width: Math.max(1, Theme.px(2))
-                                        border.color: tile.active ? Theme.accentIndigo : "transparent"
+                                        border.color: tile.active ? Theme.menuHighlight : "transparent"
 
                                         // The desk as it is, apart from the
                                         // selection outline, so choosing
@@ -1793,7 +1793,7 @@ Scope {
                                             width: currentLabel.implicitWidth + Theme.px(12)
                                             height: currentLabel.implicitHeight + Theme.px(4)
                                             radius: height / 2
-                                            color: tile.active ? Theme.accentIndigo : Theme.surfaceRaisedHover
+                                            color: tile.active ? Theme.menuHighlight : Theme.surfaceRaisedHover
 
                                             Text {
                                                 id: currentLabel
@@ -1803,7 +1803,7 @@ Scope {
                                                 font.family: Theme.uiFont
                                                 font.pixelSize: Theme.px(10)
                                                 font.weight: Font.DemiBold
-                                                color: tile.active ? Theme.ink : Theme.fg
+                                                color: tile.active ? Theme.menuHighlightText : Theme.fg
                                             }
                                         }
 
@@ -1843,7 +1843,7 @@ Scope {
                                                 font.family: Theme.uiFont
                                                 font.pixelSize: Theme.px(12)
                                                 font.weight: Font.Medium
-                                                color: tile.active ? Theme.accentIndigo : Theme.muted
+                                                color: tile.active ? Theme.menuHighlight : Theme.muted
                                             }
                                         }
 
@@ -1960,7 +1960,7 @@ Scope {
                                     width: Theme.px(26)
                                     height: Theme.px(26)
                                     radius: Theme.px(7)
-                                    color: Theme.accentIndigo
+                                    color: Theme.menuHighlight
                                     anchors.verticalCenter: parent.verticalCenter
 
                                     Text {
@@ -1969,7 +1969,7 @@ Scope {
                                         font.family: Theme.uiFont
                                         font.pixelSize: Theme.px(14)
                                         font.weight: Font.Bold
-                                        color: Theme.ink
+                                        color: Theme.menuHighlightText
                                     }
                                 }
 
@@ -2037,7 +2037,7 @@ Scope {
                                         height: Theme.px(24)
                                         radius: height / 2
                                         anchors.verticalCenter: parent.verticalCenter
-                                        color: parent.on ? Theme.accentIndigo : Theme.surfaceRaised
+                                        color: parent.on ? Theme.menuHighlight : Theme.surfaceRaised
                                         opacity: parent.on && !parent.canOff ? 0.5 : 1
 
                                         Rectangle {
@@ -2046,7 +2046,7 @@ Scope {
                                             radius: width / 2
                                             anchors.verticalCenter: parent.verticalCenter
                                             x: pill.parent.on ? pill.width - width - Theme.px(3) : Theme.px(3)
-                                            color: pill.parent.on ? Theme.ink : Theme.fg
+                                            color: pill.parent.on ? Theme.menuHighlightText : Theme.fg
 
                                             Behavior on x {
                                                 NumberAnimation {
@@ -2447,7 +2447,7 @@ Scope {
                                             width: saverSwitch.halfWidth
                                             height: saverSwitch.height - saverSwitch.pad * 2
                                             radius: Theme.px(6)
-                                            color: Theme.accentIndigo
+                                            color: Theme.menuHighlight
 
                                             Behavior on x {
                                                 NumberAnimation {
@@ -2466,7 +2466,7 @@ Scope {
                                             font.family: Theme.uiFont
                                             font.pixelSize: Theme.px(13)
                                             font.weight: Font.Medium
-                                            color: saverRow.on ? Theme.fg : Theme.ink
+                                            color: saverRow.on ? Theme.fg : Theme.menuHighlightText
                                         }
 
                                         Text {
@@ -2478,7 +2478,7 @@ Scope {
                                             font.family: Theme.uiFont
                                             font.pixelSize: Theme.px(13)
                                             font.weight: Font.Medium
-                                            color: saverRow.on ? Theme.ink : Theme.fg
+                                            color: saverRow.on ? Theme.menuHighlightText : Theme.fg
                                         }
 
                                         HoverHandler {
@@ -2727,7 +2727,7 @@ Scope {
                                     text: Theme.iconCheck
                                     font.family: Theme.iconFont
                                     font.pixelSize: Theme.px(14)
-                                    color: Theme.accentIndigo
+                                    color: Theme.menuHighlight
                                 }
 
                                 MouseArea {

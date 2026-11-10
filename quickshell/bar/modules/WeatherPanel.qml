@@ -259,8 +259,8 @@ Scope {
                                 font.family: Theme.uiFont
                                 font.pixelSize: Theme.px(15)
                                 color: Theme.fg
-                                selectionColor: Theme.accentIndigo
-                                selectedTextColor: Theme.ink
+                                selectionColor: Theme.menuHighlight
+                                selectedTextColor: Theme.menuHighlightText
 
                                 onTextChanged: {
                                     root.typed = field.text;
@@ -373,7 +373,7 @@ Scope {
                                         text: Theme.iconCheck
                                         font.family: Theme.iconFont
                                         font.pixelSize: Theme.px(16)
-                                        color: Theme.accentIndigo
+                                        color: Theme.menuHighlight
                                     }
 
                                     MouseArea {

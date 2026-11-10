@@ -150,9 +150,10 @@ Singleton {
     readonly property color offTone: Qt.rgba(root.muted.r, root.muted.g, root.muted.b, 0.55)
 
     // A card on a same-coloured surface has no edge and a 10% hairline
-    // vanishes on dark, so cards are lifted slightly instead.
-    readonly property color surfaceRaised: Qt.lighter(root.bg, 1.45)
-    readonly property color surfaceRaisedHover: Qt.lighter(root.bg, 1.9)
+    // vanishes on dark, so cards are lifted slightly instead: lighter on the
+    // black tone, plain white on the white one (Appearance.qml).
+    readonly property color surfaceRaised: Appearance.palette.raised
+    readonly property color surfaceRaisedHover: Appearance.palette.raisedHover
     readonly property int surfaceRadius:  root.px(16)
 
     // Where a line goes, after the user's call (2026-11-02: not fewer
@@ -169,7 +170,7 @@ Singleton {
     // as the outermost line. Rows repeated down a list are told apart by a
     // fill, never by a line under each. Drawings keep their strokes.
     readonly property int surfaceBorder:  Math.max(1, root.px(1))
-    readonly property color surfaceWell:  Qt.darker(root.bg, 1.8)
+    readonly property color surfaceWell:  Appearance.palette.well
     readonly property color surfaceSeparator: Qt.rgba(root.fg.r, root.fg.g, root.fg.b, 0.07)
 
     // ---------------------------------------------------------------------
@@ -248,6 +249,12 @@ Singleton {
     // Deeper still behind a glyph of the colour, as the scooter's close
     // button is its green times 0.23: the island's tinted buttons.
     readonly property real islandTintFactor: 0.23
+
+    // An accent as small text on a surface: as it is where it reads (the
+    // black tone), deepened on the white one until it does.
+    function inkOn(c: color): color {
+        return Appearance.readable(c, root.surfaceBg, 4.5);
+    }
 
     function islandDim(c: color): color {
         return Qt.rgba(c.r * root.islandDimFactor, c.g * root.islandDimFactor,
@@ -420,8 +427,10 @@ Singleton {
     readonly property int barMenuRowRadius:       root.barMenuRadius - root.barMenuPad
     readonly property int barMenuMinWidth:        18 * root.menuTextSize
     readonly property int barMenuTailWidth:       3 * root.menuTextSize
-    readonly property color menuHighlight:     root.accentIndigo
-    readonly property color menuHighlightText: root.ink
+    // The selection: the tone's accent (indigo but in the custom tone), its
+    // text the navy or, on a dark accent, white.
+    readonly property color menuHighlight:     Appearance.palette.accent
+    readonly property color menuHighlightText: Appearance.palette.accentText
 
     readonly property int windowChipPadding:  root.px(10)
 
@@ -607,12 +616,14 @@ Singleton {
     readonly property int unlockSweepMs:   root.notifLeaveMs
 
     // ---------------------------------------------------------------------
-    // spaceduck palette, matching the kitty theme
+    // The base colours, in the tone chosen (services/Appearance.qml): the
+    // black tone is the spaceduck palette, matching the kitty theme. The
+    // colours after them are fixed in every tone.
     // ---------------------------------------------------------------------
-    readonly property color bg:     "#0f111b"
-    readonly property color bgAlt:  "#1b1c36"
-    readonly property color fg:     "#ecf0c1"
-    readonly property color muted:  "#686f9a"
+    readonly property color bg:     Appearance.palette.bg
+    readonly property color bgAlt:  Appearance.palette.bgAlt
+    readonly property color fg:     Appearance.palette.fg
+    readonly property color muted:  Appearance.palette.muted
     readonly property color red:    "#e33400"
     readonly property color green:  "#5ccc96"
     readonly property color yellow: "#f2ce00"
@@ -755,6 +766,8 @@ Singleton {
     readonly property string iconCheck:     String.fromCodePoint(0xF012C)
     readonly property string iconRestart:   String.fromCodePoint(0xF0450)
     readonly property string iconSettings:  String.fromCodePoint(0xF0493)
+    // md-palette: the control centre's tile for the tone (AppearancePanel).
+    readonly property string iconPalette:   String.fromCodePoint(0xF03D8)
     readonly property string iconSwap:      String.fromCodePoint(0xF04E1)
     readonly property string iconLock:      String.fromCodePoint(0xF033E)
     readonly property string iconLogout:    String.fromCodePoint(0xF0343)

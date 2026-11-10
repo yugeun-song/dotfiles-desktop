@@ -77,7 +77,7 @@ xdg-utils
 xdg-user-dirs
 kcmutils           # kcmshell6
 kconfig            # install.sh's kreadconfig6 and kwriteconfig6
-python-pillow      # lock-colours.py, lock-media.py, the cursor build
+python-pillow      # lock-colours.py, lock-media.py, wall-tone.py, the cursor build
 python-gobject     # lock-media.py
 python-cairo       # lock-media.py
 

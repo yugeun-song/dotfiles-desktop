@@ -670,8 +670,25 @@ Scope {
                                 }
                             }
 
-                            Text {
+                            // The bar's colours after the wallpaper, in their own
+                            // panel (AppearancePanel; the user, 2026-11-11).
+                            PillButton {
+                                id: colours
+
                                 anchors.left: openFolder.right
+                                anchors.leftMargin: Theme.px(8)
+                                anchors.verticalCenter: parent.verticalCenter
+                                icon: Theme.iconPalette
+                                label: "Colours…"
+                                onClicked: {
+                                    const screen = win.screen;
+                                    root.close();
+                                    Appearance.togglePanel(screen);
+                                }
+                            }
+
+                            Text {
+                                anchors.left: colours.right
                                 anchors.leftMargin: Theme.px(12)
                                 anchors.right: actions.left
                                 anchors.rightMargin: Theme.px(12)

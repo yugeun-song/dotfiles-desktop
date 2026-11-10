@@ -95,7 +95,7 @@ Item {
 
     function dayColor(column: int, fallback: color): color {
         const d = root.weekday(column);
-        return d === 0 ? Theme.accentRed : d === 6 ? Theme.accentIndigo : fallback;
+        return d === 0 ? Theme.inkOn(Theme.accentRed) : d === 6 ? Theme.inkOn(Theme.accentIndigo) : fallback;
     }
 
     // Today: the small card, and the medium card's left.
@@ -120,7 +120,7 @@ Item {
             font.pixelSize: Theme.widgetSmallText
             font.weight: Font.DemiBold
             font.letterSpacing: 1.2
-            color: Theme.accentRed
+            color: Theme.inkOn(Theme.accentRed)
         }
 
         HeroText {

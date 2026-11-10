@@ -15,9 +15,9 @@ import Quickshell
 //   widgetEditor, the widgets' edit mode: a window as displays is, so its
 //     settings can open over it and give it the keys back.
 //   launcher, controls, notifications, weather, cheatsheet, wallpaper, mirror,
-//   widgetSettings, widgetOptions: transient, as a menu bar's menus and a
-//     search overlay are: one at a time, each opening shuts whichever of
-//     them was up.
+//   appearance, widgetSettings, widgetOptions: transient, as a menu bar's
+//     menus and a search overlay are: one at a time, each opening shuts
+//     whichever of them was up.
 // One holder of the keyboard at a time, the newest panel: two exclusive
 // layers on one screen take the keys from each other.
 Singleton {

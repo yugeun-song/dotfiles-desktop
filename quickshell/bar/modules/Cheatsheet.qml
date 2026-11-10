@@ -207,8 +207,8 @@ Scope {
                             font.family: Theme.uiFont
                             font.pixelSize: Theme.px(14)
                             color: Theme.fg
-                            selectionColor: Theme.accentIndigo
-                            selectedTextColor: Theme.ink
+                            selectionColor: Theme.menuHighlight
+                            selectedTextColor: Theme.menuHighlightText
                             // A composing Hangul syllable counts at once.
                             onTextChanged: root.query = field.text + field.preeditText
                             onPreeditTextChanged: root.query = field.text + field.preeditText

@@ -1120,6 +1120,51 @@ ShellRoot {
         check("mirror: looks for nothing with no list open", Mirror.scanners, 0);
     }
 
+    // The tones (services/Appearance.qml; the user, 2026-11-11). Off, as here
+    // and in the lock and the video player, the bar keeps its black to the
+    // pixel whatever was saved.
+    function testAppearance() {
+        const A = Appearance;
+        const hex = c => A.hexOf(c);
+        check("tones: off, Theme keeps the black tone",
+              [hex(Theme.bg), hex(Theme.fg), hex(Theme.muted), hex(Theme.menuHighlight), hex(Theme.menuHighlightText)],
+              ["#0f111b", "#ecf0c1", "#686f9a", "#7aa2f7", "#0f111b"]);
+        check("tones: off, the island is black anywhere", hex(A.islandFill("HEADLESS-1")), "#000000");
+        const black = A.black();
+        check("tones: the black tone's lifts, as Theme drew them",
+              [hex(black.raised), hex(black.raisedHover), hex(black.well)],
+              [hex(Qt.lighter(A.rgb("#0f111b"), 1.45)), hex(Qt.lighter(A.rgb("#0f111b"), 1.9)), hex(Qt.darker(A.rgb("#0f111b"), 1.8))]);
+        const white = A.paletteFor("white", "match", {}, null);
+        check("tones: white, navy on a warm white", [hex(white.bg), hex(white.fg), white.light], ["#f4f4f0", "#0f111b", true]);
+        check("tones: white's quiet text still reads", A.contrast(white.muted, white.bg) >= 4.5, true);
+        check("tones: white's cards are lifted to white", hex(white.raised), "#ffffff");
+        check("tones: the rule", [A.toneFor({ tone: "light" }, "match"), A.toneFor({ tone: "light" }, "opposite"),
+                                  A.toneFor({ tone: "dark" }, "opposite"), A.toneFor(null, "match")],
+              ["light", "dark", "light", "dark"]);
+        check("tones: automatic, in the wallpaper's tone or opposite it",
+              [hex(A.paletteFor("auto", "match", {}, { tone: "light" }).bg), hex(A.paletteFor("auto", "opposite", {}, { tone: "light" }).bg),
+               hex(A.paletteFor("auto", "match", {}, null).bg)],
+              ["#f4f4f0", "#0f111b", "#0f111b"]);
+        const reading = { tone: "dark", palettes: { match: { bg: "#0e172d", fg: "#e0eafd", accent: "#e79718" },
+                                                     opposite: { bg: "#eaf0fe", fg: "#0f1a31", accent: "" } } };
+        const drawn = A.paletteFor("custom", "match", {}, reading);
+        check("tones: custom, the wallpaper's three", [hex(drawn.bg), hex(drawn.fg), hex(drawn.accent), drawn.light],
+              ["#0e172d", "#e0eafd", "#e79718", false]);
+        check("tones: custom, the tone's accent where the wallpaper gave none",
+              hex(A.paletteFor("custom", "opposite", {}, reading).accent), "#7aa2f7");
+        const byHand = A.paletteFor("custom", "match", { bg: "#ffffff", accent: "#9d6717", fg: "nonsense" }, reading);
+        check("tones: custom, a hand's colours over the wallpaper's, nonsense ignored",
+              [hex(byHand.bg), hex(byHand.fg), hex(byHand.accent), byHand.light], ["#ffffff", "#e0eafd", "#9d6717", true]);
+        check("tones: text on a dark accent is white, on a light one navy",
+              [hex(A.textOn(A.rgb("#9d6717"))), hex(A.textOn(A.rgb("#7aa2f7")))], ["#ffffff", "#0f111b"]);
+        check("tones: a hex is #rrggbb", [A.validHex("#12ab3F"), A.validHex("12ab3f"), A.validHex("#12ab3"), A.validHex(undefined)],
+              [true, false, false, false]);
+        const deep = A.readable(A.rgb("#7aa2f7"), white.bg, 4.5);
+        check("tones: an accent as text is deepened on white until it reads, kept on black",
+              [A.contrast(deep, white.bg) >= 4.5, hex(A.readable(A.rgb("#7aa2f7"), black.bg, 4.5))], [true, "#7aa2f7"]);
+        check("tones: off, a pick is not kept", (A.setMode("white"), A.mode), "black");
+    }
+
     function testBarOptions() {
         const keys = BarOptions.keysOf([
             { description: "Display settings", modmask: 0, key: "XF86Display" },
@@ -1664,7 +1709,7 @@ ShellRoot {
                             root.testBrightness, root.testCamera, root.testBadge, root.testControls, root.testSurfaces,
                             root.testShortcuts, root.testWidgets, root.testLockout,
                             root.testApps, root.testTray, root.testBarOptions, root.testMirror,
-                            root.testScreenShare, root.testIsland];
+                            root.testScreenShare, root.testIsland, root.testAppearance];
             if (modules.item)
                 suites.push(() => modules.item.testSlider(root.check), () => modules.item.testLauncher(root.check), () => modules.item.testDisplays(root.check));
             else
