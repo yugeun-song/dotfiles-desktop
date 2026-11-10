@@ -15,7 +15,7 @@ import Quickshell.Hyprland
 //           same rule, each of which can be set by hand.
 // Theme.qml takes its base colours from `palette`, so whatever is drawn from
 // Theme follows. The island stays black in every tone (the user's call), and
-// is lifted to grey only where it hangs over a ground too dark for it
+// turns the bar's cream only where it hangs over a ground too dark for black
 // (islandFill). scripts/wall-tone.py reads the wallpaper once per change
 // (wallpaper.sh's "wallpaper changed", a screen added or resized): nothing
 // polls. Only the bar sets `active`: the lock screen and the video player

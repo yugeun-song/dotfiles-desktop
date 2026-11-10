@@ -52,15 +52,10 @@ class WallToneTest(unittest.TestCase):
         self.assertEqual(done.returncode, 0, done.stderr)
         return json.loads(done.stdout)
 
-    def test_a_dark_picture_asks_for_the_black_tone_and_lifts_the_island(self):
+    def test_a_dark_picture_asks_for_the_black_tone_and_turns_the_island_cream(self):
         got = self.read(self.picture("black.png", (8, 8, 10)))
         self.assertEqual(got["tone"], "dark")
-        for name in ("PANEL", "DESK"):
-            fill = got["screens"][name]["island"]
-            self.assertRegex(fill, r"^#([0-9a-f]{2})\1\1$")
-            level = int(fill[1:3], 16)
-            self.assertGreater(level, 0x20)
-            self.assertLessEqual(level, round(wall_tone.encode(wall_tone.FILL_MOST) * 255))
+        self.assertEqual({s["island"] for s in got["screens"].values()}, {"#ecf0c1"})
 
     def test_a_light_picture_asks_for_white_and_keeps_the_island_black(self):
         got = self.read(self.picture("light.png", (236, 232, 224)))
@@ -109,7 +104,7 @@ class WallToneTest(unittest.TestCase):
         im.paste((5, 5, 6), (900, 0, 1660, 700))
         im.save(self.root / "notch.png")
         got = self.read(self.root / "notch.png", "DESK:2560:1440:37")
-        self.assertNotEqual(got["screens"]["DESK"]["island"], "#000000")
+        self.assertEqual(got["screens"]["DESK"]["island"], "#ecf0c1")
 
     def test_an_unreadable_picture_fails_and_says_nothing_on_stdout(self):
         bad = self.root / "bad.png"
@@ -124,7 +119,8 @@ class WallToneTest(unittest.TestCase):
         spec = importlib.util.spec_from_file_location("lock_colours", REPO / "hypr/scripts/lock-colours.py")
         lock = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(lock)
-        self.assertEqual((wall_tone.FILL_READS, wall_tone.FILL_MOST), (lock.FILL_READS, lock.FILL_MOST))
+        self.assertEqual(wall_tone.FILL_READS, lock.FILL_READS)
+        self.assertEqual(wall_tone.CREAM[1:], lock.BEIGE)
         for ground in (0.0, 0.01, 0.03, 0.2):
             self.assertEqual(wall_tone.island_fill(ground)[1:], lock.fill_of(ground))
 

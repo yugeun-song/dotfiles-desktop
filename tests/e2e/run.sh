@@ -1480,8 +1480,8 @@ fi
 # it off (kept in the bar's state). A hover grows the pill itself into the
 # player from the screen's edge, in the island's fill (Appearance.islandFill,
 # the user, 2026-11-11): over this run's desktop, too dark for black, the
-# darkest grey that shows. Nothing of the pill is left in the bar, which runs
-# on beside it; the card
+# bar's cream, what it holds turned dark. Nothing of the pill is left in the
+# bar, which runs on beside it; the card
 # stays while its play-pause pauses and goes when the pointer leaves or the
 # switch turns it off. Then what plays as wide as it needs and no wider than
 # the music island's most (half the bar's idle width), an event as wide as it
@@ -1493,7 +1493,8 @@ mark=$(output_mark)
 # The grown island's fill as the bar has it for this screen, "#rrggbb".
 grown_fill() { ipc appearance island HEADLESS-2; }
 # The pill's count is of its colour, the second argument: black, as the pill
-# in the bar stays, unless the grown island's fill is asked for.
+# in the bar stays, unless the grown island's fill is asked for. Its text is
+# light ink, and white alone (the pill's title) is told from the cream.
 island_pixels() {
     shot -g "820,0 900x${1:-34}" "$WORK/island.png" 2>/dev/null || return 1
     python3 -c 'import sys; from PIL import Image
@@ -1503,10 +1504,11 @@ fill = [int(sys.argv[2][i:i + 2], 16) for i in (1, 3, 5)]
 ink = sum(1 for r, g, b in rgb if r > 150 and g > 150 and b > 100)
 cover = sum(1 for r, g, b in rgb if r > 180 and g < 90 and b > 110)
 pill = sum(1 for c in rgb if all(abs(a - b) < 6 for a, b in zip(c, fill)))
-print(ink, cover, pill)' "$WORK/island.png" "${2:-#000000}"
+white = sum(1 for r, g, b in rgb if r > 200 and g > 200 and b > 225)
+print(ink, cover, pill, white)' "$WORK/island.png" "${2:-#000000}"
 }
-island_shows() { local t c p; read -r t c p < <(island_pixels) && (( t > 100 && c > 40 && p > 2000 )); }
-island_gone() { local t c p; read -r t c p < <(island_pixels) && (( t < 5 && c < 5 && p < 5 )); }
+island_shows() { local t c p w; read -r t c p w < <(island_pixels) && (( t > 100 && c > 40 && p > 2000 )); }
+island_gone() { local t c p w; read -r t c p w < <(island_pixels) && (( t < 5 && c < 5 && p < 5 )); }
 # The bar's last row in its own colour (Theme.bg, #0f111b; no edge line
 # since 2026-10-27): under the island's middle, and beside it to the left.
 bar_row_pixels() {
@@ -1563,14 +1565,13 @@ else
     echo "e2e: the grown island: ${below:-?} of its fill (${fill:-?}) under the bar, ${cover:-?} of the cover"
     check "hovering the island grows it into the player under the bar" \
         test "${below:-0}" -gt 20000 -a "${cover:-0}" -gt 1500
-    check "in a grey that shows over this desktop, too dark for black" \
-        test -n "$fill" -a "$fill" != "#000000"
+    check "in the bar's cream over this desktop, too dark for black" test "$fill" = "#ecf0c1"
     # Above the grown card, whose padding (20 px) starts at the screen's edge:
     # the rows the pill's cover and title cross, its own cover and title not.
-    read -r ink small pill < <(island_pixels 20 "$fill")
-    echo "e2e: the bar's middle meanwhile: ink ${ink:-?}, cover ${small:-?}, fill ${pill:-?}"
+    read -r _ small pill white < <(island_pixels 20 "$fill")
+    echo "e2e: the bar's middle meanwhile: white ${white:-?}, cover ${small:-?}, fill ${pill:-?}"
     check "and the pill in the bar has given way to it: none of its cover or text is left there" \
-        test "${small:-999}" -lt 5 -a "${ink:-999}" -lt 5 -a "${pill:-0}" -gt 2000
+        test "${small:-999}" -lt 5 -a "${white:-999}" -lt 5 -a "${pill:-0}" -gt 2000
     read -r joint beside < <(bar_row_pixels)
     echo "e2e: the bar's last row: ${joint:-?} of it under the island's middle, ${beside:-?} beside"
     check "the grown island lies over the bar's middle, the bar running on beside it" \
@@ -2355,8 +2356,8 @@ check "the mirror's files raised no QML warning" quiet_since "$mark" '[@/](Mirro
 # user, 2026-11-11): Super+Shift+A opens their panel; black is the bar's own
 # palette, white turns the bar white; automatic follows the run's own
 # picture (BAR_WALLPAPER), in its tone or opposite it, read again at
-# wallpaper.sh's word; the island below the bar is lifted to grey over a
-# dark picture and black over a light one; the pick outlives a reload. The
+# wallpaper.sh's word; the island below the bar turns the bar's cream over a
+# dark picture and stays black over a light one; the pick outlives a reload. The
 # bar's colour is read off an empty patch of HEADLESS-2's bar.
 bar_rgb() {
     shot -o HEADLESS-2 "$WORK/tone.png" 2>/dev/null || return 1
@@ -2371,12 +2372,7 @@ bar_is() {
     esac
 }
 tone_is() { [[ "$(ipc appearance state | jq -r .mode)" == "$1" ]]; }
-# A grey: its three channels alike (bash's regex has no back references).
-island_lifted() {
-    local f
-    f=$(ipc appearance island HEADLESS-2) || return 1
-    [[ "$f" =~ ^#[0-9a-f]{6}$ && "${f:1:2}" == "${f:3:2}" && "${f:1:2}" == "${f:5:2}" && "$f" != "#000000" ]]
-}
+island_cream() { [[ "$(ipc appearance island HEADLESS-2)" == "#ecf0c1" ]]; }
 island_black() { [[ "$(ipc appearance island HEADLESS-2)" == "#000000" ]]; }
 if (( ! PIL )); then
     skip "the tones: python3-pillow is not installed"
@@ -2395,7 +2391,7 @@ else
     check "white turns the bar white" wait_for 3 bar_is white
     ipc appearance mode auto >/dev/null
     check "automatic over a dark picture is black" wait_for 3 bar_is black
-    check "and the island below the bar is lifted to grey there" wait_for 3 island_lifted
+    check "and the island below the bar turns cream there" wait_for 3 island_cream
     python3 -c 'import sys; from PIL import Image; Image.new("RGB", (2560, 1440), (236, 232, 224)).save(sys.argv[1])' "$WORK/desk.png"
     ipc wallpaper changed >/dev/null
     check "a light picture, at wallpaper.sh's word, turns it white" wait_for 5 bar_is white

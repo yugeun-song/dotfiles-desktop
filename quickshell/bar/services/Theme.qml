@@ -262,6 +262,14 @@ Singleton {
     // also serve for what cannot be used.
     readonly property color islandFill:    "#2c2c2d"
     readonly property color islandFillHigh: "#3f3f3f"
+    // The cream the grown island and the lock's notch take where the ground
+    // is too dark for black (Appearance.islandFill; the user, 2026-11-11):
+    // the bar's text colour, which Hyprland's focused border also is
+    // (general.lua), and what is drawn on it in the bar's dark, the pair
+    // turned over (Appearance.black()). scripts/wall-tone.py and
+    // hypr/scripts/lock-colours.py name the same two.
+    readonly property color islandCream:    "#ecf0c1"
+    readonly property color islandCreamInk: "#0f111b"
     // Each colour's quieter companion, on its own RGB vector as the user
     // asked ("a similar colour vector, only fainter"): the recording pill's
     // dots not yet recorded are its red times exactly 0.40 (#641514), the

@@ -10,8 +10,8 @@ import qs.services
 // Top corners round (`round`, the pill's) or flared into the screen's top
 // edge (`ear`, the grown island's, as a notch flares into the bezel), never
 // both; lower corners `bottomRound`. Black to its edge with no rim, as in the
-// user's references (Theme.islandShadow sets it off); `fill` lifts the grown
-// island to a dark grey where it hangs over a ground too dark for black
+// user's references (Theme.islandShadow sets it off); `fill` turns the grown
+// island to the bar's cream where it hangs over a ground too dark for black
 // (MediaPopup, Appearance.islandFill; the user, 2026-11-11). Laid out in the
 // parent's coordinates, the flares outside the body; turned over for a bar at
 // the bottom.

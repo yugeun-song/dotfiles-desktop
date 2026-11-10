@@ -19,6 +19,11 @@ import qs.services
 // does, only a small square of moving bars at the right end, in the cover's
 // colour (the user: music must not widen it). Nothing else of the track:
 // the card below the clock has it.
+//
+// Its fill is hyprlock.conf's ($island_fill, which lock-colours.py turns to
+// the bar's cream over a ground too dark for black; the user, 2026-11-11),
+// and the lock with it ($island_on); the event's colour and the bars are
+// turned over on the cream as the bar's grown island's are (IslandInk.qml).
 Item {
     id: root
 
@@ -42,11 +47,18 @@ Item {
     // A glyph's middle, as far in from each end as from the top and foot.
     readonly property real inset: root.notchH / 2
 
+    readonly property color fill: root.block.color ?? "#000000"
+    readonly property IslandInk ink: IslandInk {
+        ground: root.fill
+    }
+
     readonly property var parts: root.lockRoot.island
     readonly property bool eventOn: root.parts.trail !== "" || root.parts.mark !== "" || root.parts.lead !== Theme.iconLock
     readonly property bool musicOn: (root.card?.present ?? false) && !root.eventOn
     readonly property bool playing: root.card?.playing ?? false
-    readonly property color tone: root.parts.tone !== "" ? root.parts.tone : (root.screenRoot.o.lead?.color ?? Theme.fg)
+    readonly property color tone: root.parts.tone !== "" ? root.ink.accent(root.parts.tone)
+                                                       : (root.screenRoot.o.lead?.color ?? Theme.fg)
+    readonly property color music: root.ink.accent(root.card?.tone ?? Theme.islandText)
 
     readonly property alias offset: shift
 
@@ -70,7 +82,7 @@ Item {
             preferredRendererType: Shape.CurveRenderer
 
             ShapePath {
-                fillColor: root.block.color ?? "#000000"
+                fillColor: root.fill
                 strokeWidth: -1
 
                 // From above the edge, so no seam shows along it.
@@ -179,7 +191,7 @@ Item {
             barSpacing: Math.max(1, Math.round((wave.side - 4 * Math.max(2, Math.round(wave.side * 0.16))) / 3))
             levelHeight: wave.side
             live: root.playing
-            barColor: root.playing ? (root.card?.tone ?? Theme.islandText) : Theme.islandDim(root.card?.tone ?? Theme.islandText)
+            barColor: root.playing ? root.music : root.ink.dim(root.music)
             opacity: root.musicOn ? 1 : 0
             visible: wave.opacity > 0
 

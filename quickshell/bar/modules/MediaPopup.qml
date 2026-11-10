@@ -304,11 +304,18 @@ Item {
                     readonly property real pillTop: Theme.islandInset
                     readonly property real pillHeight: Theme.islandHeight
                     readonly property real t: stage.openness
-                    // Black in the bar, the ground's fill as it grows over the
-                    // desktop below (Appearance.islandFill: grey over a dark
-                    // wallpaper, black over windows).
-                    readonly property color fill: Appearance.mix(Theme.islandColor,
-                        Appearance.islandFill(root.QsWindow.window?.screen?.name ?? ""), stage.clamp01(hit.t))
+                    // What the grown island takes over the desktop below
+                    // (Appearance.islandFill: the cream over a dark wallpaper,
+                    // black over windows), and its fill as it grows there from
+                    // the bar's black.
+                    readonly property color ground: Appearance.islandFill(root.QsWindow.window?.screen?.name ?? "")
+                    readonly property color fill: Appearance.mix(Theme.islandColor, hit.ground, stage.clamp01(hit.t))
+
+                    // What is drawn on it, after the fill it grows to: the
+                    // content shows only once it is mostly grown.
+                    readonly property IslandInk ink: IslandInk {
+                        ground: hit.ground
+                    }
 
                     readonly property real bodyX: hit.pillX * (1 - hit.t)
                     readonly property real bodyWidth: popup.islandWidth + (popup.cardWidth - popup.islandWidth) * hit.t
@@ -392,6 +399,7 @@ Item {
                                     width: parent.width
                                     visible: root.showPlayer
                                     cut: hit.fill
+                                    ink: hit.ink
                                 }
 
                                 IslandActivities {
@@ -399,6 +407,7 @@ Item {
                                     visible: root.showCalls || root.showObs
                                     showCalls: root.showCalls
                                     showObs: root.showObs
+                                    ink: hit.ink
                                 }
                             }
                         }

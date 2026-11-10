@@ -12,14 +12,17 @@ import qs.services
 // while on, the elapsed and whole time either side of a thin bar. In the
 // island's colours (the user's references, 2026-10-26): white and grey, their
 // blue for a control that is on and the bar under the pointer, the meter in
-// the cover's colour and, paused, at rest in its companion.
+// the cover's colour and, paused, at rest in its companion; turned over on
+// the cream the island takes over a dark ground (ink, IslandInk.qml).
 Item {
     id: root
 
     readonly property var player: Media.player
-    // What the play-pause's marks are cut in: the island's own fill (black, or
-    // its grey over a dark ground; MediaPopup).
+    // What the play-pause's marks are cut in: the island's own fill as it
+    // grows (black, or the cream over a dark ground; MediaPopup).
     property color cut: Theme.islandColor
+    // What is drawn on the island, after the fill it grows to.
+    property IslandInk ink: IslandInk {}
     // Held through a seek or a change of track, as the island is (Media);
     // play and pause show the player's state as it is, at once.
     readonly property bool hasMedia: Media.steadyPresent
@@ -55,8 +58,8 @@ Item {
     readonly property real shownPosition: root.scrubbing ? root.scrubPosition : root.position
     readonly property real progress: root.length > 0 ? Math.max(0, Math.min(1, root.shownPosition / root.length)) : 0
 
-    readonly property color faint: Theme.islandSubtext
-    readonly property color unusable: Theme.islandFillHigh
+    readonly property color faint: root.ink.subtext
+    readonly property color unusable: root.ink.fillHigh
 
     Timer {
         id: poll
@@ -170,7 +173,7 @@ Item {
                     font.family: Theme.uiFont
                     font.pixelSize: Theme.mediaTitleSize
                     font.weight: Font.DemiBold
-                    color: Theme.islandText
+                    color: root.ink.text
                 }
 
                 Text {
@@ -207,7 +210,8 @@ Item {
                     levelHeight: Theme.mediaArtSize
                     // The cover's colour, paused its companion.
                     live: Media.steadyPlaying
-                    barColor: Media.steadyPlaying ? Media.artColor : Media.artDim
+                    barColor: Media.steadyPlaying ? root.ink.accent(Media.artColor)
+                                                  : root.ink.dim(root.ink.accent(Media.artColor))
                 }
 
                 Text {
@@ -216,7 +220,7 @@ Item {
                     text: Theme.iconMusic
                     font.family: Theme.iconFont
                     font.pixelSize: Theme.px(18)
-                    color: Theme.islandFillHigh
+                    color: root.ink.fillHigh
                 }
             }
         }
@@ -282,7 +286,7 @@ Item {
                             width: Theme.mediaDiscSize
                             height: width
                             radius: width / 2
-                            color: control.usable ? Theme.islandText : root.unusable
+                            color: control.usable ? root.ink.text : root.unusable
                             // Grows under the pointer and gives under a press:
                             // the one filled control answers like a button.
                             scale: press.pressed ? 0.94 : control.hot ? 1.06 : 1
@@ -297,7 +301,7 @@ Item {
 
                         // Drawn, not glyphs: the icon font's fill little more
                         // than half their box (the pause came out as two
-                        // slivers). In the island's black, as if cut out.
+                        // slivers). In the island's fill, as if cut out.
                         Item {
                             anchors.centerIn: parent
                             visible: control.disc
@@ -388,9 +392,9 @@ Item {
                             // Grey until pointed at, as in Spotify's player,
                             // and blue while switched on.
                             color: !control.usable ? root.unusable
-                                   : control.engaged ? Theme.islandBlue
-                                   : control.hot ? Theme.islandText
-                                   : Theme.islandSubtext
+                                   : control.engaged ? root.ink.accent(Theme.islandBlue)
+                                   : control.hot ? root.ink.text
+                                   : root.ink.subtext
                             scale: press.pressed ? 0.9 : 1
 
                             Behavior on color {
@@ -418,7 +422,7 @@ Item {
                             width: Math.max(3, Theme.px(4))
                             height: width
                             radius: width / 2
-                            color: Theme.islandBlue
+                            color: root.ink.accent(Theme.islandBlue)
                         }
 
                         HoverHandler {
@@ -526,8 +530,8 @@ Item {
                     anchors.verticalCenter: parent.verticalCenter
                     height: Theme.mediaTrackHeight
                     radius: height / 2
-                    // White's quieter companion, as each colour's track is.
-                    color: Theme.islandDim(Theme.islandText)
+                    // The text's quieter companion, as each colour's track is.
+                    color: root.ink.dim(root.ink.text)
 
                     Rectangle {
                         id: fill
@@ -539,7 +543,7 @@ Item {
                         radius: height / 2
                         // Blue under the pointer: the bar is live, a click
                         // seeks.
-                        color: track.hot ? Theme.islandBlue : Theme.islandText
+                        color: track.hot ? root.ink.accent(Theme.islandBlue) : root.ink.text
 
                         // ~Poll interval, so the fill moves continuously.
                         Behavior on width {
@@ -565,7 +569,7 @@ Item {
                         width: Theme.mediaKnobSize
                         height: width
                         radius: width / 2
-                        color: Theme.islandText
+                        color: root.ink.text
                         visible: track.hot
                     }
 
@@ -631,7 +635,7 @@ Item {
             text: Theme.iconMusic
             font.family: Theme.iconFont
             font.pixelSize: Theme.px(27)
-            color: Theme.islandFillHigh
+            color: root.ink.fillHigh
         }
 
         Text {
@@ -639,7 +643,7 @@ Item {
             text: "Nothing playing"
             font.family: Theme.uiFont
             font.pixelSize: Theme.mediaSubSize
-            color: Theme.islandSubtext
+            color: root.ink.subtext
         }
     }
 }

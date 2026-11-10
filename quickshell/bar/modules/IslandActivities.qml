@@ -15,6 +15,8 @@ Column {
 
     property bool showCalls: false
     property bool showObs: false
+    // What is drawn on the island, after the fill it grows to (MediaPopup).
+    property IslandInk ink: IslandInk {}
 
     spacing: Theme.islandRowGap
 
@@ -61,7 +63,7 @@ Column {
                         font.family: Theme.uiFont
                         font.pixelSize: Theme.mediaTitleSize
                         font.weight: Font.DemiBold
-                        color: Theme.islandText
+                        color: root.ink.text
                     }
 
                     // Each call's own clock: the calls began at their own
@@ -73,7 +75,7 @@ Column {
                             text: "In a call"
                             font.family: Theme.uiFont
                             font.pixelSize: Theme.mediaSubSize
-                            color: Theme.islandSubtext
+                            color: root.ink.subtext
                         }
 
                         Text {
@@ -81,7 +83,7 @@ Column {
                             font.family: Theme.uiFont
                             font.pixelSize: Theme.mediaSubSize
                             font.features: ({ "tnum": 1 })
-                            color: Theme.islandGreen
+                            color: root.ink.accent(Theme.islandGreen)
                         }
                     }
                 }
@@ -140,7 +142,7 @@ Column {
                     font.family: Theme.uiFont
                     font.pixelSize: Theme.mediaTitleSize
                     font.weight: Font.DemiBold
-                    color: Theme.islandText
+                    color: root.ink.text
                 }
 
                 Row {
@@ -151,7 +153,7 @@ Column {
                                             : "Live"
                         font.family: Theme.uiFont
                         font.pixelSize: Theme.mediaSubSize
-                        color: Theme.islandSubtext
+                        color: root.ink.subtext
                     }
 
                     Text {
@@ -159,7 +161,7 @@ Column {
                         font.family: Theme.uiFont
                         font.pixelSize: Theme.mediaSubSize
                         font.features: ({ "tnum": 1 })
-                        color: Obs.recording && Obs.paused ? Theme.islandSubtext : Theme.islandRed
+                        color: Obs.recording && Obs.paused ? root.ink.subtext : root.ink.accent(Theme.islandRed)
                     }
                 }
             }
@@ -178,11 +180,13 @@ Column {
             visible: Obs.recording
 
             IslandButton {
+                ink: root.ink
                 glyph: Obs.paused ? Theme.iconPlayMd : Theme.iconPauseMd
                 onClicked: Obs.togglePause()
             }
 
             IslandButton {
+                ink: root.ink
                 stop: true
                 onClicked: Obs.stopRecording()
             }

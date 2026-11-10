@@ -182,8 +182,8 @@ after a minute of it) and under the lock screen's blur (`LockVideo.qml`).
 picker's Colours…) sets the tone of the bar, its widgets and panels: black,
 white, black or white after the wallpaper, or colours drawn from it and set
 by hand (`modules/AppearancePanel.qml`, `services/Appearance.qml`,
-`scripts/wall-tone.py`). The island stays black, lifted to grey over a dark
-wallpaper, as the lock screen's notch is (`lock-colours.py`).
+`scripts/wall-tone.py`). The island stays black, but turns the bar's cream
+over a dark wallpaper, as the lock screen's notch does (`lock-colours.py`).
 
 The lock screen is Quickshell's (`quickshell/bar/lock.qml`, a process of
 its own that `scripts/lock.sh` starts at a lock and that ends at the

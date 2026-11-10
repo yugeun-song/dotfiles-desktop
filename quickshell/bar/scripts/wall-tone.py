@@ -19,7 +19,7 @@ object on stdout:
               for the colour editor
     screens   per screen, "island": the fill the island takes where it hangs
               below the bar over this ground: black where black reads, else
-              the darkest grey that does (the user chose the lift to grey)
+              the bar's cream (the user, 2026-11-11)
 
 Nothing is kept: the bar asks again when the picture or a screen changes,
 about a tenth of a second. Fails, printing nothing, when the picture cannot
@@ -40,11 +40,12 @@ ISLAND_H = 0.22
 CROSSOVER = 0.18
 
 # Black reads as an island over a ground to this contrast; below it the
-# island lifts to the darkest grey that reaches it, never lighter than
-# FILL_MOST. hypr/scripts/lock-colours.py lifts the lock's notch by the
-# same rule; keep the two in step.
+# island turns CREAM, the bar's text colour and Hyprland's focused border
+# (the user, 2026-11-11: a dark grey first, then this), what it holds
+# turned dark with it (modules/IslandInk.qml). hypr/scripts/lock-colours.py
+# turns the lock's notch by the same rule; keep the two in step.
 FILL_READS = 1.6
-FILL_MOST = 0.09
+CREAM = "#ecf0c1"
 
 # The palettes' lightness (OKLab L) and how much of the wallpaper's chroma
 # they keep; the grey wallpapers' fallbacks are the bar's own colours
@@ -141,13 +142,8 @@ def patch(small, area):
 
 
 def island_fill(ground):
-    """Black where it reads over the ground, else the darkest grey that
-    does, up to FILL_MOST."""
-    if contrast(0.0, ground) >= FILL_READS:
-        return "#000000"
-    y = min(FILL_MOST, FILL_READS * (ground + 0.05) - 0.05)
-    v = round(encode(y) * 255)
-    return f"#{v:02x}{v:02x}{v:02x}"
+    """Black where it reads over the ground, else the bar's cream."""
+    return "#000000" if contrast(0.0, ground) >= FILL_READS else CREAM
 
 
 def swatches(small, most=8):

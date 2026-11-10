@@ -13,8 +13,9 @@ shows it on that screen: cut to cover the screen, dimmed by the
 background's brightness. The kinds are ink (hyprlock's rgba), soft (the same
 at the strength of secondary text), hex (for markup), paint (lock-media.py's
 card: its ink, pane and edge), halo and glow (a label's shadow passes and
-colour), and fill (a shape's colour, judged apart from the text: the notch,
-black but grey on a ground too dark for black).
+colour), fill (a shape's colour, judged apart from the text: the notch,
+black but the beige on a ground too dark for black) and on (what is drawn on
+that fill: the beige on black, the bar's dark on the beige).
 
 The beige stays where most of the picture behind a group is dark enough for
 it. A light sky over dark hills can give the clock the dark and the foot the
@@ -100,12 +101,13 @@ BUSY_DARKEST = 0.35
 # A fill (the notch's, $island_fill) is no text: it is judged on its own, on
 # the background as the screen finally shows it, and never moves a group's
 # ink. Black where black reads round the notch to FILL_READS; below that the
-# darkest grey that does, never lighter than FILL_MOST (the user, 2026-11-11:
-# lifted to a dark grey). The ground is the notch's box widened by
-# FILL_MARGIN of its size on each side. quickshell/bar/scripts/wall-tone.py
-# lifts the bar's grown island by the same rule; keep the two in step.
+# beige, the bar's text colour and Hyprland's focused border (the user,
+# 2026-11-11: a dark grey first, then this), with what is drawn on it
+# ($island_on) turned to the bar's dark. The ground is the notch's box
+# widened by FILL_MARGIN of its size on each side.
+# quickshell/bar/scripts/wall-tone.py turns the bar's grown island by the
+# same rule; keep the two in step.
 FILL_READS = 1.6
-FILL_MOST = 0.09
 FILL_MARGIN = 0.5
 
 # A label's text is not known before hyprlock draws it: four of its sizes
@@ -113,7 +115,7 @@ FILL_MARGIN = 0.5
 LABEL_EMS = 4
 LINE = 1.25
 
-TOKEN = re.compile(r"\$([a-z]+)_(ink|soft|hex|paint|halo|glow|fill)\b")
+TOKEN = re.compile(r"\$([a-z]+)_(ink|soft|hex|paint|halo|glow|fill|on)\b")
 BACK = re.compile(r"^(\s*(blur_passes|brightness)\s*=\s*)[0-9.]+")
 # lock-fit.sh's line for each screen, with its two factors.
 SCREEN = re.compile(r"^# (\S+) (\d+)x(\d+) fit ([0-9.]+) wide ([0-9.]+)$")
@@ -183,7 +185,8 @@ def bare(line):
 def parse(lines):
     """The screens lock-fit.sh sized, by name: width and height; and each
     widget block: its first and last line, type, keys, the groups its text
-    tokens name and the groups its fill tokens name."""
+    tokens name and the groups its fill tokens name. A token for what is drawn
+    on a fill (on) names neither: it follows the fill."""
     screens, blocks = {}, []
     depth, start, kind, keys = 0, 0, "", {}
     for i, line in enumerate(lines):
@@ -201,7 +204,7 @@ def parse(lines):
             depth -= 1
             if depth == 0 and kind in WIDGETS:
                 found = [m for j in range(start, i + 1) for m in TOKEN.finditer(lines[j])]
-                groups = {m.group(1) for m in found if m.group(2) != "fill"}
+                groups = {m.group(1) for m in found if m.group(2) not in ("fill", "on")}
                 fills = {m.group(1) for m in found if m.group(2) == "fill"}
                 blocks.append((start, i, kind, keys, groups, fills))
         elif depth == 1 and "=" in s:
@@ -340,12 +343,14 @@ def dark_ink(patches):
 
 
 def fill_of(ground):
-    """A fill's hex: black where it reads over the ground, else the darkest
-    grey that does, up to FILL_MOST."""
-    if contrast(0.0, ground) >= FILL_READS:
-        return "000000"
-    v = round(encode(min(FILL_MOST, FILL_READS * (ground + 0.05) - 0.05)) * 255)
-    return f"{v:02x}{v:02x}{v:02x}"
+    """A fill's hex: black where it reads over the ground, else the beige."""
+    return "000000" if contrast(0.0, ground) >= FILL_READS else BEIGE
+
+
+def on_of(fill):
+    """What is drawn on a fill: the beige on black, the bar's dark on the
+    beige."""
+    return BAR_BG if fill == BEIGE else BEIGE
 
 
 def under(y, alpha, pane):
@@ -539,7 +544,9 @@ def ink(text, screens, blocks):
         for g, area in fill_areas.items():
             p = patch(ground, area)
             if p:
-                chosen.setdefault(g, {})["fill"] = f"rgba({fill_of(p['mid'])}ff)"
+                fill = fill_of(p["mid"])
+                chosen.setdefault(g, {})["fill"] = f"rgba({fill}ff)"
+                chosen[g]["on"] = f"rgba({on_of(fill)}ff)"
         values[name] = chosen
     for start, end, kind, keys, *_ in blocks:
         chosen = values.get(keys.get("monitor"))
