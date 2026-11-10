@@ -2024,6 +2024,21 @@ caps_mark_on() {
     (( c > 60 && f - $1 >= 5 && f - $1 <= 20 && l - f >= 9 && l - f <= 22 )) && [[ -z "${2:-}" || "$f" == "$2" ]]
 }
 caps_mark_off() { local r f l c; read -r r f l c < <(caps_mark "$1") && (( c == 0 )); }
+# The dots along the field's middle row of HEADLESS-2, as runs of beige: the
+# field is twice as wide as at first (the user, 2026-11-11), so forty fit
+# where twenty-eight did.
+dots_are() {
+    shot -o HEADLESS-2 "$WORK/dots.png" 2>/dev/null || return 1
+    [[ "$(python3 - "$WORK/dots.png" <<'EOF'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert("RGB")
+beige = lambda c: c[0] > 200 and c[1] > 200 and 150 < c[2] < 215
+row = [beige(im.getpixel((x, 940))) for x in range(800, 1760)]
+print(sum(1 for i in range(1, len(row)) if row[i] and not row[i - 1]))
+EOF
+)" == "$1" ]]
+}
 # A file of the lock's changing under it, as an install does. Quickshell reloads
 # on that by default, and a new generation starts with the lock not yet wanted:
 # the session opens for as long as its capture takes, the keys going to whatever
@@ -2116,6 +2131,9 @@ EOF
     caps_led 0
     input key 58
     check "Caps Lock off: the mark goes" wait_for 3 caps_mark_off "${words_end:-0}"
+    input type "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" sleep 300
+    check "forty characters show forty dots, twice the field's old room" wait_for 3 dots_are 40
+    input key 1 sleep 200
     : > "$WORK/mpris.log"
     input move 1280 792 sleep 300 click sleep 300
     check "a click on its play-pause reaches the player" wait_for 4 logged "$WORK/mpris.log" Pause
