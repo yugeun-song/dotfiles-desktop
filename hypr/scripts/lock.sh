@@ -12,6 +12,14 @@
 # power menu's suspend and the restart key (Ctrl+Alt+Shift+U) run it
 # directly. It does nothing while a lock screen it started is running. Never
 # call a locker directly.
+#
+# --glass: the see-through lock (the user, 2026-11-12), the same lock with
+# the screen left showing what it shows, live: the compositor draws the
+# desktop under it (session_lock_xray, on for this lock alone) and the
+# Quickshell lock draws only a prompt (LockGlass.qml). Run straight from its
+# key and the bar's rows: loginctl carries no choice of lock. Should the
+# Quickshell lock not hold, hyprlock locks with the lock screen, the desktop
+# out of sight, as for any lock.
 # Recovery: faillock --user "$USER" --reset   (no root needed)
 
 set -uo pipefail
@@ -19,6 +27,12 @@ set -uo pipefail
 CONFIG="${XDG_CONFIG_HOME:-$HOME/.config}"
 QS_LOCK="$CONFIG/quickshell/bar/lock.qml"
 RT="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}"
+
+glass=0
+if [[ "${1:-}" == --glass ]]; then
+    glass=1
+    shift
+fi
 
 # One lock screen at a time: the first run holds this file locked for as long
 # as it waits on its locker, and a run meanwhile leaves at once. Only this
@@ -77,10 +91,33 @@ if conf=$("$HERE/lock-fit.sh"); then
     rm -f -- "$RT/lock-spec.json.part"
 fi
 
+# Whether the compositor draws the desktop under the lock: only under the
+# see-through lock, set before it locks and put back once it ends, so that
+# the lock screen and hyprlock never have the live desktop under them, even
+# after a see-through lock that was killed before it could put it back.
+# Without it the see-through lock would show black, so this lock becomes the
+# lock screen instead.
+xray() {
+    [[ "$(hyprctl eval "hl.config({ misc = { session_lock_xray = $1 } })" 2>/dev/null)" == ok* ]]
+}
+if (( glass )); then
+    xray true || glass=0
+fi
+(( glass )) || xray false
+
 # The bar's key overlay drops keys from here to the unlock (hypridle's
 # on_unlock_cmd); hypridle's own lock notice can come late. In the
-# background, so the lock never waits on the bar.
-qs -p "$CONFIG/quickshell/bar" ipc call keys lock >/dev/null 2>&1 9>&- &
+# background, so the lock never waits on the bar. Not for the see-through
+# lock: under it the overlay would draw the password's keys in plain view,
+# so the bar is told and has dropped them before the lock takes a key (2 s
+# at most for a bar that does not answer). It is also told that the desktop
+# stays in view (KeyFeed.qml's glass), so it keeps showing what it shows
+# there.
+if (( glass )); then
+    timeout 2 qs -p "$CONFIG/quickshell/bar" ipc call keys glass >/dev/null 2>&1 9>&-
+else
+    qs -p "$CONFIG/quickshell/bar" ipc call keys lock >/dev/null 2>&1 9>&- &
+fi
 
 # The Quickshell lock, if it says within LOCK_WAIT tenths of a second that
 # the compositor has the session locked by it (lock.qml writes LOCK_READY);
@@ -94,7 +131,7 @@ if [[ -n "$spec" && -r "$QS_LOCK" ]] && command -v qs >/dev/null 2>&1; then
     # No core file and no detailed log, as bin/bar says why: this process has held
     # the password, and dropping a string does not clear its bytes. exec, so that
     # $! is the lock screen itself.
-    ( ulimit -S -c 0; LOCK_SPEC="$spec" LOCK_READY="$ready" exec qs --no-detailed-logs -n -p "$QS_LOCK" ) >/dev/null 2>&1 9>&- &
+    ( ulimit -S -c 0; LOCK_SPEC="$spec" LOCK_READY="$ready" LOCK_GLASS="$glass" exec qs --no-detailed-logs -n -p "$QS_LOCK" ) >/dev/null 2>&1 9>&- &
     qpid=$!
     for _ in $(seq "$LOCK_WAIT"); do
         [[ -s "$ready" ]] && break
@@ -144,11 +181,13 @@ rm -f -- "$ready" "$RT/lock-spec.json"
 # locked nothing (2026-11-02). Ignored, an early one is dropped; the labels
 # read the bar's files when hyprlock draws them anyway.
 if (( ! held )); then
+    (( glass )) && xray false
     trap '' USR2
     ( ulimit -S -c 0; exec hyprlock "${fitted[@]}" "$@" ) 9>&-
     rc=$?
     trap - USR2
 fi
+(( glass )) && xray false
 
 # The unlock told to the bar at once, for its sweep of the lock screen
 # (UnlockSweep.qml), which shows the last of it until then. hypridle tells it

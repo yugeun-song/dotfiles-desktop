@@ -38,6 +38,7 @@ Singleton {
         ],
         [
             { id: "lock", label: "Lock screen", what: "Lock" },
+            { id: "glass", label: "Lock, screen visible", what: "Lock, screen visible" },
             { id: "sleep", label: "Sleep" },
             { id: "session", label: "Session…", what: "Session dialog" }
         ]

@@ -3,104 +3,19 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Effects
 import Quickshell
-import Quickshell.Hyprland
 import qs.services
 
-// One screen of the lock screen (lock.qml): hyprlock.conf's design as
-// lock-spec.py hands it over for this screen, in its pixels, read as hyprlock
-// reads its numbers, so the two draw alike: a label's or a picture's
-// position is from the screen's middle (up is positive) or, at the top, its
-// top edge down from the screen's; font sizes are points at 96 dpi. A screen
-// the spec has no fitted copy for (one plugged in while locked) takes the
-// design's numbers fitted here as lock-fit.sh fits them.
-Item {
+// One screen of the lock screen (lock.qml), its numbers read as LockFrame
+// reads them.
+LockFrame {
     id: root
 
-    required property ShellScreen lockScreen
-    required property var lockRoot
-
-    readonly property var spec: root.lockRoot.spec
-    // The compositor's scale, not Qt's ratio, which rounds a fractional one.
-    readonly property real scaleOf: Hyprland.monitorFor(root.lockScreen)?.scale ?? root.lockScreen?.devicePixelRatio ?? 1
-    readonly property int deviceW: Math.round(root.width * root.scaleOf)
-    readonly property int deviceH: Math.round(root.height * root.scaleOf)
-
-    // The output's own numbers, which lock-fit.sh sized for its mode at this
-    // lock, taken to this item's pixels by the mode's width; else the
-    // design's, with this screen's factors.
-    readonly property var fitted: {
-        const s = root.spec;
-        if (!s || !s.outputs || root.width <= 0 || root.height <= 0)
-            return null;
-        const own = s.outputs[root.lockScreen?.name ?? ""];
-        if (own && own.mode && own.mode[0] > 0)
-            return { o: own, fit: 1, wide: 1, unit: root.width / own.mode[0] };
-        const design = Object.values(s.outputs).find(o => !o.mode) ?? own;
-        if (!design || root.deviceW <= 0 || root.deviceH <= 0)
-            return null;
-        const fx = root.deviceW / s.reference[0];
-        const fy = root.deviceH / s.reference[1];
-        const u = Math.min(fx, fy) * s.scale;
-        const st = Math.max(1, Math.min(s.stretch_max, fx / fy));
-        return { o: design, fit: u, wide: u * st, unit: 1 / root.scaleOf };
-    }
-    readonly property var o: root.fitted?.o ?? ({})
     // The power button's and panel's pixels per bar pixel (LockPower): the
     // bar's sizes on this screen (Theme.fit), a fifth larger. Sized by the
     // island at first, its words came out under the bar's (9 px on the
     // laptop to the bar's 13), and the user: at least a little larger than
     // what the bar shows (2026-11-05).
     readonly property real footUnit: Theme.fit(root.lockScreen) * 1.2
-
-    // A height, a font size or an even width, and a width, in this item's
-    // (logical) pixels.
-    function tall(v: real): real {
-        return v * (root.fitted?.fit ?? 1) * (root.fitted?.unit ?? 1);
-    }
-
-    function wide(v: real, even: bool): real {
-        return v * (even ? (root.fitted?.fit ?? 1) : (root.fitted?.wide ?? 1)) * (root.fitted?.unit ?? 1);
-    }
-
-    // A point size at 96 dpi as pixels here.
-    function points(pt: real): real {
-        return root.tall(pt) * 96 / 72;
-    }
-
-    // A place on the screen's own pixel grid: the ink's layers are drawn at
-    // the screen's scale, and one laid between two pixels came out jagged or
-    // soft (LockLabel).
-    function crisp(v: real): real {
-        return Math.round(v * root.scaleOf) / root.scaleOf;
-    }
-
-    // A length of whole screen pixels, at least v: the room inside a layer,
-    // so what it holds starts on a pixel too.
-    function whole(v: real): real {
-        return Math.ceil(v * root.scaleOf) / root.scaleOf;
-    }
-
-    function xOf(block: var, w: real): real {
-        const x = root.wide(block?.position?.[0] ?? 0, block?.even ?? false);
-        return block?.halign === "left" ? x : block?.halign === "right" ? root.width - w + x : (root.width - w) / 2 + x;
-    }
-
-    function yOf(block: var, h: real): real {
-        const y = root.tall(block?.position?.[1] ?? 0);
-        return block?.valign === "top" ? -y : block?.valign === "bottom" ? root.height - h - y : (root.height - h) / 2 - y;
-    }
-
-    // hyprlock.conf names faces ("Inter Bold"), but hyprlock takes the whole
-    // name as a family, finds none of that name and draws Inter's regular:
-    // the look the user chose (2026-10-24 to 2026-11-02) is the regular
-    // weight, so that is what this draws, the family without the face.
-    function family(name: string): string {
-        return (name ?? "").replace(/ (Thin|ExtraLight|Light|Regular|Medium|SemiBold|Bold|ExtraBold|Black)$/, "") || Theme.uiFont;
-    }
-
-    function weight(name: string): int {
-        return Font.Normal;
-    }
 
     // ---- the keys ---------------------------------------------------------
     // An Item, not a text field: no input method sees them, so nothing is
@@ -111,9 +26,6 @@ Item {
 
         Keys.onPressed: event => {
             event.accepted = true;
-            // The field's Caps Lock mark follows the key (lock.qml).
-            if (event.key === Qt.Key_CapsLock)
-                root.lockRoot.readCaps(true);
             // The power panel takes the arrows, Enter and Escape while it is
             // open; anything typed closes it and goes to the password.
             if (power.open) {
@@ -129,21 +41,9 @@ Item {
                 if (event.key === Qt.Key_Escape)
                     return;
             }
-            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
-                root.lockRoot.submit();
-            else if (event.key === Qt.Key_Backspace && (event.modifiers & Qt.ControlModifier))
-                root.lockRoot.clear();
-            else if (event.key === Qt.Key_Backspace)
-                root.lockRoot.erase();
-            else if (event.key === Qt.Key_Escape)
-                root.lockRoot.clear();
-            else if (event.text !== "" && event.text.charCodeAt(0) >= 32 && event.text.charCodeAt(0) !== 127)
-                root.lockRoot.type(event.text);
+            root.lockRoot.key(event);
         }
-        Keys.onReleased: event => {
-            if (event.key === Qt.Key_CapsLock)
-                root.lockRoot.readCaps(true);
-        }
+        Keys.onReleased: event => root.lockRoot.keyReleased(event)
     }
 
     // ---- the way in ---------------------------------------------------------
@@ -458,9 +358,7 @@ Item {
     readonly property alias under: probe
 
     // ---- a wrong password -------------------------------------------------
-    // The dots and the notch shake, a little, as a phone's passcode does
-    // (the user, 2026-11-05): side to side, smaller each time, for under
-    // half a second.
+    // The dots and the notch shake (LockShake).
     readonly property real shake: root.tall(14)
 
     Connections {
@@ -471,14 +369,10 @@ Item {
         }
     }
 
-    SequentialAnimation {
+    LockShake {
         id: shaking
 
-        NumberAnimation { targets: [notch.offset, field.offset]; property: "x"; to: -root.shake; duration: 45; easing.type: Easing.OutSine }
-        NumberAnimation { targets: [notch.offset, field.offset]; property: "x"; to: root.shake * 0.8; duration: 70; easing.type: Easing.InOutSine }
-        NumberAnimation { targets: [notch.offset, field.offset]; property: "x"; to: -root.shake * 0.6; duration: 65; easing.type: Easing.InOutSine }
-        NumberAnimation { targets: [notch.offset, field.offset]; property: "x"; to: root.shake * 0.4; duration: 60; easing.type: Easing.InOutSine }
-        NumberAnimation { targets: [notch.offset, field.offset]; property: "x"; to: -root.shake * 0.2; duration: 55; easing.type: Easing.InOutSine }
-        NumberAnimation { targets: [notch.offset, field.offset]; property: "x"; to: 0; duration: 50; easing.type: Easing.InSine }
+        targets: [notch.offset, field.offset]
+        reach: root.shake
     }
 }

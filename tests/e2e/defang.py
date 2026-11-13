@@ -181,7 +181,7 @@ probe = '''
             return powerMenu.selected;
         }
         function keys(): string {
-            return JSON.stringify({ enabled: KeyFeed.enabled, locked: KeyFeed.locked,
+            return JSON.stringify({ enabled: KeyFeed.enabled, locked: KeyFeed.locked, glass: KeyFeed.lockShowsDesktop,
                                     chords: KeyFeed.chords.map(c => c.key), failure: KeyFeed.failure,
                                     secret: KeyFeed.secretInput, pid: KeyFeed.focusedPid });
         }

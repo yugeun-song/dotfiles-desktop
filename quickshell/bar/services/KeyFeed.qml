@@ -28,8 +28,22 @@ Singleton {
     // locked. Starts locked and asks at once, for a bar restarted mid-lock.
     property bool locked: true
 
+    // Whether the lock leaves the desktop in view: the see-through lock
+    // (lock.sh --glass; the user, 2026-11-12) has the compositor go on
+    // drawing it (session_lock_xray). What only the desktop shows then stays
+    // as it is (the widgets, a video wallpaper: desktopHidden), while the
+    // keys stay paused as under any lock. lock.sh says so before that lock
+    // (glass), and the compositor is asked at every lock and at the start, so
+    // that hyprlock taking over from it, or a bar restarted under it, reads
+    // right.
+    property bool lockShowsDesktop: false
+    readonly property bool desktopHidden: root.locked && !root.lockShowsDesktop
+
     // A holder left by a reload or a restart is found by holdMark below.
-    Component.onCompleted: lockProbe.running = true
+    Component.onCompleted: {
+        lockProbe.running = true;
+        xrayProbe.running = true;
+    }
 
     IpcHandler {
         target: "keys"
@@ -37,11 +51,43 @@ Singleton {
         function lock(): void {
             root.locked = true;
             root.clear();
+            if (!xrayProbe.running)
+                xrayProbe.running = true;
+        }
+
+        // lock.sh, before the see-through lock takes a key.
+        function glass(): void {
+            root.lockShowsDesktop = true;
+            root.locked = true;
+            root.clear();
         }
 
         function unlock(): void {
             root.locked = false;
+            root.lockShowsDesktop = false;
             root.clear();
+        }
+    }
+
+    // {"option": ..., "bool": true or false, "set": ...}; anything else (no
+    // compositor, or one without the option) changes nothing. Taken only
+    // while still locked: an answer that comes after the unlock is stale.
+    Process {
+        id: xrayProbe
+
+        command: ["hyprctl", "-j", "getoption", "misc:session_lock_xray"]
+
+        stdout: StdioCollector {
+            onStreamFinished: {
+                let on = null;
+                try {
+                    const got = JSON.parse(this.text);
+                    if (typeof got.bool === "boolean")
+                        on = got.bool;
+                } catch (e) {}
+                if (on !== null && root.locked)
+                    root.lockShowsDesktop = on;
+            }
         }
     }
 
@@ -70,6 +116,7 @@ Singleton {
             onStreamFinished: {
                 if (this.text.trim() === "false" && root.locked) {
                     root.locked = false;
+                    root.lockShowsDesktop = false;
                     root.clear();
                 }
             }

@@ -57,6 +57,23 @@ Scope {
             probe: "loginctl"
         },
         {
+            id: "glass",
+            label: "Lock visible",
+            icon: Theme.iconMonitorLock,
+            accent: Theme.accentPurple,
+            // The see-through lock (lock.sh --glass; the user, 2026-11-12):
+            // locked as Lock locks, the screen left showing what it shows.
+            // lock.sh itself, started as Sleep starts it and for the same
+            // reasons (out of bar.service's cgroup, in the background), as
+            // loginctl carries no choice of lock.
+            command: ["sh", "-c",
+                "l=\"${XDG_CONFIG_HOME:-$HOME/.config}/hypr/scripts/lock.sh\"; " +
+                "s=\"${XDG_CONFIG_HOME:-$HOME/.config}/quickshell/bar/scripts/app-scope.sh\"; " +
+                "if [ -r \"$s\" ]; then bash \"$s\" -- \"$l\" --glass >/dev/null 2>&1 & " +
+                "else setsid -f \"$l\" --glass >/dev/null 2>&1; fi"],
+            probe: "hyprctl"
+        },
+        {
             id: "logout",
             label: "Sign out",
             icon: Theme.iconLogout,

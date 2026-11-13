@@ -505,6 +505,12 @@ hl.bind("XF86AudioPrev", hl.dsp.exec_cmd(player .. " previous'"), { locked = tru
 --##! Session
 -- Not SUPER+L, which is focus right.
 hl.bind("CTRL + ALT + L", hl.dsp.exec_cmd("loginctl lock-session"), { description = "Lock" })
+-- The see-through lock (the user, 2026-11-12): locked as by the key above,
+-- the screen left showing what it shows. Shift is the only difference, as
+-- the restart key's. Straight to lock.sh, as that key: loginctl carries no
+-- choice of lock.
+hl.bind("CTRL + ALT + SHIFT + L", hl.dsp.exec_cmd(scripts .. "/lock.sh --glass"),
+    { description = "Lock, screen visible" })
 -- A crashed locker leaves the session locked (ext-session-lock) with no
 -- password field. This starts a new one, which may attach
 -- (allow_session_lock_restore, general.lua), so the way back is the

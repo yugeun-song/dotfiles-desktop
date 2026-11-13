@@ -25,14 +25,24 @@ import "modules/lockout.js" as Lockout
 // every unlock, pam_faillock's steps included; the countdown only says how
 // long it will refuse.
 //
+// LOCK_GLASS=1 makes it the see-through lock instead (lock.sh --glass; the
+// user, 2026-11-12): the same lock, PAM and lockouts, but its surfaces are
+// clear and draw only a prompt on demand (LockGlass), with the compositor
+// drawing the live desktop under them (session_lock_xray, which lock.sh
+// turns on for this lock alone). The desktop showing is that lock's whole
+// point; what it cannot do is take a key or a click, which stay the lock's.
+//
 // LOCK_READY names a file written once the compositor has the session
 // locked with every screen covered, lock.sh's sign that this holds the lock.
 // Test hooks: LOCK_PAM_SERVICE and LOCK_PAM_DIR (a PAM stack of the tests'
 // own: never the user's password), LOCK_FAILLOCK_DIR and LOCK_PAM_STEPS (the
 // tally and the steps read for the countdown), LOCK_RUN (where the bar's
-// island parts are), LOCK_WEATHER (the weather command).
+// island parts are), LOCK_WEATHER (the weather command), LOCK_GLASS_REST
+// (how long the see-through lock's prompt stays, in ms).
 ShellRoot {
     id: root
+
+    readonly property bool glass: Quickshell.env("LOCK_GLASS") === "1"
 
     // ---- what to draw -----------------------------------------------------
     FileView {
@@ -54,11 +64,13 @@ ShellRoot {
     readonly property string runDir: Quickshell.env("LOCK_RUN") || Quickshell.env("XDG_RUNTIME_DIR") || ""
 
     // The bar's island event, as LockIsland.qml writes it while locked;
-    // the lock alone before one comes (lock.sh removes the file first).
+    // the lock alone before one comes (lock.sh removes the file first). Not
+    // watched by the see-through lock, which has no notch: the bar's own
+    // island shows through it.
     FileView {
         id: islandFile
 
-        path: root.runDir === "" ? "" : root.runDir + "/lock-island.json"
+        path: root.runDir === "" || root.glass ? "" : root.runDir + "/lock-island.json"
         watchChanges: true
         printErrors: false
         onFileChanged: islandFile.reload()
@@ -74,13 +86,14 @@ ShellRoot {
     }
 
     // The bar's weather, from its cache (weather.sh --bar), as the
-    // hyprlock card's script reads it; again every ten minutes.
+    // hyprlock card's script reads it; again every ten minutes. Not for the
+    // see-through lock, which shows none.
     property var weather: null
 
     Process {
         id: weatherRead
 
-        running: true
+        running: !root.glass
         command: ["sh", "-c", Quickshell.env("LOCK_WEATHER") || `exec "${Quickshell.shellDir}/scripts/weather.sh" --bar`]
 
         stdout: StdioCollector {
@@ -99,7 +112,7 @@ ShellRoot {
     Timer {
         interval: 600000
         repeat: true
-        running: true
+        running: !root.glass
         onTriggered: weatherRead.running = true
     }
 
@@ -157,6 +170,59 @@ ShellRoot {
             root.pending = "";
             root.checking = false;
             root.fail("Could not ask for the password");
+        }
+    }
+
+    // A key on either lock (LockScreen, LockGlass): Enter hands the password
+    // over, Backspace takes a character back, Ctrl+Backspace or Escape all of
+    // them, anything printable is typed. Caps Lock is read for the field's
+    // mark at its press and its release.
+    function key(event: var): void {
+        if (event.key === Qt.Key_CapsLock)
+            root.readCaps(true);
+        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter)
+            root.submit();
+        else if (event.key === Qt.Key_Backspace && (event.modifiers & Qt.ControlModifier))
+            root.clear();
+        else if (event.key === Qt.Key_Backspace)
+            root.erase();
+        else if (event.key === Qt.Key_Escape)
+            root.clear();
+        else if (event.text !== "" && event.text.charCodeAt(0) >= 32 && event.text.charCodeAt(0) !== 127)
+            root.type(event.text);
+    }
+
+    function keyReleased(event: var): void {
+        if (event.key === Qt.Key_CapsLock)
+            root.readCaps(true);
+    }
+
+    // ---- the see-through lock's prompt ----------------------------------------
+    // LockGlass shows its prompt while this is set: from any key, motion or
+    // click until restMs after the last, and for startMs as the lock takes
+    // hold, the one sign that it did. At rest the prompt goes and takes what
+    // was typed with it: a password half typed and left is nobody's to finish.
+    property bool awake: false
+    readonly property int restMs: Number(Quickshell.env("LOCK_GLASS_REST")) || 8000
+    readonly property int startMs: 2500
+
+    function wake(): void {
+        root.awake = true;
+        rest.interval = root.restMs;
+        rest.restart();
+    }
+
+    Timer {
+        id: rest
+
+        onTriggered: {
+            // Not while PAM checks or the unlock comes.
+            if (root.checking || root.unlocking) {
+                rest.restart();
+                return;
+            }
+            root.typed = "";
+            root.awake = false;
         }
     }
 
@@ -386,10 +452,11 @@ ShellRoot {
     // Each screen as it was, captured before the lock, so the lock screen
     // comes in over the desktop (the user, 2026-10-26; LockScreen's way in),
     // and dropped once it is in. The compositor draws nothing of the
-    // desktop under a lock (session_lock_xray stays off), so a failed
-    // capture leaves black, never the live desktop.
+    // desktop under the lock screen (lock.sh keeps session_lock_xray off for
+    // it), so a failed capture leaves black, never the live desktop. The
+    // see-through lock has no way in to draw, the desktop staying as it is.
     property var captures: ({})
-    property bool capturing: true
+    property bool capturing: !root.glass
     readonly property bool ready: root.spec !== null && !root.capturing
 
     function captured(name: string, result: var): void {
@@ -494,6 +561,34 @@ ShellRoot {
     WlSessionLock {
         id: lock
 
+        // A surface per screen: the lock screen's, opaque black under all it
+        // draws (see the header), or the see-through lock's, clear, so that
+        // what shows is the desktop the compositor draws under it.
+        property Component screenSurface: WlSessionLockSurface {
+            id: surface
+
+            color: "black"
+
+            LockScreen {
+                anchors.fill: parent
+                lockScreen: surface.screen
+                lockRoot: root
+            }
+        }
+
+        property Component glassSurface: WlSessionLockSurface {
+            id: pane
+
+            color: "transparent"
+
+            LockGlass {
+                anchors.fill: parent
+                lockScreen: pane.screen
+                lockRoot: root
+            }
+        }
+
+        surface: root.glass ? lock.glassSurface : lock.screenSurface
         locked: root.ready && !root.unlocking
         onSecureChanged: {
             if (!lock.secure)
@@ -503,17 +598,11 @@ ShellRoot {
             // Keys pressed before the lock held went elsewhere.
             if (!capsFind.running)
                 capsFind.running = true;
-        }
-
-        WlSessionLockSurface {
-            id: surface
-
-            color: "black"
-
-            LockScreen {
-                anchors.fill: parent
-                lockScreen: surface.screen
-                lockRoot: root
+            // Nothing else on the screen changes, so the prompt says it.
+            if (root.glass) {
+                root.awake = true;
+                rest.interval = root.startMs;
+                rest.restart();
             }
         }
     }

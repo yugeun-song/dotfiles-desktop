@@ -11,6 +11,11 @@
 #   - A lock screen this session's lock.sh holds: nothing starts. A locker
 #     found elsewhere by name (a nested compositor's) does not stop the lock.
 #   - A Quickshell lock that outlives the unlock: it is ended.
+#   - The see-through lock (--glass): the compositor's session_lock_xray on
+#     before it locks and off once it ends, the bar told before the lock
+#     takes a key, the Quickshell lock started as that lock; off for every
+#     other lock; without it, the lock screen; and off before hyprlock when
+#     the Quickshell lock does not hold.
 # The island's files of an earlier lock must be gone before either locker
 # starts and after it ends.
 # The stand-ins expand their own variables.
@@ -38,22 +43,31 @@ cp "$REPO/hypr/hyprlock.conf" "$WORK/config/hypr/hyprlock.conf"
 : >"$WORK/config/quickshell/bar/lock.qml"
 # lock-colours.py is left out: without it the fitted copy keeps the beige.
 
+# What the stand-ins were asked, in order: the compositor's option, the bar's
+# word, the locker started.
+events() { cat "$WORK/events" 2>/dev/null; }
+
 # The hyprlock stand-in records what it inherited (the shell keeps a signal
 # that was ignored on entry ignored) and what it found.
 cat >"$WORK/bin/hyprlock" <<EOF
 #!/bin/sh
+echo hyprlock >>"$WORK/events"
 grep '^SigIgn:' /proc/\$\$/status >"$WORK/sigign"
 ulimit -S -c >"$WORK/hyprlock-core"
 ls "$WORK/run" >"$WORK/run-at-start"
 EOF
 printf '#!/bin/sh\necho 1\n' >"$WORK/bin/fcitx5-remote"
 # hyprctl: "locked" answers from $WORK/locked (false by default); "-j
-# monitors all" lists one screen when $WORK/monitors exists.
+# monitors all" lists one screen when $WORK/monitors exists; setting
+# session_lock_xray answers ok unless $WORK/no-xray exists, as a compositor
+# without the option would not.
 cat >"$WORK/bin/hyprctl" <<EOF
 #!/bin/sh
 case "\$*" in
     locked) cat "$WORK/locked" 2>/dev/null || echo false ;;
     "-j monitors all") [ -e "$WORK/monitors" ] && echo '[{"name": "eDP-1", "width": 2880, "height": 1800, "disabled": false}]' ;;
+    *"session_lock_xray = true"*) [ -e "$WORK/no-xray" ] && exit 0; echo "xray true" >>"$WORK/events"; echo ok ;;
+    *"session_lock_xray = false"*) [ -e "$WORK/no-xray" ] && exit 0; echo "xray false" >>"$WORK/events"; echo ok ;;
 esac
 exit 0
 EOF
@@ -65,8 +79,10 @@ cat >"$WORK/bin/qs" <<EOF
 #!/bin/sh
 case "\$*" in
     *lock.qml*) ;;
+    *"ipc call keys glass"*) echo "bar glass" >>"$WORK/events"; exit 0 ;;
     *) exit 0 ;;
 esac
+echo "lock glass=\$LOCK_GLASS" >>"$WORK/events"
 echo \$\$ >"$WORK/qs.pid"
 echo "\$LOCK_SPEC" >"$WORK/qs-spec"
 ulimit -S -c >"$WORK/qs-core"
@@ -88,10 +104,10 @@ stale() {
 }
 
 run_lock() {
-    rm -f -- "$WORK/sigign" "$WORK/run-at-start" "$WORK/qs-spec" "$WORK/qs-run-at-start"
+    rm -f -- "$WORK/sigign" "$WORK/run-at-start" "$WORK/qs-spec" "$WORK/qs-run-at-start" "$WORK/events"
     stale
     env -i HOME="$WORK" PATH="$WORK/bin:/usr/bin" XDG_RUNTIME_DIR="$WORK/run" XDG_CONFIG_HOME="$WORK/config" \
-        USER=test LOCK_WAIT="${LOCK_WAIT:-40}" timeout 20 bash "$WORK/config/hypr/scripts/lock.sh" >/dev/null 2>&1
+        USER=test LOCK_WAIT="${LOCK_WAIT:-40}" timeout 20 bash "$WORK/config/hypr/scripts/lock.sh" "$@" >/dev/null 2>&1
 }
 
 islands_gone() {
@@ -137,6 +153,22 @@ else
     pass
 fi
 if islands_gone; then pass; else fail "the island's files outlived the Quickshell lock"; fi
+if [[ "$(events | tr '\n' '|')" == "xray false|lock glass=0|" ]]; then pass
+else fail "the lock screen did not lock with the desktop out of sight under it ($(events | tr '\n' '|'))"; fi
+
+# ---- the see-through lock -----------------------------------------------------
+run_lock --glass
+code=$?
+if [[ $code -eq 0 ]]; then pass; else fail "lock.sh --glass exited $code after the Quickshell lock ended well"; fi
+if [[ "$(events | tr '\n' '|')" == "xray true|bar glass|lock glass=1|xray false|" ]]; then pass
+else fail "the see-through lock was not the desktop drawn under it, the bar told, then the lock, then the desktop hidden again ($(events | tr '\n' '|'))"; fi
+if [[ ! -e "$WORK/sigign" ]]; then pass; else fail "hyprlock ran although the see-through lock held the session"; fi
+
+touch "$WORK/no-xray"
+run_lock --glass
+if [[ "$(events)" == "lock glass=0" ]]; then pass
+else fail "without the compositor's option the see-through lock was not the lock screen ($(events | tr '\n' '|'))"; fi
+rm -f -- "$WORK/no-xray"
 
 # ---- one that never says it holds the session -----------------------------
 echo mute >"$WORK/qs-mode"
@@ -144,6 +176,11 @@ LOCK_WAIT=5 run_lock
 if [[ -s "$WORK/sigign" ]]; then pass; else fail "hyprlock did not lock after the Quickshell lock never held the session"; fi
 if ! kill -0 "$(cat "$WORK/qs.pid" 2>/dev/null)" 2>/dev/null; then pass
 else fail "the Quickshell lock that never held the session was left running"; fi
+# The see-through lock's hyprlock draws the lock screen: the desktop goes out
+# of sight under it first.
+LOCK_WAIT=5 run_lock --glass
+if [[ "$(events | tr '\n' '|')" == "xray true|bar glass|lock glass=1|xray false|hyprlock|xray false|" ]]; then pass
+else fail "hyprlock took over the see-through lock with the desktop still drawn under it ($(events | tr '\n' '|'))"; fi
 
 # ---- a lock screen of this session already running ------------------------
 # Held as lock.sh holds its guard while it waits on its locker.

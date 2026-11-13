@@ -8,8 +8,9 @@ import qs.services
 
 // One screen's widgets (modules/WidgetDesk.qml makes one per screen), drawn
 // only where they can be seen, the user's rule (2026-11-04: only what is
-// shown runs): on a workspace with no tiled or fullscreen window, unlocked,
-// outside the edit mode. Otherwise no window is made at all, and with it go
+// shown runs): on a workspace with no tiled or fullscreen window, unlocked
+// or under the see-through lock (KeyFeed.desktopHidden), outside the edit
+// mode. Otherwise no window is made at all, and with it go
 // the clocks, the quotes asked for and the textures.
 //
 // One window round all of a screen's widgets, under the windows (the Bottom
@@ -61,7 +62,7 @@ Scope {
         return { x: x0, y: y0, w: x1 - x0, h: y1 - y0 };
     }
 
-    readonly property bool shown: Widgets.loaded && !Widgets.editing && !root.covered && !KeyFeed.locked
+    readonly property bool shown: Widgets.loaded && !Widgets.editing && !root.covered && !KeyFeed.desktopHidden
         && root.rects.length > 0
 
     LazyLoader {

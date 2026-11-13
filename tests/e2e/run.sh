@@ -2243,9 +2243,9 @@ else
     rows_of_bar_menu() { menu_rows 900 700 640 && [[ $(wc -w <<<"$rows") == "$1" ]]; }
     bar_row() { awk -v at="$1" '{print $at}' <<<"$rows"; }
     bar_is() { [[ "$(ipc e2e "$1")" == "$2" ]]; }
-    bar_menu_gone() { ! rows_of_bar_menu 16; }
+    bar_menu_gone() { ! rows_of_bar_menu 17; }
     right_click 900
-    if wait_for 5 rows_of_bar_menu 16; then
+    if wait_for 5 rows_of_bar_menu 17; then
         pass "a right click on the bar opens its menu, all its rows"
         y=$(bar_row 2)
         input move 910 "$y" sleep 200 click sleep 100
@@ -2254,8 +2254,8 @@ else
         input key 1 sleep 100
         wait_for 3 bar_is controls false
         right_click 900
-        if wait_for 5 rows_of_bar_menu 16; then
-            y=$(bar_row 16)
+        if wait_for 5 rows_of_bar_menu 17; then
+            y=$(bar_row 17)
             input move 910 "$y" sleep 200 click sleep 100
             check "its Session opens the session dialog, and only that" wait_for 3 bar_is session true
             input key 1 sleep 100
@@ -2406,6 +2406,152 @@ else
     ipc appearance rule match >/dev/null
     ipc appearance mode black >/dev/null
     check "and black is back at the end" wait_for 3 bar_is black
+fi
+
+# 35. The see-through lock (lock.qml with LOCK_GLASS, modules/LockGlass.qml;
+# the user, 2026-11-12), on the nested compositor 30 left unlocked, with the
+# compositor drawing the desktop under the lock (session_lock_xray, as
+# lock.sh --glass sets it) and the bar told as lock.sh tells it. Over a
+# window of one colour on HEADLESS-2: the prompt, a black pill where the lock
+# screen's field is, shows as the lock takes hold and goes, leaving the
+# window as it was; a colour the window takes under the lock shows, so the
+# desktop is live; the bar lays no sheet over it; a key brings the prompt
+# back with a dot, a motion of the pointer too, and at rest it goes with
+# what was typed; Caps Lock's mark stands in its right end in the beige.
+# Then the run's own PAM stack and tally, as 30's: a wrong password is
+# counted, the right one unlocks.
+glass_up() { n clients -j | jq -e '[.[] | select(.class == "glasswin")] | length > 0' >/dev/null; }
+# In HEADLESS-2's pixels, at 30's fit (0.683 of the design's heights, 0.759
+# of its widths): the pill 52 tall about the field's middle row, 940, at
+# least the notch's 250 wide about the middle, 1280; its lock in its left
+# 52, Caps Lock's mark in its right 52. Printed: black in the pill's box;
+# beige runs along its middle row past the lock (a dot is one); beige in the
+# right end; of the box and of a patch far from it, how much is the colour
+# asked for.
+glass_pixels() {
+    shot -o HEADLESS-2 "$WORK/glass.png" 2>/dev/null || return 1
+    python3 - "$WORK/glass.png" "$1" <<'EOF'
+import sys
+from PIL import Image
+im = Image.open(sys.argv[1]).convert("RGB")
+want = tuple(int(sys.argv[2][i:i + 2], 16) for i in (1, 3, 5))
+def count(box, test):
+    data = im.crop(box).tobytes()
+    return sum(1 for i in range(0, len(data), 3) if test(data[i:i + 3]))
+beige = lambda c: c[0] > 200 and c[1] > 200 and 150 < c[2] < 215
+black = lambda c: max(c) <= 4
+asked = lambda c: all(abs(a - b) <= 10 for a, b in zip(c, want))
+pill, far = (1160, 920, 1400, 960), (400, 300, 700, 500)
+row = [beige(im.getpixel((x, 940))) for x in range(1205, 1365)]
+runs = sum(1 for i in range(len(row)) if row[i] and (i == 0 or not row[i - 1]))
+print(count(pill, black), runs, count((1372, 922, 1404, 958), beige),
+      count(pill, asked) * 100 // ((pill[2] - pill[0]) * (pill[3] - pill[1])),
+      count(far, asked) * 100 // ((far[2] - far[0]) * (far[3] - far[1])))
+EOF
+}
+# prompt: the pill with words; dot: the pill with one dot; caps: and the mark;
+# clear: no pill, the window's colour all through the box and far from it.
+glass_is() {
+    local black runs caps box far
+    read -r black runs caps box far < <(glass_pixels "$2") || return 1
+    case $1 in
+        prompt) (( black > 5000 && runs > 6 && far > 95 )) ;;
+        dot) (( black > 5000 && runs == 1 )) ;;
+        caps) (( black > 5000 && caps > 40 )) ;;
+        clear) (( black < 50 && box > 95 && far > 95 )) ;;
+    esac
+}
+glass_quiet() {
+    local w
+    w=$(grep -E "WARN scene|ERROR" "$WORK/qsglass.out" | grep -v -E "portal|Could not register")
+    [[ -z "$w" ]] || { echo "$w"; return 1; }
+}
+no_sheet_for() {
+    local i
+    for (( i = 0; i < $1 * 10; i++ )); do
+        has_layer quickshell:unlock && return 1
+        sleep 0.1
+    done
+}
+
+if (( ! PIL )); then
+    skip "see-through lock: python3-pillow is not installed"
+elif [[ -z "$WL" || "$WL" == "$WAYLAND_DISPLAY" || ! -S "$RT/$WL" ]]; then
+    fail "see-through lock: refusing to lock anything but the nested compositor"
+elif [[ ! -s "$WORK/lock-spec.json" || ! -s "$WORK/pam.d/locktest" ]]; then
+    fail "see-through lock: scenario 30 left no spec or PAM stack"
+elif [[ "$(n locked)" != false ]]; then
+    fail "see-through lock: the nested compositor is still locked from scenario 30"
+else
+    green='#28a05a' red='#c83c3c'
+    faillock --dir "$WORK/tally" --user "$(id -un)" --reset
+    printf '%s\n' "$green" > "$WORK/glass-colour"
+    focus_external
+    n dispatch "hl.dsp.focus({ workspace = 8 })" >/dev/null
+    n dispatch "hl.dsp.exec_cmd('[workspace 8 silent] python3 -I $REPO/tests/e2e/glasswin.py $WORK/glass-colour')" >/dev/null
+    if ! wait_for 10 glass_up; then
+        fail "see-through lock: its window did not open"
+    else
+        check "the window fills the desktop in its colour" wait_for 5 glass_is clear "$green"
+        check "the compositor draws the desktop under a lock when asked" \
+            test "$(n eval 'hl.config({ misc = { session_lock_xray = true } })')" = ok
+        ipc keys glass >/dev/null
+        check "the bar, told, takes the lock as one that leaves the desktop in view" key_state_is .glass true
+        caps_led 0
+        rm -f "$WORK/lock-ready"
+        benv env LOCK_GLASS=1 LOCK_GLASS_REST=1500 LOCK_SPEC="$WORK/lock-spec.json" LOCK_READY="$WORK/lock-ready" \
+            LOCK_PAM_SERVICE=locktest LOCK_PAM_DIR="$WORK/pam.d" LOCK_FAILLOCK_DIR="$WORK/tally" \
+            LOCK_PAM_STEPS="$WORK/pam.d/locktest" LOCK_LEDS="$WORK/leds" \
+            qs -n -p "$WORK/bar/lock.qml" >"$WORK/qsglass.out" 2>&1 &
+        LOCK_PID=$!
+        check "the see-through lock takes the session and says it holds it" wait_for 10 qs_lock_up
+        check "as it takes hold its prompt shows: the black pill, its lock and Press to unlock" \
+            wait_for 3 glass_is prompt "$green"
+        check "then it goes, and the desktop is as it was" wait_for 6 glass_is clear "$green"
+        check "the bar lays no sheet over the desktop" no_sheet_for 2
+        # hypridle's word once the compositor has the lock: the bar asks the
+        # compositor which lock it is, and keeps the desktop in view.
+        ipc keys lock >/dev/null
+        sleep 0.5
+        check "told of the lock again, it asks the compositor and still keeps the desktop in view" key_state_is .glass true
+        printf '%s\n' "$red" > "$WORK/glass-colour"
+        check "the desktop goes on live under the lock: the window's new colour shows" \
+            wait_for 5 glass_is clear "$red"
+        input type "a" sleep 100
+        check "a key brings the prompt back, a dot for it" wait_for 3 glass_is dot "$red"
+        check "at rest it goes again" wait_for 5 glass_is clear "$red"
+        input move 1280 600 sleep 100 move 1300 640 sleep 100
+        check "a motion of the pointer brings it too" wait_for 3 glass_is prompt "$red"
+        caps_led 1
+        input key 58
+        check "Caps Lock's mark in its right end, in the beige" wait_for 3 glass_is caps "$red"
+        caps_led 0
+        input key 58 sleep 300
+        input type "e2e-wrong" sleep 150 key 28 sleep 1500
+        check "a wrong password is counted in the run's own tally" \
+            test "$(faillock --dir "$WORK/tally" --user "$(id -un)" | grep -c ' V$')" -eq 1
+        # Typed, then left until the prompt rests: what follows is the
+        # password alone only if the "x" went with the prompt.
+        input type "x" sleep 100
+        wait_for 3 glass_is dot "$red"
+        wait_for 5 glass_is clear "$red"
+        input type "e2e-pass" sleep 150 key 28
+        check "what was typed went with the prompt, and the right password unlocks" wait_for 6 qs_unlocked
+        check "the see-through lock raised no QML warning" glass_quiet
+        kill -KILL "$LOCK_PID" 2>/dev/null
+        LOCK_PID=""
+    fi
+    n eval 'hl.config({ misc = { session_lock_xray = false } })' >/dev/null
+    ipc keys unlock >/dev/null
+    check "the bar, told of the unlock, forgets the see-through lock" key_state_is .glass false
+    # The lock screen's lock after it: the compositor says the desktop is out
+    # of sight, so the bar takes it so, whatever it was told before.
+    ipc keys glass >/dev/null
+    ipc keys lock >/dev/null
+    check "a lock the compositor draws nothing under is no see-through one, whatever the bar heard" \
+        wait_for 3 key_state_is .glass false
+    ipc keys unlock >/dev/null
+    pkill -f -- "$REPO/tests/e2e/glasswin.py $WORK/glass-colour" 2>/dev/null
 fi
 
 check "no session action or hardware write was even attempted" no_writes

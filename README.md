@@ -204,7 +204,11 @@ number or mark at its right, or a small square of bars while music plays
 (`services/LockIsland.qml`, `scripts/lock-island.sh`; hyprlock reads them
 again only at the bar's SIGUSR2). It comes in over the desktop frosting
 under it, and at the unlock the bar
-sweeps it up off the desktop (`modules/UnlockSweep.qml`). `Ctrl+Alt+Shift+U`
+sweeps it up off the desktop (`modules/UnlockSweep.qml`). `Ctrl+Alt+Shift+L`
+(Lock visible in the session dialog) is the same lock with the screen left
+showing what it shows, live: `lock.sh --glass` has the compositor draw the
+desktop under it (`session_lock_xray`, for that lock alone) and
+`modules/LockGlass.qml` draws only a prompt, at a key or a motion. `Ctrl+Alt+Shift+U`
 on it starts a new locker when one has crashed: the way out is the
 password, never an unlock without one. Wrong passwords lock for longer the
 more there are (`pam/system-auth`, Arch only, through sudo): from the 10th a

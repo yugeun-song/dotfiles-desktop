@@ -42,8 +42,8 @@ ShellRoot {
     }
 
     // What a right click on the bar runs (services/BarOptions.qml names the rows):
-    // the panels are siblings a bar cannot reach. Lock and Sleep as the session
-    // dialog's own rows do them, which say why they go the way they go.
+    // the panels are siblings a bar cannot reach. The two locks and Sleep as the
+    // session dialog's own rows do them, which say why they go the way they go.
     readonly property var menuActions: ({
         launcher: () => launcher.toggle(),
         controls: () => Controls.toggle(null),
@@ -59,6 +59,7 @@ ShellRoot {
         keyOverlay: () => KeyFeed.toggle(),
         cheatsheet: () => cheatsheet.toggle(),
         lock: () => powerMenu.run(powerMenu.entries.find(e => e.id === "lock")),
+        glass: () => powerMenu.run(powerMenu.entries.find(e => e.id === "glass")),
         sleep: () => powerMenu.run(powerMenu.entries.find(e => e.id === "suspend")),
         session: () => powerMenu.toggle()
     })

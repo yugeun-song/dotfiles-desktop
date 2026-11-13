@@ -14,6 +14,13 @@ import qs.services
 // holds the last capture, so at the unlock it covers the desktop as the lock
 // screen did, and is drawn up off the screen. Nothing is made unless a lock
 // was seen, and all of it goes with the sweep.
+//
+// Never under the see-through lock (lock.sh --glass), which has the
+// compositor draw the desktop under it (session_lock_xray): there the
+// overlay would show, a capture a second old over the live desktop, and the
+// unlock has no lock screen to sweep. The compositor says which lock it is
+// in the same breath as that it is locked, so this needs no word from the
+// bar in time.
 Scope {
     id: root
 
@@ -49,7 +56,8 @@ Scope {
             confirm.start();
     }
 
-    // Asked until it says so, then not again for this lock.
+    // Asked until it says so, then not again for this lock; a see-through
+    // lock ends the asking unconfirmed.
     Timer {
         id: confirm
 
@@ -62,17 +70,24 @@ Scope {
         }
     }
 
+    // "true" or "false", then {"option": ..., "bool": ...}; an option the
+    // compositor does not know reads as no see-through lock, as before it.
     Process {
         id: probe
 
-        command: ["hyprctl", "locked"]
+        command: ["sh", "-c", "hyprctl locked; hyprctl -j getoption misc:session_lock_xray"]
 
         stdout: StdioCollector {
             onStreamFinished: {
-                if (this.text.trim() === "true" && root.locked) {
-                    root.confirmed = true;
-                    confirm.stop();
-                }
+                const lines = this.text.trim().split("\n");
+                if (lines[0]?.trim() !== "true" || !root.locked)
+                    return;
+                let glass = false;
+                try {
+                    glass = JSON.parse(lines.slice(1).join("\n")).bool === true;
+                } catch (e) {}
+                root.confirmed = !glass;
+                confirm.stop();
             }
         }
     }

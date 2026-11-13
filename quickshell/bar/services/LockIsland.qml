@@ -24,7 +24,9 @@ Singleton {
     id: root
 
     readonly property string dir: Paths.runtimeDir
-    readonly property bool active: KeyFeed.locked && Media.islandOn && root.dir !== ""
+    // Not under the see-through lock, which has no island of its own: the
+    // bar's shows through it.
+    readonly property bool active: KeyFeed.desktopHidden && Media.islandOn && root.dir !== ""
 
     // What the lock's island shows now; a string, so that only a change of
     // what it shows asks for a write.

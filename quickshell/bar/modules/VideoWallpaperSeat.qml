@@ -11,9 +11,11 @@ import qs.services
 // player lets the screen's window and decoder go, so hyprpaper's picture,
 // the video's first frame, shows again.
 //
-// Seen: the screen lit (the screensaver's stage), the session unlocked, and
-// its workspace without a tiled or fullscreen window (the widgets' rule,
-// WidgetScreen.qml). No QtMultimedia here: the bar only decides.
+// Seen: the screen lit (the screensaver's stage), the session unlocked or
+// under the see-through lock, which leaves the desktop in view
+// (KeyFeed.desktopHidden), and its workspace without a tiled or fullscreen
+// window (the widgets' rule, WidgetScreen.qml). No QtMultimedia here: the
+// bar only decides.
 Scope {
     id: root
 
@@ -37,7 +39,7 @@ Scope {
         return false;
     }
     readonly property bool dark: (Screensaver.stages[root.screen?.name ?? ""] ?? "lit") !== "lit"
-    readonly property bool seen: !root.covered && !root.dark && !KeyFeed.locked
+    readonly property bool seen: !root.covered && !root.dark && !KeyFeed.desktopHidden
 
     // Kept for a minute after it was last seen.
     property bool kept: false

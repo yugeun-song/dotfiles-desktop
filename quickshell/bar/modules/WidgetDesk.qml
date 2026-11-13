@@ -42,18 +42,19 @@ Scope {
         target: Hyprland
 
         function onRawEvent(event) {
-            if (root.anyPlaced && !KeyFeed.locked && root.windowEvents.indexOf(event.name) !== -1)
+            if (root.anyPlaced && !KeyFeed.desktopHidden && root.windowEvents.indexOf(event.name) !== -1)
                 refresh.restart();
         }
     }
 
-    // Not asked while locked, so a window opened meanwhile has no IPC object yet
-    // and would read as tiled, hiding the widgets until the next window event.
+    // Not asked while the lock hides the desktop (the see-through lock does
+    // not), so a window opened meanwhile has no IPC object yet and would read
+    // as tiled, hiding the widgets until the next window event.
     Connections {
         target: KeyFeed
 
-        function onLockedChanged() {
-            if (root.anyPlaced && !KeyFeed.locked)
+        function onDesktopHiddenChanged() {
+            if (root.anyPlaced && !KeyFeed.desktopHidden)
                 refresh.restart();
         }
     }

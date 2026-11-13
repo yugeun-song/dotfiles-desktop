@@ -103,7 +103,7 @@ Item {
         }
 
         // ---- the left end: the lock, or the event's glyph -----------------
-        Glyph {
+        LockGlyph {
             id: lead
 
             cx: root.notchX + root.inset
@@ -115,7 +115,7 @@ Item {
         }
 
         // ---- the right end: the event's mark and number --------------------
-        Glyph {
+        LockGlyph {
             id: mark
 
             cx: root.notchX + root.notchW - root.inset
@@ -204,30 +204,6 @@ Item {
             target: Cava
             property: "active"
             value: root.musicOn && root.playing && root.visible
-        }
-    }
-
-    // A glyph set by its ink's middle, not its box's: icons sit unevenly in
-    // their em boxes.
-    component Glyph: Text {
-        id: glyph
-
-        property real cx: 0
-        property real cy: 0
-        property string family: Theme.iconFont
-        property real size: 16
-
-        x: glyph.cx - (ink.tightBoundingRect.x + ink.tightBoundingRect.width / 2)
-        y: glyph.cy - (glyph.baselineOffset + ink.tightBoundingRect.y + ink.tightBoundingRect.height / 2)
-        textFormat: Text.PlainText
-        font.family: glyph.family
-        font.pixelSize: Math.max(1, glyph.size)
-
-        TextMetrics {
-            id: ink
-
-            font: glyph.font
-            text: glyph.text
         }
     }
 }

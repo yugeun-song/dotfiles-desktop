@@ -800,6 +800,8 @@ Singleton {
     readonly property string iconPalette:   String.fromCodePoint(0xF03D8)
     readonly property string iconSwap:      String.fromCodePoint(0xF04E1)
     readonly property string iconLock:      String.fromCodePoint(0xF033E)
+    // md-monitor_lock: the see-through lock, the screen kept in view (PowerMenu).
+    readonly property string iconMonitorLock: String.fromCodePoint(0xF0DDB)
     readonly property string iconLogout:    String.fromCodePoint(0xF0343)
     readonly property string iconSleep:     String.fromCodePoint(0xF0904)
     readonly property string iconPower:     String.fromCodePoint(0xF0425)
